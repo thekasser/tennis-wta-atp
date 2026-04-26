@@ -98,7 +98,6 @@ const PLAYERS_WTA = [
   {id:93, mid:43866, name:"Panna Udvardy",            ab:"Udvardy",        nat:"HUN",age:25,surf:{H:.53,C:.54,G:.52},form:"WWWWWWWLWWWWWWWWWWLW",inj:false},
   {id:94, name:"Danka Kovinic",            ab:"Kovinic",        nat:"MNE",age:29,surf:{H:.53,C:.53,G:.51},form:"WWWLWWWWWWWWWWWWWWLW",inj:false},
   {id:95, name:"Katie Swan",               ab:"Swan",           nat:"GBR",age:25,surf:{H:.52,C:.52,G:.55},form:"WWWWWLWWWWWWWWWWWWLW",inj:false},
-  {id:96, mid:12089, sid:"202684", name:"Lin Zhu",                  ab:"Lin Zhu",        nat:"CHN",age:29,surf:{H:.53,C:.53,G:.50},form:"WWWWWWWLWWWWWWWWWWLW",inj:false},
   {id:97, mid:16134, name:"Julia Grabher",            ab:"Grabher",        nat:"AUT",age:26,surf:{H:.52,C:.53,G:.53},form:"WWWWLWWWWWWWWWWWWWLW",inj:false},
   {id:98, mid:39540, sid:"215306", name:"Emiliana Arango",          ab:"Arango",         nat:"COL",age:28,surf:{H:.52,C:.55,G:.49},form:"WWWWWWLWWWWWWWWWWLWW",inj:false},
   {id:99, name:"Jodie Burrage",            ab:"Burrage",        nat:"GBR",age:27,surf:{H:.52,C:.51,G:.56},form:"WWWLWWWWWWWWWWWWWWLW",inj:false},
