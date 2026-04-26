@@ -1174,6 +1174,7 @@ function buildSelects() {
   const injEl   = document.getElementById('inj-player');
   if(injEl){const prev=parseInt(injEl.value)||0;injEl.innerHTML=injOpts;if(prev&&allPs.find(p=>p.id===prev))injEl.value=prev;}
 
+  predPs = [...predPs].sort((a,b)=>(a.rank||9999)-(b.rank||9999));
   const predOpts = predPs.map(p=>`<option value="${p.id}">#${p.rank} ${p.name}</option>`).join('');
   ['pred-a','pred-b'].forEach((id,i)=>{
     const el=document.getElementById(id);
