@@ -210,7 +210,43 @@ select:focus{outline:none;border-color:var(--tc)}
 .bluf .bluf-label::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--tc)}
 .bluf strong{color:var(--ink);font-weight:700}
 .bluf .bluf-detail{color:var(--muted);font-size:12px;margin-top:4px}
-@media(max-width:768px){.stat-row{grid-template-columns:1fr 1fr}.two-col{grid-template-columns:1fr}.app{padding:16px}}
+@media(max-width:768px){
+  /* layout */
+  .app{padding:12px 12px 32px}
+  .stat-row{grid-template-columns:1fr 1fr}
+  .two-col{grid-template-columns:1fr}
+  .three-col{grid-template-columns:1fr 1fr}
+  h1{font-size:22px}
+  /* header: stack tour toggle + live badge below title */
+  .hdr{flex-direction:column;align-items:flex-start;gap:8px}
+  .hdr-right{gap:8px}
+  /* tab nav: don't overflow viewport */
+  .tab-nav{max-width:100%;box-sizing:border-box}
+  /* tables: scroll horizontally instead of clipping */
+  .tbl-wrap{overflow-x:auto}
+  /* hide low-priority ranking columns */
+  #tbl-rankings th:nth-child(2),#tbl-rankings td:nth-child(2),
+  #tbl-rankings th:nth-child(6),#tbl-rankings td:nth-child(6),
+  #tbl-rankings th:nth-child(7),#tbl-rankings td:nth-child(7),
+  #tbl-rankings th:nth-child(9),#tbl-rankings td:nth-child(9){display:none}
+  /* form bar: wrap boxes instead of overflowing */
+  .form-row{flex-wrap:wrap;max-width:80px}
+  /* trapezoid: presets drop to own full-width row */
+  .trap-presets{margin-left:0;flex-basis:100%;flex-wrap:wrap;justify-content:flex-start;gap:4px}
+  .preset-btn{padding:6px 10px;font-size:11px}
+  /* trapezoid scatter: shorter on mobile */
+  #tab-trapezoid .chart-wrap{height:360px!important}
+  /* modal: tighter padding */
+  .modal{padding:18px 16px;border-radius:12px}
+  .modal-backdrop{padding:3vh 12px}
+  .modal h2{font-size:22px}
+}
+@media(max-width:480px){
+  .three-col{grid-template-columns:1fr}
+  .stat-row{grid-template-columns:1fr}
+  .tab-btn{padding:8px 11px;font-size:12px}
+  .tab-btn .sub{display:none}
+}
 
 /* ─── Trapezoid tab ─────────────────────────────────────────────────────── */
 .trap-controls{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;box-shadow:var(--shadow-sm)}
