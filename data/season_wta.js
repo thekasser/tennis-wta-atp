@@ -1,6 +1,6 @@
 // season_wta.js — WTA season data. AUTO-UPDATED by scripts/refresh_rankings_api.py
 // Source: Matchstat Tennis API (RapidAPI). Do not edit manually.
-// Last updated: 2026-04-26T15:20:24Z
+// Last updated: 2026-04-26T16:08:11Z
 
 const SEASON_WTA = {
   lastUpdated: "2026-04-26",
@@ -124,5 +124,24 @@ const SEASON_WTA = {
     109: { rank:47  , pts:1217   , ytd:221   , rankMove:0   , results:{  } },
     110: { rank:48  , pts:1214   , ytd:364   , rankMove:0   , results:{  } },
     111: { rank:50  , pts:1186   , ytd:198   , rankMove:0   , results:{  } },
+    112: { rank:76  , pts:916    , ytd:250   , rankMove:0   , results:{  } },
+    113: { rank:113 , pts:0      , ytd:0     , rankMove:0   , results:{  } },
+    114: { rank:114 , pts:0      , ytd:0     , rankMove:0   , results:{  } },
+    115: { rank:53  , pts:1139   , ytd:504   , rankMove:0   , results:{  } },
+    116: { rank:51  , pts:1161   , ytd:358   , rankMove:0   , results:{  } },
+    117: { rank:55  , pts:1092   , ytd:367   , rankMove:0   , results:{  } },
+    118: { rank:59  , pts:1046   , ytd:405   , rankMove:0   , results:{  } },
+    119: { rank:60  , pts:1042   , ytd:337   , rankMove:0   , results:{  } },
+    120: { rank:62  , pts:1029   , ytd:0     , rankMove:0   , results:{  } },
+    121: { rank:65  , pts:989    , ytd:345   , rankMove:0   , results:{  } },
+    122: { rank:67  , pts:963    , ytd:497   , rankMove:0   , results:{  } },
+    123: { rank:70  , pts:945    , ytd:0     , rankMove:0   , results:{  } },
+    124: { rank:71  , pts:937    , ytd:451   , rankMove:0   , results:{  } },
+    125: { rank:74  , pts:919    , ytd:0     , rankMove:0   , results:{  } },
+    126: { rank:124 , pts:620    , ytd:0     , rankMove:0   , results:{  } },
+    127: { rank:144 , pts:524    , ytd:0     , rankMove:0   , results:{  } },
+    128: { rank:128 , pts:0      , ytd:0     , rankMove:0   , results:{  } },
+    129: { rank:129 , pts:0      , ytd:0     , rankMove:0   , results:{  } },
+    130: { rank:95  , pts:806    , ytd:217   , rankMove:0   , results:{  } },
   }
 };
