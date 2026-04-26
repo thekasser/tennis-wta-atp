@@ -1,0 +1,8 @@
+# Cloudflare Workers config — serves the repo as a static site.
+# No compute, no functions, no API proxy — just static asset hosting at the edge.
+# index.html redirects root visitors to wta_analytics.html (the real dashboard).
+name = "tennis-wta-atp"
+compatibility_date = "2024-04-01"
+
+[assets]
+directory = "./"
