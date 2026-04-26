@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.Python
+*.egg-info/
+.venv/
+venv/
+
+# Secrets — NEVER commit
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# Cached match-level data — large, fetched on-demand from Sackmann's repos
+scripts/cache/
+*.csv
+
+# Allow specific data files we DO commit (recompute outputs, not raw inputs)
+!data/*.js
+
+# Local dev artifacts
+*.log
+node_modules/
+
+# Claude/Cowork local state (paranoia — these don't usually live in workspace folders, but in case)
+.claude/
+.cowork/
