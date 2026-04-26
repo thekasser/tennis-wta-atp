@@ -367,6 +367,7 @@ select:focus{outline:none;border-color:var(--tc)}
       </div>
       <div class="trap-presets">
         <button class="preset-btn active" onclick="trapApp && trapApp.preset('f1')">F1: Serve × Return</button>
+        <button class="preset-btn" onclick="trapApp && trapApp.preset('f2')">F2: Deciding × Composite</button>
         <button class="preset-btn" onclick="trapApp && trapApp.preset('f3')">F3: Efficiency × Clutch</button>
         <button class="preset-btn" onclick="trapApp && trapApp.preset('f4')">F4: Offense × Defense</button>
       </div>
@@ -1888,8 +1889,9 @@ class TrapezoidApp {
   preset(name) {
     const map = {
       f1: { x:'servePtsWonPct', y:'returnPtsWonPct', size:'matchWinPct', color:'tour', btn:0 },
-      f3: { x:'totalPtsWonPct', y:'tbWinPct',        size:'matchWinPct', color:'tour', btn:1 },
-      f4: { x:'acesPerSvGm',    y:'bpSavedPct',      size:'matchWinPct', color:'tour', btn:2 },
+      f2: { x:'decSetWinPct',   y:'composite',       size:'matchWinPct', color:'tour', btn:1 },
+      f3: { x:'totalPtsWonPct', y:'tbWinPct',        size:'matchWinPct', color:'tour', btn:2 },
+      f4: { x:'acesPerSvGm',    y:'bpSavedPct',      size:'matchWinPct', color:'tour', btn:3 },
     };
     const p = map[name];
     document.getElementById('trap-x').value = p.x;
