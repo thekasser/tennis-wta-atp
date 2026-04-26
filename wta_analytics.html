@@ -231,8 +231,11 @@ select:focus{outline:none;border-color:var(--tc)}
   #tbl-rankings th:nth-child(9),#tbl-rankings td:nth-child(9){display:none}
   /* form bar: wrap boxes instead of overflowing */
   .form-row{flex-wrap:wrap;max-width:80px}
-  /* trapezoid: presets drop to own full-width row */
-  .trap-presets{margin-left:0;flex-basis:100%;flex-wrap:wrap;justify-content:flex-start;gap:4px}
+  /* trapezoid controls: enforce 2-col grid so long select labels don't break layout */
+  .trap-controls{display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:10px}
+  .trap-controls select{width:100%;box-sizing:border-box}
+  /* presets span full width below the control grid */
+  .trap-presets{grid-column:1/-1;margin-left:0;flex-wrap:wrap;justify-content:flex-start;gap:4px}
   .preset-btn{padding:6px 10px;font-size:11px}
   /* trapezoid scatter: shorter on mobile */
   #tab-trapezoid .chart-wrap{height:360px!important}
