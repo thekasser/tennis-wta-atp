@@ -19,7 +19,7 @@ draw_data = json.loads(DRAW_FILE.read_text())
 # Parse PLAYERS_WTA bios
 wta_js = PLAYERS_FILE.read_text(encoding='utf-8')
 players = []
-for m in re.finditer(r'\{id:(\d+),\s*name:"([^"]+)",\s*ab:"([^"]+)"', wta_js):
+for m in re.finditer(r'\{id:(\d+)[^}]*?name:"([^"]+)"[^}]*?ab:"([^"]+)"', wta_js):
     players.append({'id': int(m.group(1)), 'name': m.group(2), 'ab': m.group(3)})
 
 print(f'Loaded {len(players)} WTA bios, {len(draw_data)} draw entries')
