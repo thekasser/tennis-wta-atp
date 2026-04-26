@@ -1,9 +1,9 @@
 // season_atp.js — ATP season data. AUTO-UPDATED by scripts/refresh_rankings_api.py
 // Source: Matchstat Tennis API (RapidAPI). Do not edit manually.
-// Last updated: 2026-04-26T02:01:01Z
+// Last updated: 2026-04-26T05:30:54Z
 
 const SEASON_ATP = {
-  lastUpdated: "2026-04-25",
+  lastUpdated: "2026-04-26",
   activeTournaments: [
       {
         id: "madrid26",
