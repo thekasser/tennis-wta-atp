@@ -1723,10 +1723,24 @@ function enrichActiveTournaments() {
         const sem = tbl[latest.rd];
         if (!sem) return;
 
+        // Only update if the recent match is from a more advanced round than
+        // what the draw patch already recorded. This prevents stale match data
+        // (e.g. an R16 win fetched last Monday) from overwriting a manually
+        // patched QF/SF elimination in season_wta.js / season_atp.js.
+        const ROUND_ORDER = ['R128','R64','R32','R16','QF','SF','F','W'];
+        const curStatus = at.players[bioId];
+        const curIdx = curStatus ? ROUND_ORDER.indexOf(curStatus.r) : -1;
+
         if (latest.won === true) {
-          at.players[bioId] = { r: sem.next, elim: false };
+          const newIdx = ROUND_ORDER.indexOf(sem.next);
+          if (newIdx > curIdx) {
+            at.players[bioId] = { r: sem.next, elim: false };
+          }
         } else if (latest.won === false) {
-          at.players[bioId] = { r: sem.played, elim: true };
+          const newIdx = ROUND_ORDER.indexOf(sem.played);
+          if (newIdx >= curIdx) {
+            at.players[bioId] = { r: sem.played, elim: true };
+          }
         }
       });
     });
