@@ -137,4 +137,5 @@ const PLAYERS_ATP = [
   {id:133, name:"Borna Coric",                 ab:"Coric",         nat:"CRO",age:29,surf:{H:0.55,C:0.55,G:0.53},form:"WLWWLWLWWL",inj:false},
   {id:134, name:"Hugo Grenier",                ab:"Grenier",       nat:"FRA",age:29,surf:{H:0.52,C:0.55,G:0.50},form:"WLWWLWLWWL",inj:false},
   {id:135, name:"Soon-Woo Kwon",               ab:"Kwon",          nat:"KOR",age:25,surf:{H:0.55,C:0.53,G:0.52},form:"WLWWLWLWWL",inj:false},
+  {id:136, mid:88766, name:"Alexander Blockx",            ab:"Blockx",        nat:"BEL",age:20,surf:{H:0.52,C:0.54,G:0.51},form:"WLWWLWLWWL",inj:false},
 ];

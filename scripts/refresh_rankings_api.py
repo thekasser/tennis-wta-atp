@@ -166,11 +166,15 @@ def parse_js_season(js_text: str, var_name: str) -> dict:
     return {'players': players, 'activeTournamentsRaw': active_raw}
 
 
-def derive_active_tournaments(tour: str) -> str:
+def derive_active_tournaments(tour: str, preserve_raw: str = '') -> str:
     """Build the activeTournaments JS block by reading tournaments.js for any
     entry where active:true and tour matches (or 'BOTH'). This means we don't
     need to manually edit season_*.js when a new event starts — just flip the
     `active` flag in tournaments.js and the next pipeline run picks it up.
+
+    For tournaments that already exist in preserve_raw, the existing players{}
+    block and stage are carried over verbatim — draw data is NEVER wiped by a
+    rankings refresh. Only genuinely new tournament IDs get a blank R32 block.
 
     Stage defaults to 'R32' as a sensible mid-tournament guess; the JS-side
     enrichActiveTournaments() in wta_analytics.html computes the real per-player
@@ -191,16 +195,27 @@ def derive_active_tournaments(tour: str) -> str:
         entries.append(tid)
     if not entries:
         return 'activeTournaments: [\n  ],'
+
+    # Extract existing per-tournament blocks from preserve_raw so we can
+    # carry them forward unchanged for any tournament already in the file.
+    existing_blocks: dict[str, str] = {}
+    for m in re.finditer(r'\{(\s*id:\s*"([^"]+)"[\s\S]*?)\}(?=\s*,|\s*\])', preserve_raw):
+        existing_blocks[m.group(2)] = m.group(0)
+
     lines = ['activeTournaments: [']
     for tid in entries:
-        lines += [
-            '    {',
-            f'      id: "{tid}",',
-            f'      stage: "R32",',
-            f'      players: {{',
-            f'      }}',
-            '    },',
-        ]
+        if tid in existing_blocks:
+            # Preserve draw data exactly as it was
+            lines.append('    ' + existing_blocks[tid].strip() + ',')
+        else:
+            lines += [
+                '    {',
+                f'      id: "{tid}",',
+                f'      stage: "R32",',
+                f'      players: {{',
+                f'      }}',
+                '    },',
+            ]
     lines.append('  ],')
     return '\n'.join(lines)
 
@@ -228,9 +243,10 @@ def refresh_tour(client: MatchstatClient, tour: str, dry_run: bool) -> bool:
     active_raw  = existing.get('activeTournamentsRaw', 'activeTournaments: [\n  ],')
 
     # Auto-derive activeTournaments from tournaments.js (any active:true entry
-    # for this tour). Replaces the existing block — keeps the tour in sync with
-    # the curated tournament metadata without manual season_*.js editing.
-    derived = derive_active_tournaments(tour)
+    # for this tour). When deriving, PRESERVE existing player draw data for any
+    # tournament that already appears in the current season_*.js — only inject
+    # a fresh empty block for tournaments that are genuinely new.
+    derived = derive_active_tournaments(tour, preserve_raw=active_raw)
     derived_count = derived.count('id:')
     if derived_count > 0:
         active_raw = derived
