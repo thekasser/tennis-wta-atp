@@ -452,24 +452,14 @@ def process_tour(client: MatchstatClient, tour: str, years: list[int],
                 })
 
         # ── Current-tournament aggregate ("CURR") ──────────────────────────────
-        # Find the most recent tournament this player appeared in (within 21
-        # days). Aggregate only those matches with a lower floor (2+ real
-        # matches) so QF/SF players who've played 3-6 matches still appear.
-        curr_cutoff = today - timedelta(days=21)
-        from collections import defaultdict as _dd_curr
-        curr_by_tn: dict = _dd_curr(list)
-        for m in all_year_matches:
-            d = _parse_dt(m)
-            if not d or d < curr_cutoff:
-                continue
-            tn = ((m.get('tournament') or {}).get('name') or '').strip()
-            if tn:
-                curr_by_tn[tn].append(m)
-        if curr_by_tn:
-            def _latest(ms):
-                return max((_parse_dt(m) for m in ms if _parse_dt(m)), default=None)
-            curr_tn = max(curr_by_tn.keys(), key=lambda t: _latest(curr_by_tn[t]) or date.min)
-            curr_matches = curr_by_tn[curr_tn]
+        # Straight 14-day rolling window — covers one tournament week plus
+        # qualifying. Consistent across all players (no per-player tournament
+        # detection, which breaks when cached data lags behind the live draw).
+        # Lower floor (2+) so players early in a draw still appear.
+        curr_cutoff = today - timedelta(days=14)
+        curr_matches = [m for m in all_year_matches
+                        if (d := _parse_dt(m)) and d >= curr_cutoff]
+        if curr_matches:
             curr_agg = aggregate_year(curr_matches, mid, min_matches=2)
             if curr_agg:
                 curr_agg.pop('_meta', None)
@@ -477,7 +467,6 @@ def process_tour(client: MatchstatClient, tour: str, years: list[int],
                     'id':    str(mid), 'bioId': bio_id, 'name': name,
                     'ioc':   b.get('nat', ''), 'year': 'CURR',
                     'surf':  'All', 'tour': tour.upper(),
-                    '_currTn': curr_tn,
                     **curr_agg,
                 })
 
