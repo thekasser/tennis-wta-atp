@@ -385,6 +385,7 @@ select:focus{outline:none;border-color:var(--tc)}
       <div class="trap-group">
         <label>Min Matches</label>
         <select id="trap-min" onchange="trapApp && trapApp.update()">
+          <option value="2">2+</option>
           <option value="5">5+</option>
           <option value="10">10+</option>
           <option value="20">20+</option>
@@ -1900,7 +1901,7 @@ class TrapezoidApp {
     const OPTS = [5, 10, 20, 30, 50];
     const snap = (n) => OPTS.reduce((best, o) =>
       Math.abs(o - n) < Math.abs(best - n) ? o : best, OPTS[0]);
-    if (yearVal === 'CURR') return 5;   // 2+ matches required by pipeline; 5 is the UI floor
+    if (yearVal === 'CURR') return 2;   // pipeline floor is 2; show all qualifying players
     if (yearVal === 'T3M')  return snap((() => {  // same 40th-pct logic as current calendar year
       const cohort = this.allData.filter(p => p.year === 'T3M').map(p => p.matches).filter(n => Number.isFinite(n)).sort((a,b) => a-b);
       return cohort.length ? cohort[Math.floor(0.4 * cohort.length)] : 10;
