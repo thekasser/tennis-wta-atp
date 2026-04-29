@@ -1864,8 +1864,8 @@ class TrapezoidApp {
       opt.textContent = LABELS[y] || String(y);
       sel.appendChild(opt);
     });
-    // Default to T12M if present — most useful early in the calendar year.
-    sel.value = years.includes('T12M') ? 'T12M' : String(years[0]);
+    // Default to T6M if present — most current surface-filterable window.
+    sel.value = years.includes('T6M') ? 'T6M' : (years.includes('T12M') ? 'T12M' : String(years[0]));
     // Match min-matches default to the chosen year (no UI redraw needed yet).
     this.applyDefaultMin();
 

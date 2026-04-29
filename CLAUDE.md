@@ -158,6 +158,30 @@ git push
 
 ---
 
+## Git workflow — Claude must follow this
+
+**Claude must never run `git` commands from the sandbox.** The sandbox mounts the macOS filesystem via Linux; any git lock files it creates have macOS ownership and cannot be removed by the sandbox (`Operation not permitted`). Partial git operations from the sandbox leave permanent `HEAD.lock` / `index.lock` files that block all subsequent git use until Connor manually removes them.
+
+**Correct pattern:**
+1. Claude edits files using Read/Edit/Write tools only.
+2. Claude tells Connor to commit and push from Mac Terminal:
+   ```bash
+   git add -A && git commit -m "message" && git push
+   ```
+3. If push fails with non-fast-forward (remote is ahead due to prior plumbing commits), Connor runs:
+   ```bash
+   git fetch && git reset --hard origin/main
+   git add -A && git commit -m "message" && git push
+   ```
+
+**If lock files appear** (from a previous session where this rule wasn't followed):
+```bash
+rm -f "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard/.git/HEAD.lock"
+rm -f "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard/.git/index.lock"
+```
+
+---
+
 ## Known gotchas
 
 - **WTA rankings partial results:** API sometimes returns top-50 only when pagination doesn't advance. Fallback: `api.wtatennis.com` undocumented endpoint. See comments in `refresh_rankings_api.py`.
