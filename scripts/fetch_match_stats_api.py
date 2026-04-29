@@ -169,10 +169,10 @@ def is_real_match(score: str) -> bool:
 
 # ─── Aggregation (mirrors recompute_trapezoid.aggregate_player) ──────────────
 
-def aggregate_year(matches: list[dict], our_mid: int) -> dict | None:
+def aggregate_year(matches: list[dict], our_mid: int, min_matches: int = MIN_MATCHES) -> dict | None:
     """Return metric dict matching the trapezoid schema, or None if too few matches."""
     real = [m for m in matches if is_real_match(_get(m, 'result', 'score', default=''))]
-    if len(real) < MIN_MATCHES:
+    if len(real) < min_matches:
         return None
 
     matches_n = len(real)
@@ -404,6 +404,7 @@ def process_tour(client: MatchstatClient, tour: str, years: list[int],
         windows = {
             'T12M': today - timedelta(days=365),
             'T6M':  today - timedelta(days=180),
+            'T3M':  today - timedelta(days=90),
         }
         # Matchstat court IDs → surface code (H/C/G). Defaults to H for unknowns.
         SURFACE_MAP = {1:'H', 2:'H', 3:'C', 4:'C', 5:'G', 6:'C', 7:'C'}
@@ -448,6 +449,36 @@ def process_tour(client: MatchstatClient, tour: str, years: list[int],
                     'ioc':   b.get('nat', ''), 'year': tag,
                     'surf':  surf, 'tour': tour.upper(),
                     **surf_agg,
+                })
+
+        # ── Current-tournament aggregate ("CURR") ──────────────────────────────
+        # Find the most recent tournament this player appeared in (within 21
+        # days). Aggregate only those matches with a lower floor (2+ real
+        # matches) so QF/SF players who've played 3-6 matches still appear.
+        curr_cutoff = today - timedelta(days=21)
+        from collections import defaultdict as _dd_curr
+        curr_by_tn: dict = _dd_curr(list)
+        for m in all_year_matches:
+            d = _parse_dt(m)
+            if not d or d < curr_cutoff:
+                continue
+            tn = ((m.get('tournament') or {}).get('name') or '').strip()
+            if tn:
+                curr_by_tn[tn].append(m)
+        if curr_by_tn:
+            def _latest(ms):
+                return max((_parse_dt(m) for m in ms if _parse_dt(m)), default=None)
+            curr_tn = max(curr_by_tn.keys(), key=lambda t: _latest(curr_by_tn[t]) or date.min)
+            curr_matches = curr_by_tn[curr_tn]
+            curr_agg = aggregate_year(curr_matches, mid, min_matches=2)
+            if curr_agg:
+                curr_agg.pop('_meta', None)
+                rows_by_year['CURR'].append({
+                    'id':    str(mid), 'bioId': bio_id, 'name': name,
+                    'ioc':   b.get('nat', ''), 'year': 'CURR',
+                    'surf':  'All', 'tour': tour.upper(),
+                    '_currTn': curr_tn,
+                    **curr_agg,
                 })
 
         # Last 30 across ALL years — used for the form bar (last 10) AND the

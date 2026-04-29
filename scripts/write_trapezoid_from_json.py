@@ -100,10 +100,10 @@ def main():
             else:
                 print(f'  {tour.upper()} {y}: missing ({f.name})')
 
-    # Rolling windows (string keys: 'T12M', 'T6M') — auto-detect on disk.
-    # All-surface file: {tour}_t12m.json
-    # Per-surface files: {tour}_t12m_h.json / _c.json / _g.json
-    for tag in ('T12M', 'T6M'):
+    # Rolling windows (string keys: 'CURR', 'T3M', 'T6M', 'T12M') — auto-detect on disk.
+    # All-surface file: {tour}_t12m.json / _t6m.json / _t3m.json / _curr.json
+    # Per-surface files: {tour}_t12m_h.json / _c.json / _g.json (T3M same pattern)
+    for tag in ('CURR', 'T3M', 'T6M', 'T12M'):
         for tour, bucket in (('atp', atp_by_year), ('wta', wta_by_year)):
             sid_map = load_sid_to_bio_id(tour)
             # All-surface
@@ -140,10 +140,10 @@ def main():
         print('ERROR: no aggregate JSON files found, refusing to write empty data.', file=sys.stderr)
         return 1
 
-    # Order: rolling windows first (T12M, T6M), then calendar years descending.
+    # Order: CURR first (most recent), then rolling windows, then calendar years descending.
     int_years   = sorted({y for y in args.years
                           if y in atp_by_year or y in wta_by_year}, reverse=True)
-    rolling     = [t for t in ('T12M', 'T6M')
+    rolling     = [t for t in ('CURR', 'T3M', 'T6M', 'T12M')
                    if t in atp_by_year or t in wta_by_year]
     years_with_data = rolling + int_years
 

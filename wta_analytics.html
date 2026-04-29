@@ -1859,13 +1859,13 @@ class TrapezoidApp {
     const sel = document.getElementById('trap-year');
     if (!sel) return;
     // Order: rolling windows first (T12M → T6M), then calendar years descending.
-    const ROLL_ORDER = {T12M: 0, T6M: 1};
+    const ROLL_ORDER = {CURR: 0, T3M: 1, T6M: 2, T12M: 3};
     years.sort((a, b) => {
       const ar = (typeof a === 'string') ? ROLL_ORDER[a] ?? 99 : 100 - a;
       const br = (typeof b === 'string') ? ROLL_ORDER[b] ?? 99 : 100 - b;
       return ar - br;
     });
-    const LABELS = {T12M: 'T12M (Last 12 Months)', T6M: 'T6M (Last 6 Months)'};
+    const LABELS = {CURR: 'Current Tournament', T3M: 'T3M (Last 3 Months)', T6M: 'T6M (Last 6 Months)', T12M: 'T12M (Last 12 Months)'};
     years.forEach(y => {
       const opt = document.createElement('option');
       opt.value = String(y);
