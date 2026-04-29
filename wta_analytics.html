@@ -375,6 +375,14 @@ select:focus{outline:none;border-color:var(--tc)}
         </select>
       </div>
       <div class="trap-group">
+        <label title="Filter to players in an active tournament draw">Draw</label>
+        <select id="trap-draw" onchange="trapApp && trapApp.update()">
+          <option value="all">All players</option>
+          <option value="draw">In active draw</option>
+          <option value="alive">Alive only</option>
+        </select>
+      </div>
+      <div class="trap-group">
         <label>Min Matches</label>
         <select id="trap-min" onchange="trapApp && trapApp.update()">
           <option value="5">5+</option>
@@ -1977,6 +1985,25 @@ class TrapezoidApp {
     // returns nothing (which is the honest signal — no data).
     const surfEl = document.getElementById('trap-surf');
     const surf = surfEl ? surfEl.value : 'All';
+    // Draw filter — build per-tour Sets of qualifying bioIds from activeTournaments
+    const drawFilter = (document.getElementById('trap-draw') || {}).value || 'all';
+    const drawIds = { atp: null, wta: null }; // null = no filter
+    if (drawFilter !== 'all') {
+      drawIds.atp = new Set();
+      drawIds.wta = new Set();
+      [['atp', typeof SEASON_ATP !== 'undefined' ? SEASON_ATP : null],
+       ['wta', typeof SEASON_WTA !== 'undefined' ? SEASON_WTA : null]].forEach(([t, season]) => {
+        if (!season || !season.activeTournaments) return;
+        season.activeTournaments.forEach(at => {
+          if (!at.players) return;
+          Object.entries(at.players).forEach(([idStr, status]) => {
+            if (drawFilter === 'draw' || (drawFilter === 'alive' && !status.elim))
+              drawIds[t].add(parseInt(idStr));
+          });
+        });
+      });
+    }
+
     const baseFiltered = this.allData.filter(p => {
       if (year !== null && p.year !== year) return false;
       if (tour !== 'both' && p.tour.toLowerCase() !== tour) return false;
@@ -1986,6 +2013,9 @@ class TrapezoidApp {
       if (surf === 'All' && pSurf !== 'All') return false;  // exclude surface variants when on 'All'
       if (p.matches < minM) return false;
       if (p[xKey] === null || p[yKey] === null) return false;
+      // Draw filter
+      const tourKey = p.tour.toLowerCase();
+      if (drawIds[tourKey] !== null && !drawIds[tourKey].has(p.bioId)) return false;
       return true;
     });
     if (!compareYear) return baseFiltered;
