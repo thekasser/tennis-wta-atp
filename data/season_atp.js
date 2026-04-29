@@ -4,11 +4,37 @@
 
 const SEASON_ATP = {
   lastUpdated: "2026-04-29",
-  activeTournaments: [
+    activeTournaments: [
       {
         id: "madrid26",
-        stage: "R32",
+        stage: "SF",
         players: {
+        2: {r:"SF", elim:false},
+        3: {r:"QF", elim:false},
+        5: {r:"R16", elim:true},
+        6: {r:"R64", elim:true},
+        7: {r:"R32", elim:true},
+        9: {r:"R64", elim:true},
+        10: {r:"R16", elim:true},
+        11: {r:"R64", elim:true},
+        12: {r:"QF", elim:false},
+        13: {r:"QF", elim:false},
+        14: {r:"QF", elim:true},
+        15: {r:"WD", elim:true},
+        16: {r:"R64", elim:true},
+        18: {r:"R16", elim:true},
+        20: {r:"SF", elim:false},
+        21: {r:"R64", elim:true},
+        24: {r:"R32", elim:true},
+        27: {r:"R32", elim:true},
+        28: {r:"R16", elim:true},
+        29: {r:"R64", elim:true},
+        30: {r:"R16", elim:true},
+        33: {r:"R16", elim:true},
+        47: {r:"R64", elim:true},
+        101: {r:"R16", elim:true},
+        102: {r:"R32", elim:true},
+        104: {r:"QF", elim:true}
         }
       },
     ],

@@ -1,104 +1,175 @@
-# CLAUDE.md — Tennis Dashboard
+# CLAUDE.md — Tennis Dashboard (ATP / WTA 2026)
 
-Personal-use ATP/WTA analytics dashboard. **Data accuracy is the primary constraint.** Never fabricate player stats, rankings, or results — source everything or say it's a placeholder.
-
----
-
-## What this project is
-
-Two browser-opened HTML dashboards plus automated data pipelines:
-
-- `wta_analytics.html` — rankings (T12M + YTD), active draws, matchup predictor
-- `trapezoid.html` — per-player serve/return/tiebreak/clutch scatter, filtered by year and tour
-
-Not a web app. Opens from `file://` on Connor's Mac. No build step, no server.
+Personal-use ATP/WTA analytics dashboard. **Data accuracy is the primary constraint.** Never fabricate player stats, rankings, or results — source everything from the data files or label it explicitly as a placeholder.
 
 ---
 
-## File map (read these before touching anything)
+## What this is
 
-| What you need | Where to look |
-|---|---|
-| Data architecture + source registry | `data/sources.md` |
-| Scrape runbook (step-by-step JS + Python) | `scripts/SCRAPE_INSTRUCTIONS.md` |
-| Trapezoid refresh runbook | `scripts/trapezoid_refresh_SKILL.md` |
-| Tournament calendar logic | `data/tournaments.js` |
-| Player bios (static, curated) | `data/players_atp.js`, `data/players_wta.js` |
-| Live season data (auto-updated) | `data/season_atp.js`, `data/season_wta.js` |
-| Trapezoid metrics | `data/trapezoid_data.js` |
+Single-file HTML dashboard (`wta_analytics.html`) deployed as a static site on Cloudflare Pages, gated by Cloudflare Zero Trust (email allowlist, ~10 family/friends). No server-side compute. No build step. Data is pre-materialized into `data/*.js` files and committed to the repo.
+
+**Live URL:** `https://tennis-wta-atp.kasserconnor.workers.dev/wta_analytics`
+**Repo:** private GitHub → auto-deploys to Cloudflare Pages on push to `main`
 
 ---
 
-## Data model (commit this to memory)
+## Architecture
 
-```js
-// season_*.js structure
-SEASON_ATP.players[id] = {
-  rank,       // current singles ranking
-  pts,        // T12M points (read from rankings page — NOT computed)
-  ytd,        // YTD race points (from race standings page)
-  rankMove,   // +/- vs prior week
-  results: {  // per-tournament performance
-    [tournId]: { r, pts }
-  }
-}
-SEASON_ATP.activeTournaments = [{ id, stage, players: { [pid]: { r, elim } } }]
+Python scripts → JSON cache → `data/*.js` → committed to git → Cloudflare Pages serves them → `wta_analytics.html` renders in the browser.
+
+The API key (`.env`) lives only on Connor's Mac. Never in the repo. Never on Cloudflare.
+
+---
+
+## The four tabs
+
+| Tab | Data source | What it shows |
+|-----|-------------|---------------|
+| **Live Events** | `season_*.js` + `tournaments.js` | Active tournament per-player status: alive/eliminated/withdrawn, guaranteed pts, projected pts, defending pts, net change |
+| **Rankings (T12M)** | `season_*.js` | Sortable T12M + YTD race standings, scatter chart, biggest movers, form bar + trend sparkline |
+| **Trapezoid Metrics** | `trapezoid_data.js` | Scatter explorer across 9 metrics (serve %, return %, BP saved, tiebreak %, aces/SvGm, etc.) filterable by year/tour/surface/min-matches |
+| **Matchup Predictor** | `h2h.js` + `season_*.js` | Pairwise win probability with surface bias, real H2H records, form ratio |
+
+Click any player name → drill-down modal: bio, metrics by period/surface, last-15 matches, top H2H records.
+
+---
+
+## Data files (auto-generated, committed to repo)
+
+```
+data/
+├── tournaments.js          # 2026 calendar — set active:true to surface in Live Events
+├── players_atp.js          # 110 ATP bios (top-100 + recent top-50 absentees)
+├── players_wta.js          # 111 WTA bios
+├── season_atp.js           # T12M rankings + YTD race + activeTournaments
+├── season_wta.js           # same
+├── rank_baseline_atp.json  # weekly snapshot for rankMove computation
+├── rank_baseline_wta.json  # same
+├── trapezoid_data.js       # all metrics × period × surface (2024 Sackmann + 2025+ API)
+├── recent_matches.js       # last 30 matches per bio (form-bar hover + Live Events draw)
+├── tournament_history.js   # per-bio tournament results across years
+└── h2h.js                  # head-to-head records
 ```
 
-Player IDs in `players_atp.js` / `players_wta.js` are 1–100, approximately ranking order at the time of the last manual refresh (id:1 = Alcaraz for ATP). Name matching between scraped data and player IDs is handled by `update_season.py`.
+---
+
+## Scripts
+
+```
+scripts/
+├── api_client.py                # Matchstat API wrapper — auth, cache, rate-limit retry
+├── refresh_rankings_api.py      # Rankings refresh (STEP 1 of pipeline)
+├── fetch_match_stats_api.py     # Match-level stats fetch (STEP 2 of pipeline)
+├── write_trapezoid_from_json.py # Merge aggregates → trapezoid_data.js (STEP 3)
+├── build_h2h.py                 # H2H aggregator — no API calls, reads cache only
+├── patch_wta_active.py          # Manual: inject WTA active-tournament status
+├── link_bios_to_api.py          # One-time: match bio names → Matchstat IDs
+├── link_bios_to_sackmann.py     # One-time: match bio names → Sackmann IDs
+├── recompute_trapezoid.py       # DEPRECATED Sackmann CSV fallback — do not run
+└── update_season.py             # DEPRECATED Chrome scraper — do not run
+```
+
+**Never run** `recompute_trapezoid.py` or `update_season.py` — both replaced by the API pipeline.
 
 ---
 
-## Pipeline summary
+## Data sources & licensing
 
-### Rankings + draws (daily/weekly)
-1. Chrome MCP scrapes ATP + WTA rankings and race pages (4 pages total)
-2. Results written to `scripts/raw/*.json`
-3. `python scripts/update_season.py` processes JSON → writes `data/season_*.js`
+| Data | Source | License |
+|------|--------|---------|
+| T12M/YTD rankings + match-level stats (2025+) | Matchstat Tennis API via RapidAPI (`jjrm365`) | Commercial; $10/mo Pro tier; 10k calls/month |
+| Match-level stats (2024 only, frozen) | Jeff Sackmann tennis CSVs | CC BY-NC-SA 4.0 — personal use ✓, commercial ✗ |
+| Tournament calendar | Manual entry | N/A |
+| Player bios | Manual curation | N/A |
 
-Scheduled as `tennis-dashboard-update` task in Cowork. Full runbook in `scripts/SCRAPE_INSTRUCTIONS.md`.
+**Budget:** Matchstat Pro = $10/mo. `player/past-matches` has a 6-hour TTL cache — mid-week runs of step 2 cost ~10–50 API calls (only players who played in the last 6 hours need fresh fetches). Weekly full pipeline ≈ 500 API calls on a cold cache. Daily runs during active tournaments ≈ 50–100/day. Keep total under ~3k/month to stay well within the 10k cap.
 
-### Trapezoid metrics (weekly/annual)
-Fetches Jeff Sackmann's match-level CSVs from GitHub → aggregates in-browser → `scripts/write_trapezoid_from_json.py` writes `data/trapezoid_data.js`.
-
-Sackmann CSVs update annually (year N lands in Jan-Feb of N+1). The 2025 file won't appear until early 2026.
-
----
-
-## Known issues (don't debug these without checking first)
-
-- **WTA load-more bug**: `wtatennis.com/rankings/singles` sometimes only returns top-50 when the "Load More" button doesn't trigger. Fallback: use the undocumented `api.wtatennis.com/tennis/players/ranked?page=N&pageSize=50` endpoint. See `data/sources.md` → Path A.
-- **activeTournaments not updating for WTA**: WTA rankings page doesn't embed tournament status inline (unlike ATP). Manual update or separate draw scrape required.
-- **Race tab heatmap mostly empty**: per-tournament results in `results{}` only populate if a tournament transitions from active → complete while the scraper is running. Currently manual. See `data/sources.md` → Action Item 3.
-- **Player name matching warnings**: `update_season.py` prints `WARN: X not found — skipping` for unmatched names. Match rate < 80 suggests page structure changed.
+**License hard stop:** `data/trapezoid_data.js` inherits CC BY-NC-SA 4.0 from Sackmann. Commercial use is prohibited and cannot be unlocked without replacing the entire match-level data layer. Don't propose monetization features without flagging this.
 
 ---
 
-## License constraint — important
+## Refresh pipeline
 
-`data/trapezoid_data.js` is derived from Jeff Sackmann's data, licensed **CC BY-NC-SA 4.0**.
+### Scheduled task (auto)
+`tennis-dashboard-update` runs **every day at 10pm PST** via Cowork Scheduled Tasks. Runs all three steps + QA check + git commit + push → Cloudflare Pages auto-deploys. The 6-hour `past-matches` cache makes daily step 2 runs cheap (~10–50 calls on non-Monday runs).
 
-- ✅ Personal use, learning, sharing
-- ❌ Ads, commercial products, paid tiers
+### Manual refresh
+```bash
+cd "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard"
 
-This is **non-negotiable and non-upgradable** without replacing the entire match-level data layer. Don't suggest commercial features without flagging this.
+# Step 1 — Rankings (~4 API calls)
+python3 scripts/refresh_rankings_api.py --tour both
+
+# Step 2 — Match-level stats (cache-aware: ~10–50 API calls mid-week, ~500 cold)
+python3 scripts/fetch_match_stats_api.py --tour both --years 2025 2026
+
+# Step 3 — Merge trapezoid metrics (no API calls)
+python3 scripts/write_trapezoid_from_json.py --years 2024 2025 2026
+
+# H2H rebuild (no API calls, run after step 2)
+python3 scripts/build_h2h.py
+
+# QA — verify alive/eliminated counts look sane before committing
+python3 -c "
+import re
+from pathlib import Path
+ok = True
+for tour in ['atp', 'wta']:
+    c = Path(f'data/season_{tour}.js').read_text()
+    m = re.search(r'activeTournaments:\s*\[([\s\S]*?)\],', c)
+    if not m:
+        print(f'{tour.upper()}: WARNING — no activeTournaments block found')
+        ok = False
+        continue
+    block = m.group(0)
+    alive = block.count('elim:false')
+    elim  = block.count('elim:true')
+    stage = re.search(r'stage:\s*\"([^\"]+)\"', block)
+    stage = stage.group(1) if stage else '?'
+    print(f'{tour.upper()}: stage={stage}, alive={alive}, eliminated={elim}')
+    if alive == 0 and elim == 0:
+        print(f'  WARNING — players block is empty, draw status will come from recent_matches only')
+        ok = False
+    if alive > 64:
+        print(f'  WARNING — alive count suspiciously high ({alive}), check for stale elim:false entries')
+        ok = False
+print('QA passed' if ok else 'QA FAILED — review before committing')
+"
+
+# Commit + push → triggers Cloudflare Pages auto-deploy
+git add data/
+git commit -m "chore: data refresh $(date +%Y-%m-%d)"
+git push
+```
 
 ---
 
-## How to work in this project
+## Making common changes
 
-**Before modifying any pipeline script**, read `scripts/SCRAPE_INSTRUCTIONS.md` and check what the script already handles. `update_season.py` preserves `results{}` history — don't overwrite it with a naive rewrite.
+**Add a player:** Edit `data/players_atp.js` or `data/players_wta.js`. Assign a unique integer ID (no conflicts). Then run `link_bios_to_api.py` to match the new name to a Matchstat ID. Do not hardcode players inside the HTML.
 
-**Before modifying dashboard HTML/JSX**, check whether data is coming from `season_*.js` vs `players_*.js` vs `trapezoid_data.js`. Getting the source wrong produces stale or missing data.
+**Add a tournament:** Edit `data/tournaments.js` only — update both `TOURNAMENTS_DATA[]` and `PTS{}` lookup.
 
-**When adding players**: edit `data/players_atp.js` or `data/players_wta.js` — do NOT hardcode players inside the HTML. IDs must not conflict with existing entries.
+**Activate a live tournament:** Set `active: true` in `data/tournaments.js`. For WTA (API doesn't expose draw status), use `patch_wta_active.py` or set manually.
 
-**When adding tournaments**: edit `data/tournaments.js` only. The `TOURNAMENTS_DATA[]` array and `PTS{}` lookup table both need updating.
+**Modify dashboard UI:** Edit `wta_analytics.html` directly — it is the compiled output. `wta_analytics_dashboard.jsx` is a JSX reference source only; it is not used in deployment.
 
-**Scraper JS snippets are fragile**: ATP and WTA change their page DOM periodically. If match rate drops, inspect the live page and update the selectors. The current working snippets are in `scripts/SCRAPE_INSTRUCTIONS.md` — don't modify them without testing.
+**Before modifying any pipeline script:** Check whether data flows from `season_*.js` vs `players_*.js` vs `trapezoid_data.js`. Getting the source wrong produces stale or missing data. `refresh_rankings_api.py` preserves `results{}` history — don't overwrite it with a naive rewrite.
+
+---
+
+## Known gotchas
+
+- **WTA rankings partial results:** API sometimes returns top-50 only when pagination doesn't advance. Fallback: `api.wtatennis.com` undocumented endpoint. See comments in `refresh_rankings_api.py`.
+- **WTA active draw status:** Not in Matchstat API. Set manually in `tournaments.js` or use `patch_wta_active.py`.
+- **`SvGms` field missing:** Per-match service games count isn't always in the API payload. If `acesPerSvGm` looks wrong, check what `fetch_match_stats_api.py` is actually receiving.
+- **Cloudflare 1010 errors:** User-Agent rejection — already mitigated in `api_client.py`. If it recurs, update the UA string there.
+- **Race tab heatmap sparse:** Requires per-tournament results data; fills in during active events.
+- **`scripts/cache/` is gitignored:** Local only. Don't delete it — saves ~500 API calls on every weekly run.
+- **`.env` is gitignored:** `MATCHSTAT_API_KEY` lives only on Connor's Mac. Never commit it.
 
 ---
 
 ## Response style
 
-BLUF (bottom line first). No fluff. If something is a hypothesis or estimate, label it explicitly. Cite the specific file/line when making claims about code behavior.
+BLUF first. No fluff. If something is a hypothesis or estimate, label it explicitly. Cite the specific file/line when making claims about code behavior.
