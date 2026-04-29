@@ -11,7 +11,7 @@ PLAYERS_FILE = REPO_ROOT / 'data' / 'players_wta.js'
 SEASON_FILE = REPO_ROOT / 'data' / 'season_wta.js'
 
 TOURNAMENT_ID = 'madrid26'
-CURRENT_STAGE = 'R32'
+CURRENT_STAGE = 'QF'
 
 # Load draw data
 draw_data = json.loads(DRAW_FILE.read_text())
