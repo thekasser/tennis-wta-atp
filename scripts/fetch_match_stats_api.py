@@ -169,7 +169,8 @@ def is_real_match(score: str) -> bool:
 
 # ─── Aggregation (mirrors recompute_trapezoid.aggregate_player) ──────────────
 
-def aggregate_year(matches: list[dict], our_mid: int, min_matches: int = MIN_MATCHES) -> dict | None:
+def aggregate_year(matches: list[dict], our_mid: int, min_matches: int = MIN_MATCHES,
+                   min_tb: int = 3, min_dec: int = 3) -> dict | None:
     """Return metric dict matching the trapezoid schema, or None if too few matches."""
     real = [m for m in matches if is_real_match(_get(m, 'result', 'score', default=''))]
     if len(real) < min_matches:
@@ -251,8 +252,8 @@ def aggregate_year(matches: list[dict], our_mid: int, min_matches: int = MIN_MAT
                               ),
         'acesPerSvGm':       round(aces / sv_gms_estimate, 2) if sv_gms_estimate else None,
         'bpSavedPct':        safe_pct(bp_saved, bp_faced),
-        'tbWinPct':          safe_pct(tb_won, tb_played) if tb_played >= 3 else None,
-        'decSetWinPct':      safe_pct(dec_won, dec_played) if dec_played >= 3 else None,
+        'tbWinPct':          safe_pct(tb_won, tb_played) if tb_played >= min_tb else None,
+        'decSetWinPct':      safe_pct(dec_won, dec_played) if dec_played >= min_dec else None,
         '_meta': {
             'svpt':           svpt,
             'matchesWithStats': used_for_serve,
@@ -460,7 +461,7 @@ def process_tour(client: MatchstatClient, tour: str, years: list[int],
         curr_matches = [m for m in all_year_matches
                         if (d := _parse_dt(m)) and d >= curr_cutoff]
         if curr_matches:
-            curr_agg = aggregate_year(curr_matches, mid, min_matches=2)
+            curr_agg = aggregate_year(curr_matches, mid, min_matches=1, min_tb=1, min_dec=1)
             if curr_agg:
                 curr_agg.pop('_meta', None)
                 rows_by_year['CURR'].append({
