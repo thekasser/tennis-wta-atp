@@ -376,7 +376,7 @@ select:focus{outline:none;border-color:var(--tc)}
       </div>
       <div class="trap-group">
         <label title="Filter to players in an active tournament draw">Draw</label>
-        <select id="trap-draw" onchange="trapApp && trapApp.update()">
+        <select id="trap-draw" onchange="trapApp && trapApp.onDrawFilterChange()">
           <option value="all">All players</option>
           <option value="draw">In active draw</option>
           <option value="alive">Alive only</option>
@@ -1967,6 +1967,15 @@ class TrapezoidApp {
     if (btns[p.btn]) btns[p.btn].classList.add('active');
     this.update();
   }
+  onDrawFilterChange() {
+    const drawFilter = document.getElementById('trap-draw').value;
+    if (drawFilter !== 'all') {
+      // Small draw: drop min-matches threshold so all draw players appear
+      const minEl = document.getElementById('trap-min');
+      if (minEl && parseInt(minEl.value) > 5) minEl.value = '5';
+    }
+    this.update();
+  }
   getFilteredData() {
     const tour = document.getElementById('trap-tour').value;
     const minM = parseInt(document.getElementById('trap-min').value);
@@ -2151,15 +2160,25 @@ class TrapezoidApp {
           const sorted = [...self.filteredData].sort((a,b) => (b[totalKey]||0)-(a[totalKey]||0));
           const topN = self.filteredData.length <= 50 ? sorted : sorted.slice(0, Math.max(15, Math.ceil(sorted.length * 0.12)));
           const topIds = new Set(topN.map(p => p.id + p.tour));
+          const ca = chart.chartArea;
           meta.data.forEach((point, i) => {
             const p = self.filteredData[i];
             if (!topIds.has(p.id + p.tour)) return;
             c.save();
             c.font = "11px 'Manrope', system-ui, sans-serif";
             c.fillStyle = 'rgba(36,43,42,0.78)';
-            c.textAlign = 'left'; c.textBaseline = 'bottom';
             const surname = p.name.split(' ').pop();
-            c.fillText(surname, point.x + self.getPointSize(p) + 3, point.y - 2);
+            const r = self.getPointSize(p);
+            const tw = c.measureText(surname).width;
+            // Horizontal: flip left when label would overflow right edge
+            const goLeft = (point.x + r + 4 + tw) > ca.right;
+            const tx = goLeft ? point.x - r - 4 : point.x + r + 3;
+            c.textAlign = goLeft ? 'right' : 'left';
+            // Vertical: flip below when label would overflow top edge
+            const goDown = (point.y - 14) < ca.top;
+            const ty = goDown ? point.y + r + 12 : point.y - 2;
+            c.textBaseline = goDown ? 'top' : 'bottom';
+            c.fillText(surname, tx, ty);
             c.restore();
           });
         }
