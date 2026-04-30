@@ -17,7 +17,7 @@ const SEASON_ATP = {
           9: {r:"R64", elim:true},
           10: {r:"R16", elim:true},
           11: {r:"R64", elim:true},
-          12: {r:"QF", elim:false},
+          12: {r:"QF", elim:true},
           13: {r:"QF", elim:false},
           14: {r:"QF", elim:true},
           15: {r:"WD", elim:true},
@@ -35,7 +35,7 @@ const SEASON_ATP = {
           101: {r:"R16", elim:true},
           102: {r:"R32", elim:true},
           104: {r:"QF", elim:true},
-          136: {r:"QF", elim:false}
+          136: {r:"SF", elim:false}
           }
         },
       ],
