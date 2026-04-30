@@ -323,11 +323,12 @@ select:focus{outline:none;border-color:var(--tc)}
       </div>
     </div>
     <div class="tbl-wrap">
-      <div class="filter-row">
+      <div class="filter-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="filter-label">Show:</span>
         <button class="flt-btn active" id="rflt-all"   onclick="setRankFilter('all')">All 100</button>
         <button class="flt-btn"        id="rflt-top20" onclick="setRankFilter('top20')">Top 20</button>
         <button class="flt-btn"        id="rflt-movers"onclick="setRankFilter('movers')">Movers</button>
+        <button class="flt-btn" id="rflt-proj" onclick="toggleProjRankings()" title="Reorder rankings using projected T12M pts from active draw — players not in any draw keep their current pts" style="margin-left:auto">Projected Rankings</button>
       </div>
       <table id="tbl-rankings">
         <thead><tr>
@@ -335,6 +336,7 @@ select:focus{outline:none;border-color:var(--tc)}
           <th>Move</th>
           <th>Player</th>
           <th onclick="sortRank('pts')"      id="rth-pts">T12M Pts ↕</th>
+          <th id="rth-projpts" title="Projected T12M after active tournament settles — only shown when Projected Rankings is on" style="display:none">Proj T12M</th>
           <th onclick="sortRank('ytd')"      id="rth-ytd">YTD Race ↕</th>
           <th onclick="sortRank('ytdRank')"  id="rth-ytdRank" title="Rank by YTD race points (within tour, top 100)">YTD Rank ↕</th>
           <th onclick="sortRank('rankDelta')"id="rth-rankDelta" title="T12M rank − YTD rank. Positive = trending up; negative = lagging the field this season.">T12M − YTD ↕</th>
@@ -497,6 +499,7 @@ let RANK_ASC  = true;
 let PRED_FILTER = 'all';
 let LIVE_FILTER = 'all';   // 'all' | 'alive' | 'defenders' — Live Events table filter
 let PRED_SURF   = 'Hard';
+let USE_PROJ_RANKINGS = false;  // Toggle: show projected T12M in Rankings tab
 const CHARTS = {};
 
 const WTA_H2H = {
@@ -693,6 +696,10 @@ function matchProb(pA, pB, surf) {
 // TOUR SWITCHING
 // ═══════════════════════════════════════
 function setTour(t) {
+  // Reset projected rankings toggle on tour switch (draw data is tour-specific)
+  USE_PROJ_RANKINGS = false;
+  const projBtn = document.getElementById('rflt-proj');
+  if (projBtn) projBtn.classList.remove('active');
   TOUR=t; TC=t==='WTA'?'#406b5f':'#5f7380';
   document.documentElement.dataset.tour = t.toLowerCase();
   document.documentElement.style.setProperty('--tc',TC);
@@ -977,6 +984,54 @@ function setRankFilter(f) {
   renderScatter();   // filter the chart above too
 }
 
+function toggleProjRankings() {
+  USE_PROJ_RANKINGS = !USE_PROJ_RANKINGS;
+  const btn = document.getElementById('rflt-proj');
+  if (btn) btn.classList.toggle('active', USE_PROJ_RANKINGS);
+  renderRankingsTable();
+}
+
+// Build a map of bioId → projT12M using the same logic as renderLive().
+// Only includes players present in an active tournament draw.
+function buildProjRankingsMap() {
+  const map = new Map();
+  const sd  = seasonData();
+  const allBios = TOUR === 'WTA' ? PLAYERS_WTA : PLAYERS_ATP;
+  const allSeas = TOUR === 'WTA' ? SEASON_WTA  : SEASON_ATP;
+
+  (sd.activeTournaments || []).forEach(evData => {
+    const tourn = TOURNAMENTS_DATA.find(t => t.id === evData.id);
+    if (!tourn) return;
+    const ptsKey   = tourn.type === 'M1000' ? (tourn.draw === 128 ? 'M1000_128' : 'M1000_96') : tourn.type;
+    const ptsTable = PTS[ptsKey] || PTS.M1000_96;
+
+    Object.entries(evData.players || {}).forEach(([pidStr, status]) => {
+      const pid = parseInt(pidStr);
+      const bio = allBios.find(p => p.id === pid);
+      const seas = allSeas.players[pid] || {};
+      if (!bio) return;
+      const p = {...bio, ...seas};
+      const isElim = status.elim;
+
+      // Use projected pts if still alive, guaranteed if eliminated
+      let ptsEarned;
+      if (isElim) {
+        ptsEarned = ptsTable[status.r] || 0;
+      } else {
+        const projInfo = computeProjection(p, tourn, status, ptsTable);
+        ptsEarned = projInfo.projected;
+      }
+
+      const defending = computeDefending(pid, tourn);
+      const currPts   = seas.pts || 0;
+      const projT12M  = currPts + ptsEarned - defending;
+      map.set(pid, { projT12M, ptsEarned, defending, currPts, isElim });
+    });
+  });
+
+  return map;
+}
+
 function sortRank(col) {
   if(RANK_SORT===col) RANK_ASC=!RANK_ASC;
   else { RANK_SORT=col; RANK_ASC=(col==='rank'||col==='ytdRank'); }
@@ -1109,50 +1164,109 @@ function renderScatter() {
 }
 
 function renderRankingsTable() {
-  // 1. Compute YTD rank within the full tour roster (so filters don't change YTD rank)
+  // Show/hide the Proj T12M column header based on toggle state
+  const projTh = document.getElementById('rth-projpts');
+  if (projTh) projTh.style.display = USE_PROJ_RANKINGS ? '' : 'none';
+
+  // 1. Build projected rankings map if toggle is on
+  const projMap = USE_PROJ_RANKINGS ? buildProjRankingsMap() : new Map();
+
+  // 2. Compute YTD rank within the full tour roster (so filters don't change YTD rank)
   const all = players();
   const ytdSorted = [...all].sort((a,b)=>b.ytd-a.ytd);
   const ytdRankById = {};
   ytdSorted.forEach((p,i)=>{ ytdRankById[p.id] = p.ytd>0 ? i+1 : null; });
-  // 2. Decorate every player with ytdRank + rankDelta (T12M rank − YTD rank; positive = trending up)
-  let data = all.map(p => ({
-    ...p,
-    ytdRank: ytdRankById[p.id],
-    rankDelta: ytdRankById[p.id]==null ? null : (p.rank - ytdRankById[p.id])
-  }));
-  // 3. Apply filters
+
+  // 3. Decorate every player with ytdRank + rankDelta + projT12M
+  let data = all.map(p => {
+    const proj = projMap.get(p.id);
+    const projT12M = proj ? proj.projT12M : p.pts;  // fallback to current pts
+    const inDraw   = projMap.has(p.id);
+    return {
+      ...p,
+      ytdRank: ytdRankById[p.id],
+      rankDelta: ytdRankById[p.id]==null ? null : (p.rank - ytdRankById[p.id]),
+      projT12M,
+      inDraw,
+      projData: proj || null,
+    };
+  });
+
+  // 4. Apply filters
   if (RANK_FILTER==='top20')  data = data.filter(p=>p.rank<=20);
   if (RANK_FILTER==='movers') data = data.filter(p=>Math.abs(p.rankMove)>=2);
-  // 4. Sort. Treat null ytdRank/rankDelta as worst.
-  data.sort((a,b)=>{
-    let av=a[RANK_SORT], bv=b[RANK_SORT];
-    if (av==null) av = RANK_ASC? Infinity : -Infinity;
-    if (bv==null) bv = RANK_ASC? Infinity : -Infinity;
-    const v = av<bv?-1:av>bv?1:0;
-    return RANK_ASC?v:-v;
-  });
-  // 5. Helper for delta cell
+
+  // 5. Sort — when projected toggle on, sort by projT12M desc; else normal sort
+  if (USE_PROJ_RANKINGS) {
+    data.sort((a,b) => b.projT12M - a.projT12M);
+  } else {
+    data.sort((a,b)=>{
+      let av=a[RANK_SORT], bv=b[RANK_SORT];
+      if (av==null) av = RANK_ASC? Infinity : -Infinity;
+      if (bv==null) bv = RANK_ASC? Infinity : -Infinity;
+      const v = av<bv?-1:av>bv?1:0;
+      return RANK_ASC?v:-v;
+    });
+  }
+
+  // 6. Helper for delta cell
   const deltaCell = d => {
     if (d==null) return '<td style="color:var(--muted)">—</td>';
     if (d>0)  return `<td style="font-weight:700;color:var(--accent-green)">+${d}</td>`;
     if (d<0)  return `<td style="font-weight:700;color:var(--accent-rose)">${d}</td>`;
     return '<td style="font-weight:700;color:var(--muted)">0</td>';
   };
-  document.getElementById('rank-tbody').innerHTML = data.map(p=>`
-    <tr>
-      <td style="font-weight:800;color:${p.rank<=4?'var(--accent-amber)':'var(--ink)'}">#${p.rank}</td>
+
+  // 7. Projected rank number — position in sorted list when toggle is on
+  const projRankMap = new Map();
+  if (USE_PROJ_RANKINGS) {
+    [...data].sort((a,b) => b.projT12M - a.projT12M).forEach((p,i) => projRankMap.set(p.id, i+1));
+  }
+
+  document.getElementById('rank-tbody').innerHTML = data.map((p, i)=>{
+    // Rank display: when projected toggle on, show projected rank and delta vs current
+    let rankCell;
+    if (USE_PROJ_RANKINGS) {
+      const projRank = i + 1;  // position in sorted list
+      const rankDiff = p.rank - projRank;  // positive = would move up
+      const rankDiffStr = rankDiff > 0 ? `<span style="font-size:10px;color:var(--accent-green);margin-left:3px">▲${rankDiff}</span>`
+                        : rankDiff < 0 ? `<span style="font-size:10px;color:var(--accent-rose);margin-left:3px">▼${Math.abs(rankDiff)}</span>`
+                        : '';
+      rankCell = `<td style="font-weight:800;color:${projRank<=4?'var(--accent-amber)':'var(--ink)'}">#${projRank}${rankDiffStr}</td>`;
+    } else {
+      rankCell = `<td style="font-weight:800;color:${p.rank<=4?'var(--accent-amber)':'var(--ink)'}">#${p.rank}</td>`;
+    }
+
+    // Projected T12M cell (only shown when toggle is on)
+    let projCell = '';
+    if (USE_PROJ_RANKINGS) {
+      const proj = p.projData;
+      const color = p.projT12M > p.pts ? 'var(--accent-green)'
+                  : p.projT12M < p.pts ? 'var(--accent-rose)'
+                  : 'var(--muted)';
+      const netPts = proj ? proj.ptsEarned - proj.defending : 0;
+      const tip = proj
+        ? `Earned: +${proj.ptsEarned} · Defending: -${proj.defending} · Net: ${netPts >= 0 ? '+' : ''}${netPts}`.replace(/"/g,'&quot;')
+        : 'Not in active draw — current pts used';
+      const inDrawStyle = !p.inDraw ? 'opacity:.55;font-style:italic' : '';
+      projCell = `<td class="proj-cell" data-tooltip="${tip}" style="font-weight:700;color:${color};${inDrawStyle}">${fmtPts(p.projT12M)}</td>`;
+    }
+
+    return `<tr>
+      ${rankCell}
       <td>${moveHTML(p.rankMove)}</td>
       <td>
         <div style="font-weight:600"><span class="player-link" onclick="openPlayerModal(${p.id}, TOUR)">${p.name}</span>${injIcon(p)}</div>
       </td>
       <td style="font-weight:700;color:var(--tc)">${p.pts.toLocaleString()}</td>
+      ${projCell}
       <td style="font-weight:700;color:var(--accent-amber)">${p.ytd.toLocaleString()}</td>
       <td style="font-weight:700;color:var(--ink)">${p.ytdRank!=null?'#'+p.ytdRank:'—'}</td>
       ${deltaCell(p.rankDelta)}
       <td><div class="form-row">${formBarHTML(p.form, p.id)}</div><div title="Rolling 5-match win rate (last ~30 matches)">${formSparkline(p.form)}</div></td>
       <td style="color:var(--muted)">${p.nat}</td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════
