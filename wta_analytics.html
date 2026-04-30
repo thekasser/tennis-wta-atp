@@ -317,7 +317,7 @@ select:focus{outline:none;border-color:var(--tc)}
   <div class="tab-panel" id="tab-rankings">
     <div class="stat-row" id="rank-stats"></div>
     <div class="chart-card" id="scatter-card">
-      <h3>YTD Race Points vs T12M Ranking Points</h3>
+      <h3 id="scatter-title">YTD Race Points vs T12M Ranking Points</h3>
       <div class="chart-wrap" style="height:280px">
         <canvas id="chart-scatter"></canvas>
       </div>
@@ -988,6 +988,7 @@ function toggleProjRankings() {
   USE_PROJ_RANKINGS = !USE_PROJ_RANKINGS;
   const btn = document.getElementById('rflt-proj');
   if (btn) btn.classList.toggle('active', USE_PROJ_RANKINGS);
+  renderScatter();
   renderRankingsTable();
 }
 
@@ -1078,33 +1079,61 @@ function renderRankings() {
 }
 
 function renderScatter() {
+  // Update chart card title to reflect projected mode
+  const scatterTitle = document.getElementById('scatter-title');
+  if (scatterTitle) scatterTitle.textContent = USE_PROJ_RANKINGS
+    ? 'YTD Race Points vs Projected T12M (after active draw)'
+    : 'YTD Race Points vs T12M Ranking Points';
+
   let ps = players();
   // Apply Rankings filter so chart matches the table beneath it.
   if (RANK_FILTER === 'top20')  ps = ps.filter(p => p.rank <= 20);
   if (RANK_FILTER === 'movers') ps = ps.filter(p => Math.abs(p.rankMove) >= 2);
-  // Bucket into rank tiers for colour coding
+
+  // Build projected map if toggle is on
+  const projMap = USE_PROJ_RANKINGS ? buildProjRankingsMap() : new Map();
+
+  // When projected toggle is on, compute projected ranks for tier colouring
+  const projPtsList = ps.map(p => {
+    const proj = projMap.get(p.id);
+    return proj ? proj.projT12M : p.pts;
+  }).sort((a,b) => b - a);
+
+  // Bucket into rank tiers for colour coding (uses projected rank when toggle on)
   const colour = p => {
-    if (p.rank <= 4)  return TC;          // top 4: tour colour
-    if (p.rank <= 10) return TC + 'bb';   // 5–10: slightly faded
-    if (p.rank <= 30) return TC + '77';   // 11–30
-    return TC + '44';                     // 31–100
+    const pts = projMap.has(p.id) ? projMap.get(p.id).projT12M : p.pts;
+    const projRank = USE_PROJ_RANKINGS ? projPtsList.indexOf(pts) + 1 : p.rank;
+    if (projRank <= 4)  return TC;
+    if (projRank <= 10) return TC + 'bb';
+    if (projRank <= 30) return TC + '77';
+    return TC + '44';
   };
   const radius = p => {
-    if (p.rank <= 4)  return 7;
-    if (p.rank <= 10) return 5;
-    if (p.rank <= 30) return 4;
+    const pts = projMap.has(p.id) ? projMap.get(p.id).projT12M : p.pts;
+    const projRank = USE_PROJ_RANKINGS ? projPtsList.indexOf(pts) + 1 : p.rank;
+    if (projRank <= 4)  return 7;
+    if (projRank <= 10) return 5;
+    if (projRank <= 30) return 4;
     return 3;
   };
 
-  const data = ps.map(p => ({
-    x: p.ytd,
-    y: p.pts,
-    label: p.ab || p.name.split(' ').pop(),
-    rank: p.rank,
-    name: p.name,
-    r: radius(p),
-    bg: colour(p),
-  }));
+  const data = ps.map(p => {
+    const proj = projMap.get(p.id);
+    const yPts  = USE_PROJ_RANKINGS ? (proj ? proj.projT12M : p.pts) : p.pts;
+    const inDraw = projMap.has(p.id);
+    return {
+      x: p.ytd,
+      y: yPts,
+      label: p.ab || p.name.split(' ').pop(),
+      rank: p.rank,
+      name: p.name,
+      currPts: p.pts,
+      projPts: proj ? proj.projT12M : null,
+      inDraw,
+      r: radius(p),
+      bg: USE_PROJ_RANKINGS && !inDraw ? colour(p).replace(/[0-9a-f]{2}$/i, '33') : colour(p),
+    };
+  });
 
   destroyChart('chart-scatter');
   const ctx = document.getElementById('chart-scatter').getContext('2d');
@@ -1134,11 +1163,18 @@ function renderScatter() {
           callbacks: {
             label: ctx => {
               const d = ctx.raw;
-              return [
+              const lines = [
                 `${d.name}  (#${d.rank})`,
                 `YTD:  ${d.x.toLocaleString()} pts`,
-                `T12M: ${d.y.toLocaleString()} pts`,
               ];
+              if (USE_PROJ_RANKINGS && d.projPts != null) {
+                lines.push(`T12M: ${d.currPts.toLocaleString()} pts`);
+                lines.push(`Proj: ${d.projPts.toLocaleString()} pts ${d.projPts >= d.currPts ? '▲' : '▼'}`);
+              } else {
+                lines.push(`T12M: ${d.y.toLocaleString()} pts`);
+              }
+              if (USE_PROJ_RANKINGS && !d.inDraw) lines.push('(not in active draw)');
+              return lines;
             }
           }
         },
@@ -1153,7 +1189,7 @@ function renderScatter() {
                    callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v },
         },
         y: {
-          title: { display: true, text: 'T12M Ranking Points', color: '#5f6a68', font: { size: 11 } },
+          title: { display: true, text: USE_PROJ_RANKINGS ? 'Projected T12M Pts (after active draw)' : 'T12M Ranking Points', color: '#5f6a68', font: { size: 11 } },
           grid:  { color: 'rgba(57,67,64,0.08)' },
           ticks: { color: '#5f6a68', font: { size: 10 },
                    callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v },
@@ -1196,18 +1232,18 @@ function renderRankingsTable() {
   if (RANK_FILTER==='top20')  data = data.filter(p=>p.rank<=20);
   if (RANK_FILTER==='movers') data = data.filter(p=>Math.abs(p.rankMove)>=2);
 
-  // 5. Sort — when projected toggle on, sort by projT12M desc; else normal sort
-  if (USE_PROJ_RANKINGS) {
-    data.sort((a,b) => b.projT12M - a.projT12M);
-  } else {
-    data.sort((a,b)=>{
-      let av=a[RANK_SORT], bv=b[RANK_SORT];
-      if (av==null) av = RANK_ASC? Infinity : -Infinity;
-      if (bv==null) bv = RANK_ASC? Infinity : -Infinity;
-      const v = av<bv?-1:av>bv?1:0;
-      return RANK_ASC?v:-v;
-    });
-  }
+  // 5. Sort — when projected toggle on, rank/pts cols sort by projT12M; others sort normally
+  data.sort((a,b) => {
+    // When projected mode is on, treat rank/pts as projT12M (always descending)
+    if (USE_PROJ_RANKINGS && (RANK_SORT === 'rank' || RANK_SORT === 'pts')) {
+      return b.projT12M - a.projT12M;
+    }
+    let av=a[RANK_SORT], bv=b[RANK_SORT];
+    if (av==null) av = RANK_ASC? Infinity : -Infinity;
+    if (bv==null) bv = RANK_ASC? Infinity : -Infinity;
+    const v = av<bv?-1:av>bv?1:0;
+    return RANK_ASC?v:-v;
+  });
 
   // 6. Helper for delta cell
   const deltaCell = d => {
