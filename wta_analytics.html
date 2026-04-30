@@ -897,6 +897,8 @@ function renderLive() {
         <thead><tr>
           <th>Rank</th>
           <th>Player</th>
+          <th>T12M</th>
+          <th>YTD</th>
           <th>Event</th>
           <th>Round</th>
           <th>Status</th>
@@ -904,8 +906,8 @@ function renderLive() {
           <th>Projected</th>
           <th title="Pts earned at this tournament last year — what they're defending">Defending</th>
           <th>Net</th>
-          <th>T12M Now</th>
-          <th>YTD Now</th>
+          <th title="Projected T12M after this tournament settles">Proj T12M</th>
+          <th title="Projected YTD after this tournament settles">Proj YTD</th>
         </tr></thead>
         <tbody>
           ${visibleRows.map(p => {
@@ -917,12 +919,19 @@ function renderLive() {
             const rowOpacity = isWD ? '.45' : (isElim ? '.55' : '1');
             const badge = isWD ? '<span class="locked-badge" style="background:var(--accent-amber-soft);color:var(--accent-amber)">WD</span>'
                                 : (isElim ? '<span class="locked-badge">OUT</span>' : '');
+            const ptsEarned = isElim ? (p.guarPts || 0) : (p.projected || 0);
+            const projT12M = (p.pts || 0) + ptsEarned - (p.defending || 0);
+            const projYTD  = (p.ytd || 0) + ptsEarned;
+            const projT12MColor = projT12M > (p.pts||0) ? 'var(--accent-green)' : projT12M < (p.pts||0) ? 'var(--accent-rose)' : 'var(--ink)';
+            const projYTDColor  = projYTD  > (p.ytd||0) ? 'var(--accent-green)' : 'var(--ink)';
             return `<tr style="opacity:${rowOpacity}">
               <td style="font-weight:800;color:${p.rank<=4?'var(--accent-amber)':'var(--ink)'}">#${p.rank}</td>
               <td>
                 <div style="font-weight:600"><span class="player-link" onclick="openPlayerModal(${p.id}, TOUR)">${p.name}</span>${badge}</div>
                 <div style="font-size:11px;color:var(--muted)">${p.nat}${injIcon(p)}</div>
               </td>
+              <td style="font-weight:600">${fmtPts(p.pts)}</td>
+              <td style="font-weight:600">${fmtPts(p.ytd)}</td>
               <td><span class="event-pill" style="color:${tc2};border-color:${tc2}33;background:${tc2}1a">${p.tourn.short}</span></td>
               <td><span class="round-badge" style="background:${roundColor(p.status.r)}1a;color:${roundColor(p.status.r)}">${p.status.r}</span></td>
               <td style="color:${isElim?'var(--accent-rose)':'var(--accent-green)'};font-weight:700;font-size:11px">${isElim?'Eliminated':'Active'}</td>
@@ -930,8 +939,8 @@ function renderLive() {
               <td class="proj-cell" data-tooltip="${(p.projTip||'').replace(/"/g,'&quot;')}" style="font-weight:700;color:var(--accent-amber)">${isElim?'—':p.projected}</td>
               <td style="font-weight:600;color:var(--muted)">${p.defending || '—'}</td>
               <td style="font-weight:700;color:${netColor}">${netGuar > 0 ? '+' : ''}${netGuar || '—'}</td>
-              <td style="font-weight:600">${fmtPts(p.pts)}</td>
-              <td style="font-weight:600">${fmtPts(p.ytd)}</td>
+              <td style="font-weight:700;color:${projT12MColor}">${fmtPts(projT12M)}</td>
+              <td style="font-weight:700;color:${projYTDColor}">${fmtPts(projYTD)}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -1712,7 +1721,11 @@ function enrichActiveTournaments() {
     season.activeTournaments.forEach(at => {
       const tdef = TOURNAMENTS_DATA.find(t => t.id === at.id);
       if (!tdef) return;
-      const keyword  = tdef.name;             // matches Matchstat's `tn` substring
+      // Prefer numeric API tournament ID (stable, immune to sponsor name changes).
+      // apiId in tournaments.js is {atp: <int>, wta: <int>} — pick the right tour.
+      // Fall back to name-substring matching for tournaments without apiId set.
+      const apiId    = tdef.apiId ? (tdef.apiId[tour] || null) : null;
+      const keyword  = tdef.name;             // fallback: Matchstat `tn` substring
       const drawSize = tdef.draw || 96;
       const start    = tdef.startDate || '';
       const end      = tdef.endDate   || '9999-99-99';
@@ -1721,7 +1734,7 @@ function enrichActiveTournaments() {
       Object.entries(recents).forEach(([bioStr, matches]) => {
         const bioId = parseInt(bioStr);
         const inWindow = (matches || [])
-          .filter(m => (m.tn || '').toLowerCase().includes(keyword.toLowerCase()))
+          .filter(m => apiId ? (m.tId === apiId) : (m.tn || '').toLowerCase().includes(keyword.toLowerCase()))
           .filter(m => (m.date || '') >= start && (m.date || '') <= end);
         if (!inWindow.length) return;
 
