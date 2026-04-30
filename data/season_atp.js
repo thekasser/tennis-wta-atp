@@ -1,16 +1,44 @@
 // season_atp.js — ATP season data. AUTO-UPDATED by scripts/refresh_rankings_api.py
 // Source: Matchstat Tennis API (RapidAPI). Do not edit manually.
-// Last updated: 2026-04-30T05:07:09Z
+// Last updated: 2026-04-30T16:16:10Z
 
 const SEASON_ATP = {
   lastUpdated: "2026-04-30",
   activeTournaments: [
-      {
+        {
           id: "madrid26",
           stage: "SF",
           players: {
           2: {r:"SF", elim:false},
-    ],
+          3: {r:"QF", elim:false},
+          5: {r:"R16", elim:true},
+          6: {r:"R64", elim:true},
+          7: {r:"R32", elim:true},
+          9: {r:"R64", elim:true},
+          10: {r:"R16", elim:true},
+          11: {r:"R64", elim:true},
+          12: {r:"QF", elim:false},
+          13: {r:"QF", elim:false},
+          14: {r:"QF", elim:true},
+          15: {r:"WD", elim:true},
+          16: {r:"R64", elim:true},
+          18: {r:"R16", elim:true},
+          20: {r:"SF", elim:false},
+          21: {r:"R64", elim:true},
+          24: {r:"R32", elim:true},
+          27: {r:"R32", elim:true},
+          28: {r:"R16", elim:true},
+          29: {r:"R64", elim:true},
+          30: {r:"R16", elim:true},
+          33: {r:"R16", elim:true},
+          47: {r:"R64", elim:true},
+          101: {r:"R16", elim:true},
+          102: {r:"R32", elim:true},
+          104: {r:"QF", elim:true},
+          136: {r:"QF", elim:false}
+          }
+        },
+      ],
   players: {
       1: { rank:2   , pts:12960  , ytd:3650  , rankMove:0   , results:{  } },
       2: { rank:1   , pts:13350  , ytd:3900  , rankMove:0   , results:{  } },

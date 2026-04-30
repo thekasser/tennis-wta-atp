@@ -24,7 +24,7 @@ const TOURNAMENTS_DATA = [
   { id:"houston26",  name:"Houston Open",       short:"Houston",  tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true  },
   { id:"marrakech26",name:"Grand Prix Hassan II",short:"Marrakech",tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true  },
 
-  { id:"madrid26",   name:"Mutua Madrid Open",  short:"Madrid",   tour:"BOTH", type:"M1000", surf:"C", draw:96,  wk:16, month:4,  startDate:"2026-04-22", endDate:"2026-05-03", active:true,  complete:false, wtaId:"madrid-open", wtaSlug:"" },
+  { id:"madrid26",   name:"Mutua Madrid Open",  short:"Madrid",   tour:"BOTH", type:"M1000", surf:"C", draw:96,  wk:16, month:4,  startDate:"2026-04-22", endDate:"2026-05-03", active:true,  complete:false, wtaId:"madrid-open", wtaSlug:"", apiId:{atp:21325, wta:16721} },
 
   // ── MAY ───────────────────────────────────────────────────────────────────
   { id:"rome26",     name:"Internazionali BNL d'Italia", short:"Rome", tour:"BOTH", type:"M1000", surf:"C", draw:96, wk:18, month:5, startDate:"2026-05-06", endDate:"2026-05-17", active:false, complete:false },
