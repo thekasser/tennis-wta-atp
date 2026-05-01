@@ -67,6 +67,9 @@ h2{font-size:18px}
 .tour-btn{padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;border:none;color:var(--muted);border-radius:999px;transition:all .15s;font-family:inherit}
 .tour-btn.active.wta{background:var(--accent-green);color:#fffef9;box-shadow:var(--shadow-sm)}
 .tour-btn.active.atp{background:var(--accent-steel);color:#fffef9;box-shadow:var(--shadow-sm)}
+.tour-btn.active.both{background:linear-gradient(90deg,var(--accent-steel) 0%,var(--accent-green) 100%);color:#fffef9;box-shadow:var(--shadow-sm)}
+#btn-both{display:none}
+body.tab-trapezoid #btn-both{display:inline-flex}
 .live-badge{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;font-size:12px;background:var(--tbg);border:1px solid var(--tborder);color:var(--tc);font-weight:700}
 .pulse{width:8px;height:8px;border-radius:50%;background:var(--tc);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
@@ -288,6 +291,7 @@ select:focus{outline:none;border-color:var(--tc)}
       <div class="tour-toggle">
         <button class="tour-btn active wta" id="btn-wta" onclick="setTour('WTA')">WTA</button>
         <button class="tour-btn" id="btn-atp" onclick="setTour('ATP')">ATP</button>
+        <button class="tour-btn" id="btn-both" onclick="setTour('BOTH')">Both</button>
       </div>
       <div class="live-badge" id="live-badge"><div class="pulse"></div><span id="live-label">Live</span></div>
     </div>
@@ -366,14 +370,6 @@ select:focus{outline:none;border-color:var(--tc)}
           <option value="H">🔵 Hard</option>
           <option value="C">🟤 Clay</option>
           <option value="G">🟢 Grass</option>
-        </select>
-      </div>
-      <div class="trap-group">
-        <label>Tour</label>
-        <select id="trap-tour" onchange="trapApp && trapApp.update()">
-          <option value="both">ATP + WTA</option>
-          <option value="atp">ATP Only</option>
-          <option value="wta">WTA Only</option>
         </select>
       </div>
       <div class="trap-group">
@@ -700,16 +696,17 @@ function setTour(t) {
   USE_PROJ_RANKINGS = false;
   const projBtn = document.getElementById('rflt-proj');
   if (projBtn) projBtn.classList.remove('active');
-  TOUR=t; TC=t==='WTA'?'#406b5f':'#5f7380';
-  document.documentElement.dataset.tour = t.toLowerCase();
+  TOUR=t; TC=t==='WTA'?'#406b5f':t==='ATP'?'#5f7380':'#5f7380';
+  document.documentElement.dataset.tour = t==='BOTH'?'both':t.toLowerCase();
   document.documentElement.style.setProperty('--tc',TC);
   document.documentElement.style.setProperty('--tbg',  t==='WTA'?'#e1eee7':'#dfe9ee');
   document.documentElement.style.setProperty('--tborder',t==='WTA'?'rgba(64,107,95,0.35)':'rgba(95,115,128,0.35)');
   document.getElementById('btn-wta').className='tour-btn'+(t==='WTA'?' active wta':'');
   document.getElementById('btn-atp').className='tour-btn'+(t==='ATP'?' active atp':'');
+  document.getElementById('btn-both').className='tour-btn'+(t==='BOTH'?' active both':'');
   const bar=document.getElementById('ctx-bar');
   bar.className='ctx-bar '+(t==='WTA'?'wta':'atp');
-  document.getElementById('ctx-tour').textContent=t;
+  document.getElementById('ctx-tour').textContent=t==='BOTH'?'ATP + WTA':t;
   const acts = activeTournaments();
   const actLabel = acts.length ? acts.map(a=>a.short).join(' · ') : 'No live events';
   document.getElementById('ctx-info').textContent=
@@ -747,12 +744,19 @@ function setTour(t) {
 }
 
 function setTab(tab) {
+  // If leaving trapezoid while in BOTH mode, revert to WTA before switching.
+  if (CURRENT_TAB === 'trapezoid' && tab !== 'trapezoid' && TOUR === 'BOTH') {
+    setTour('WTA');
+  }
   CURRENT_TAB=tab;
+  document.body.className = 'tab-' + tab;
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
   const tabIdx={live:0,rankings:1,trapezoid:2,predict:3}[tab];
   document.querySelectorAll('.tab-btn')[tabIdx].classList.add('active');
+  // Default to WTA when entering trapezoid if not already on a valid tour.
+  // (TOUR is already set; just re-render so trapezoid picks up the current value.)
   renderCurrentTab();
 }
 
@@ -1952,6 +1956,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     decorateTrapezoidComposite(TRAPEZOID_WTA.map(r => Object.assign(r, { tour: 'WTA' })));
   }
 
+  document.body.className = 'tab-live';  // initial tab; keeps btn-both hidden
   setTour('WTA');
   buildSelects();
 
@@ -2150,7 +2155,7 @@ class TrapezoidApp {
     this.update();
   }
   getFilteredData() {
-    const tour = document.getElementById('trap-tour').value;
+    const tour = TOUR === 'BOTH' ? 'both' : TOUR.toLowerCase();
     const minM = parseInt(document.getElementById('trap-min').value);
     const xKey = document.getElementById('trap-x').value;
     const yKey = document.getElementById('trap-y').value;
@@ -2244,7 +2249,7 @@ class TrapezoidApp {
   }
   renderKPIs() {
     const d = this.filteredData;
-    const tour = document.getElementById('trap-tour').value;
+    const tour = TOUR === 'BOTH' ? 'both' : TOUR.toLowerCase();
     const xKey = document.getElementById('trap-x').value;
     const yKey = document.getElementById('trap-y').value;
     const topX = [...d].sort((a,b) => (b[xKey]||0)-(a[xKey]||0))[0];
