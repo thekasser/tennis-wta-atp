@@ -15,14 +15,17 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # Persist the API response cache between runs so repeat calls are served
-      # from disk (same as running locally). Cache key rotates weekly so stale
-      # player/past-matches entries (6h TTL) never get permanently stuck.
+      # Seed the cache from the most recent prior run. The exact key uses run_id
+      # (unique per run) so it never hits — forcing a fresh save every time.
+      # restore-keys falls back to any prior cache, which api_client.py's 6h TTL
+      # then selectively invalidates: files older than 6h get refetched, recent
+      # ones are served from disk. This prevents the run_number pattern where
+      # run N restores run N-1's cache and serves everything as a cache hit.
       - name: Restore API cache
         uses: actions/cache@v4
         with:
           path: scripts/cache
-          key: tennis-api-cache-${{ github.run_number }}
+          key: tennis-api-cache-${{ github.run_id }}
           restore-keys: tennis-api-cache-
 
       # ── Step 1: Rankings (~4 API calls) ──────────────────────────────────
