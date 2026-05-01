@@ -283,7 +283,8 @@ def build_form_match(m: dict, our_mid: int) -> dict:
         rd_str = rd_obj.get('shortName') or rd_obj.get('name') or ''
     else:
         rd_str = rd_obj or m.get('roundCode') or ''
-    return {
+    t_id = m.get('tournamentId') or tour_obj.get('id') or None
+    row = {
         'date':  (m.get('date') or m.get('matchDate') or '')[:10],
         'tn':    tour_obj.get('name') or tour_obj.get('tournamentName') or '',
         'rd':    rd_str,
@@ -292,6 +293,9 @@ def build_form_match(m: dict, our_mid: int) -> dict:
         'score': _get(m, 'result', 'score', default=''),
         'won':   won,
     }
+    if t_id:
+        row['tId'] = t_id
+    return row
 
 
 # ─── Per-player fetcher ──────────────────────────────────────────────────────
@@ -565,17 +569,49 @@ def write_recent_matches(atp_recent: dict, wta_recent: dict, dry_run: bool):
           f"ATP {len(atp_recent)} bios, WTA {len(wta_recent)} bios)")
 
 
-def write_tournament_history(atp_hist: dict, wta_hist: dict, dry_run: bool):
+def write_tournament_history(atp_hist: dict, wta_hist: dict, dry_run: bool,
+                             fetched_years: list[int] | None = None):
     """Emit data/tournament_history.js consumed by Live Events 'defending' column.
 
     Schema: keyed by tour, then by bio.id (string); value = list of:
       [{tn, year, round, won}, ...]
+
+    Merges with the existing file so that years not in fetched_years are
+    preserved — critical for defending-pts lookups when running --years 2026
+    only (the 2025 history written on Monday must survive the daily run).
     """
+    # Load existing history and preserve entries for years we didn't fetch
+    existing = {'atp': {}, 'wta': {}}
+    if HISTORY_OUT.exists() and fetched_years:
+        try:
+            import re as _re
+            raw = HISTORY_OUT.read_text(encoding='utf-8')
+            m = _re.search(r'const \w+\s*=\s*(\{[\s\S]*\})\s*;?\s*$', raw)
+            if m:
+                old = json.loads(m.group(1))
+                for tour in ('atp', 'wta'):
+                    for bio_id, entries in (old.get(tour) or {}).items():
+                        kept = [e for e in entries if e.get('year') not in fetched_years]
+                        if kept:
+                            existing[tour][bio_id] = kept
+        except Exception:
+            pass  # corrupt file — start fresh
+
+    # Merge: existing preserved entries + new entries
+    def _merge(existing_tour: dict, new_tour: dict) -> dict:
+        merged = {}
+        all_ids = set(existing_tour) | set(new_tour)
+        for bio_id in all_ids:
+            entries = existing_tour.get(bio_id, []) + new_tour.get(bio_id, [])
+            if entries:
+                merged[bio_id] = entries
+        return merged
+
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     payload = {
         'lastUpdated': now,
-        'atp':         atp_hist,
-        'wta':         wta_hist,
+        'atp':         _merge(existing['atp'], atp_hist),
+        'wta':         _merge(existing['wta'], wta_hist),
     }
     js = (
         f'/**\n'
@@ -631,7 +667,7 @@ def main():
             wta_hist   = result.get('history', {})
 
     write_recent_matches(atp_recent, wta_recent, args.dry_run)
-    write_tournament_history(atp_hist, wta_hist, args.dry_run)
+    write_tournament_history(atp_hist, wta_hist, args.dry_run, fetched_years=args.years)
     print('\n✓ Done.')
     print('Next: python3 scripts/write_trapezoid_from_json.py --years '
           + ' '.join(str(y) for y in [2024] + args.years))

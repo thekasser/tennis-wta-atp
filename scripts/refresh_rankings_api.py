@@ -166,6 +166,40 @@ def parse_js_season(js_text: str, var_name: str) -> dict:
     return {'players': players, 'activeTournamentsRaw': active_raw}
 
 
+def _extract_tournament_blocks(preserve_raw: str) -> dict[str, str]:
+    """Extract per-tournament {id:"..."} blocks from the activeTournaments raw
+    string using brace-counting rather than a regex, so nested {} in the
+    players: { bioId: {r:"SF", elim:false}, ... } sub-object are handled
+    correctly.  A non-greedy regex stops at the first inner } followed by ','
+    and returns a truncated block that produces invalid JS when written back.
+    """
+    blocks: dict[str, str] = {}
+    text = preserve_raw
+    i = 0
+    while i < len(text):
+        start = text.find('{', i)
+        if start == -1:
+            break
+        depth = 0
+        j = start
+        while j < len(text):
+            if text[j] == '{':
+                depth += 1
+            elif text[j] == '}':
+                depth -= 1
+                if depth == 0:
+                    block = text[start:j + 1]
+                    m = re.search(r'id:\s*"([^"]+)"', block)
+                    if m:
+                        blocks[m.group(1)] = block
+                    i = j + 1
+                    break
+            j += 1
+        else:
+            break
+    return blocks
+
+
 def derive_active_tournaments(tour: str, preserve_raw: str = '') -> str:
     """Build the activeTournaments JS block by reading tournaments.js for any
     entry where active:true and tour matches (or 'BOTH'). This means we don't
@@ -184,7 +218,7 @@ def derive_active_tournaments(tour: str, preserve_raw: str = '') -> str:
     text = (REPO_ROOT / 'data' / 'tournaments.js').read_text(encoding='utf-8')
     # Find every {...} block in TOURNAMENTS_DATA where active:true
     entries = []
-    for m in re.finditer(r'\{[^{}]*?id:"([^"]+)"[^{}]*?active:true[^{}]*?\}', text):
+    for m in re.finditer(r'\{(?:[^{}]|\{[^{}]*\})*?id:"([^"]+)"(?:[^{}]|\{[^{}]*\})*?active:true(?:[^{}]|\{[^{}]*\})*?\}', text):
         block = m.group(0)
         tid = m.group(1)
         # Pull `tour:` field from the block
@@ -198,9 +232,10 @@ def derive_active_tournaments(tour: str, preserve_raw: str = '') -> str:
 
     # Extract existing per-tournament blocks from preserve_raw so we can
     # carry them forward unchanged for any tournament already in the file.
-    existing_blocks: dict[str, str] = {}
-    for m in re.finditer(r'\{(\s*id:\s*"([^"]+)"[\s\S]*?)\}(?=\s*,|\s*\])', preserve_raw):
-        existing_blocks[m.group(2)] = m.group(0)
+    # Uses brace-counting instead of regex to correctly handle nested {} in
+    # players: { 2: {r:"SF", elim:false}, ... } — a non-greedy regex stops at
+    # the first inner } followed by , and captures only a partial block.
+    existing_blocks: dict[str, str] = _extract_tournament_blocks(preserve_raw)
 
     lines = ['activeTournaments: [']
     for tid in entries:
