@@ -1,0 +1,66 @@
+name: Tennis Dashboard Refresh
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 10pm PST (6am UTC)
+  workflow_dispatch:       # allow manual trigger from Actions tab
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # Persist the API response cache between runs so repeat calls are served
+      # from disk (same as running locally). Cache key rotates weekly so stale
+      # player/past-matches entries (6h TTL) never get permanently stuck.
+      - name: Restore API cache
+        uses: actions/cache@v4
+        with:
+          path: scripts/cache
+          key: tennis-api-cache-${{ github.run_number }}
+          restore-keys: tennis-api-cache-
+
+      # ── Step 1: Rankings (~4 API calls) ──────────────────────────────────
+      - name: Step 1 — Rankings refresh
+        env:
+          MATCHSTAT_API_KEY: ${{ secrets.MATCHSTAT_API_KEY }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/refresh_rankings_api.py --tour both
+
+      # ── Step 2: Match stats (~240 API calls, mostly cache hits) ──────────
+      - name: Step 2 — Match stats fetch
+        env:
+          MATCHSTAT_API_KEY: ${{ secrets.MATCHSTAT_API_KEY }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/fetch_match_stats_api.py --tour both --years 2026
+
+      # ── Step 3: Trapezoid merge (no API calls) ────────────────────────────
+      # 2024 Sackmann aggregates live only on Connor's Mac; omit that year here.
+      # The existing trapezoid_data.js already has 2024 data baked in from the
+      # last local run — this step updates only the 2025/2026 aggregates.
+      - name: Step 3 — Trapezoid merge
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/write_trapezoid_from_json.py --years 2025 2026
+
+      # ── H2H rebuild (no API calls) ────────────────────────────────────────
+      - name: H2H rebuild
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/build_h2h.py
+
+      # ── Commit & push → triggers Cloudflare Pages auto-deploy ─────────────
+      - name: Commit and push data files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git diff --staged --quiet && echo "No data changes — skipping commit" || \
+            git commit -m "chore: data refresh $(date +%Y-%m-%d)" && git push
