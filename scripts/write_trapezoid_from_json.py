@@ -13,7 +13,7 @@ USAGE
 -----
     python3 scripts/write_trapezoid_from_json.py [--years 2024 2025 2026]
 """
-import argparse, json, sys
+import argparse, json, re, sys
 from datetime import datetime
 from pathlib import Path
 
@@ -63,6 +63,63 @@ def render_js(years, atp_by_year, wta_by_year):
         '',
     ]
     return '\n'.join(lines)
+
+
+def load_existing_rows(tour: str) -> list:
+    """Parse TRAPEZOID_ATP or TRAPEZOID_WTA from the current trapezoid_data.js.
+    Returns [] if the file is missing or unparseable."""
+    if not OUT_FILE.exists():
+        return []
+    raw = OUT_FILE.read_text(encoding='utf-8')
+    var = 'TRAPEZOID_ATP' if tour == 'atp' else 'TRAPEZOID_WTA'
+    # The array can be large — use a bracket-depth walk rather than a fragile regex.
+    marker = f'const {var} = ['
+    pos = raw.find(marker)
+    if pos == -1:
+        return []
+    depth, i = 0, pos + len(marker) - 1  # start at the opening '['
+    while i < len(raw):
+        if raw[i] == '[':
+            depth += 1
+        elif raw[i] == ']':
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(raw[pos + len(marker) - 1: i + 1])
+                except Exception:
+                    return []
+        i += 1
+    return []
+
+
+def merge_existing_into_bucket(bucket: dict, existing_rows: list, tour: str) -> None:
+    """For any (bioId, year, surf) not already in `bucket`, carry forward the
+    existing row from the prior trapezoid_data.js.  This prevents a CI run that
+    only fetches 2 WTA players from wiping the other 100+ from the output."""
+    # Build coverage set from what the new aggregate files provided.
+    covered: set = set()
+    for rows in bucket.values():
+        for r in rows:
+            key = (r.get('bioId'), str(r.get('year', '')), r.get('surf', 'All'))
+            covered.add(key)
+
+    # Walk existing rows; if not covered, slot them back into the bucket.
+    preserved = 0
+    for r in existing_rows:
+        if str(r.get('tour', '')).upper() != tour.upper():
+            continue
+        yr   = r.get('year')
+        surf = r.get('surf', 'All')
+        key  = (r.get('bioId'), str(yr), surf)
+        if key in covered:
+            continue  # new data already has this player×period×surface
+        # Use yr as bucket key; create bucket entry if needed.
+        bucket.setdefault(yr, []).append(r)
+        preserved += 1
+
+    if preserved:
+        print(f'  {tour.upper()}: preserved {preserved} rows from existing trapezoid_data.js '
+              f'(not in current aggregate files)')
 
 
 def load_sid_to_bio_id(tour: str) -> dict:
@@ -139,6 +196,13 @@ def main():
     if not found_any:
         print('ERROR: no aggregate JSON files found, refusing to write empty data.', file=sys.stderr)
         return 1
+
+    # Merge-on-write: carry forward any (bioId, year, surf) rows from the existing
+    # trapezoid_data.js that aren't covered by the freshly-fetched aggregate files.
+    # This prevents a GH Actions run that only fetches 2 WTA players from wiping the
+    # other 100+ players that are already in the committed file.
+    merge_existing_into_bucket(atp_by_year, load_existing_rows('atp'), 'atp')
+    merge_existing_into_bucket(wta_by_year, load_existing_rows('wta'), 'wta')
 
     # Order: CURR first (most recent), then rolling windows, then calendar years descending.
     int_years   = sorted({y for y in args.years
