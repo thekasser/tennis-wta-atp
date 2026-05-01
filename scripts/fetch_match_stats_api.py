@@ -543,12 +543,37 @@ def write_aggregates(tour: str, rows_by_year: dict, dry_run: bool):
 
 
 def write_recent_matches(atp_recent: dict, wta_recent: dict, dry_run: bool):
-    """Emit data/recent_matches.js consumed by the form-bar hover."""
+    """Emit data/recent_matches.js consumed by the form-bar hover.
+
+    Merges with the existing file so that players absent from this run (e.g.
+    due to API errors or rate-limiting in CI) keep their prior data.  New
+    fetch results always overwrite the corresponding bio entry.
+    """
+    # Load existing data to preserve entries for players not fetched this run
+    existing_atp: dict = {}
+    existing_wta: dict = {}
+    if RECENT_OUT.exists():
+        try:
+            import re as _re
+            raw = RECENT_OUT.read_text(encoding='utf-8')
+            _m = _re.search(r'const RECENT_MATCHES\s*=\s*(\{.*\});', raw, re.DOTALL)
+            if _m:
+                old = json.loads(_m.group(1))
+                existing_atp = old.get('atp') or {}
+                existing_wta = old.get('wta') or {}
+        except Exception:
+            pass  # corrupt file — start fresh
+
+    # Merge: existing entries fill gaps; new fetch results take precedence.
+    # Keys in recent_by_bio are integers (bio_id); JSON round-trips them to strings.
+    merged_atp = {**existing_atp, **{str(k): v for k, v in atp_recent.items()}}
+    merged_wta = {**existing_wta, **{str(k): v for k, v in wta_recent.items()}}
+
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     payload = {
         'lastUpdated': now,
-        'atp':         atp_recent,
-        'wta':         wta_recent,
+        'atp':         merged_atp,
+        'wta':         merged_wta,
     }
     js = (
         f'/**\n'
@@ -566,7 +591,8 @@ def write_recent_matches(atp_recent: dict, wta_recent: dict, dry_run: bool):
         return
     RECENT_OUT.write_text(js, encoding='utf-8')
     print(f"  ✓ wrote {RECENT_OUT.relative_to(REPO_ROOT)} ({len(js):,} chars; "
-          f"ATP {len(atp_recent)} bios, WTA {len(wta_recent)} bios)")
+          f"ATP {len(merged_atp)} bios [{len(atp_recent)} updated], "
+          f"WTA {len(merged_wta)} bios [{len(wta_recent)} updated])")
 
 
 def write_tournament_history(atp_hist: dict, wta_hist: dict, dry_run: bool,
