@@ -74,6 +74,11 @@ class MatchstatClient:
             )
         self.cache = cache
         self.verbose = verbose
+        # Rate-limit throttle: Matchstat Pro plan caps ~5 req/s. Spacing
+        # consecutive network requests ≥ 250ms apart keeps us safely under
+        # without serializing too aggressively.
+        self._last_request_at = 0.0
+        self._min_interval    = 0.25
         if cache:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -130,13 +135,36 @@ class MatchstatClient:
         )
         if self.verbose:
             print(f"  [net]   {full_endpoint}", file=sys.stderr)
-        try:
-            with urllib.request.urlopen(req, timeout=DEFAULT_TIMEOUT) as resp:
-                body = resp.read().decode("utf-8")
-                data = json.loads(body)
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
-            raise RuntimeError(f"HTTP {e.code} on {full_endpoint}: {err_body[:300]}")
+
+        # Throttle: ensure ≥ self._min_interval since the last network request.
+        elapsed = time.time() - self._last_request_at
+        if elapsed < self._min_interval:
+            time.sleep(self._min_interval - elapsed)
+
+        # Retry loop: on 429, honor Retry-After (or back off 2/4/8s).
+        max_attempts = 4  # 1 initial + 3 retries
+        data = None
+        for attempt in range(1, max_attempts + 1):
+            self._last_request_at = time.time()
+            try:
+                with urllib.request.urlopen(req, timeout=DEFAULT_TIMEOUT) as resp:
+                    body = resp.read().decode("utf-8")
+                    data = json.loads(body)
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and attempt < max_attempts:
+                    retry_after = e.headers.get("Retry-After") if hasattr(e, "headers") and e.headers else None
+                    try:
+                        wait = float(retry_after) if retry_after else 2.0 * (2 ** (attempt - 1))
+                    except (TypeError, ValueError):
+                        wait = 2.0 * (2 ** (attempt - 1))
+                    if self.verbose:
+                        print(f"  [429]   {full_endpoint} — retry {attempt}/{max_attempts-1} after {wait:.1f}s",
+                              file=sys.stderr)
+                    time.sleep(wait)
+                    continue
+                err_body = e.read().decode("utf-8") if hasattr(e, "read") else str(e)
+                raise RuntimeError(f"HTTP {e.code} on {full_endpoint}: {err_body[:300]}")
 
         if self.cache:
             path.write_text(json.dumps(data, indent=2))
