@@ -1,0 +1,48 @@
+# Files in this repo that wrangler should NOT upload as static Worker assets.
+# Same syntax as .gitignore. The Worker's [assets] directory = "./" so without
+# this, wrangler grabs everything including 44MB SQLite + python scripts.
+
+# Local SQLite working DB (44MB+; only the .gz snapshot is committed and
+# even that doesn't need to be public)
+data/tennis.db
+data/tennis.db-*
+data/tennis.db.gz
+data/snapshot_summary.txt
+
+# Pipeline + Worker source (not user-facing)
+scripts/
+workers/
+.github/
+
+# Repo metadata / build artifacts
+.git/
+.github/
+.wrangler/
+.claude/
+.gitignore
+.assetsignore
+.env
+.env.*
+node_modules/
+**/node_modules/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+*.swp
+*~
+.vscode/
+.idea/
+
+# Markdown docs (not served — visit GitHub instead)
+README.md
+CLAUDE.md
+*.md
+
+# Plan files / reference JSX (not used in deployment)
+wta_analytics_dashboard.jsx
+wrangler.toml

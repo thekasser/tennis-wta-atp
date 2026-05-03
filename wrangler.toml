@@ -1,8 +1,31 @@
-# Cloudflare Workers config — serves the repo as a static site.
-# No compute, no functions, no API proxy — just static asset hosting at the edge.
-# index.html redirects root visitors to wta_analytics.html (the real dashboard).
-name = "tennis-wta-atp"
-compatibility_date = "2024-04-01"
+# Cloudflare Workers config — tennis dashboard (Phase 2: D1 + /api/* routes).
+#
+# Worker behavior:
+#   - Static dashboard served from repo root via [assets] (existing).
+#   - JSON API under /api/* served by workers/src/index.ts, reading
+#     pre-materialized blobs from D1.
+#
+# Deploy: `cd ./` then `wrangler deploy --config wrangler.toml`.
+# Local:  `wrangler dev` (runs against remote D1 by default).
 
+name = "tennis-wta-atp"
+main = "workers/src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Static asset binding. The Worker's index.ts falls through to `env.ASSETS.fetch`
+# for any path that isn't /api/*, so the existing static serving keeps working.
 [assets]
 directory = "./"
+binding   = "ASSETS"
+
+# D1 binding. Worker code reads via `env.DB.prepare(...).first()`.
+[[d1_databases]]
+binding       = "DB"
+database_name = "tennis"
+database_id   = "26fcfba1-290f-4333-999f-e621fb1527e5"
+
+# ─── Workers Secrets (set via CLI, NOT in this file) ──────────────────────
+# Day 3: bearer token for admin endpoints + Matchstat key for the sync.
+#   wrangler secret put ADMIN_SYNC_TOKEN     # any random 32-char string
+#   wrangler secret put MATCHSTAT_API_KEY    # same as local .env
