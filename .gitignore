@@ -34,6 +34,12 @@ scripts/cache/
 # Allow specific data files we DO commit (recompute outputs, not raw inputs)
 !data/*.js
 
+# SQLite working DB — committed snapshot is data/tennis.db.gz only
+data/tennis.db
+data/tennis.db-journal
+data/tennis.db-wal
+data/tennis.db-shm
+
 # Local dev artifacts
 *.log
 node_modules/
