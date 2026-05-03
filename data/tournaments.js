@@ -21,7 +21,7 @@ const TOURNAMENTS_DATA = [
 
   // ── APRIL (current) ────────────────────────────────────────────────────────
   { id:"charleston26", name:"Credit One Charleston", short:"Charleston", tour:"WTA", type:"W500", surf:"C", draw:48, wk:13, month:4, startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true, wtaId:804, wtaSlug:"charleston", apiId:{wta:16716} },
-  { id:"houston26",  name:"Houston Open",       short:"Houston",  tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true  },
+  { id:"houston26",  name:"Houston Open",       short:"Houston",  tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true, apiId:{atp:21320} },
   { id:"marrakech26",name:"Grand Prix Hassan II",short:"Marrakech",tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true, apiId:{atp:21321} },
 
   { id:"madrid26",   name:"Mutua Madrid Open",  short:"Madrid",   tour:"BOTH", type:"M1000", surf:"C", draw:96,  wk:16, month:4,  startDate:"2026-04-22", endDate:"2026-05-03", active:true,  complete:false, wtaId:"madrid-open", wtaSlug:"", apiId:{atp:21325, wta:16721} },
@@ -175,6 +175,22 @@ const TOURNAMENTS_DATA = [
   { id:"stuttgart_w26", name:"Porsche Tennis Grand Prix - Stuttgart", short:"Stuttgart", tour:"WTA", type:"W500", surf:"H", draw:32, wk:15, month:4, startDate:"2026-04-11", endDate:"2026-04-19", active:false, complete:true, apiId:{wta:16719} },  // 34 matches
 
 
+
+  // ── BACKFILL: tour events missed in initial catalog
+ { id:"unitedcup26", name:"United Cup", short:"United Cup", tour:"BOTH", type:"M500", surf:"H", draw:18, wk:1, month:1, startDate:"2026-01-02", endDate:"2026-01-11", active:false, complete:true, apiId:{atp:21300, wta:16700} },
+ { id:"austin26", name:"ATX Open - Austin", short:"Austin", tour:"WTA", type:"W250", surf:"H", draw:32, wk:8, month:2, startDate:"2026-02-23", endDate:"2026-03-01", active:false, complete:true, apiId:{wta:16713} },
+ { id:"montpellier26", name:"Open Occitanie - Montpellier", short:"Montpellier", tour:"ATP", type:"M250", surf:"H", draw:28, wk:6, month:2, startDate:"2026-02-02", endDate:"2026-02-08", active:false, complete:true, apiId:{atp:21307} },
+ { id:"rio26", name:"Rio Open - Rio de Janeiro", short:"Rio", tour:"ATP", type:"M500", surf:"C", draw:32, wk:8, month:2, startDate:"2026-02-14", endDate:"2026-02-22", active:false, complete:true, apiId:{atp:21312} },
+ { id:"santiago26", name:"BCI Seguros Chile Open - Santiago", short:"Santiago", tour:"ATP", type:"M250", surf:"C", draw:28, wk:9, month:3, startDate:"2026-02-22", endDate:"2026-03-01", active:false, complete:true, apiId:{atp:21316} },
+ { id:"bucharest26", name:"Tiriac Open - Bucharest", short:"Bucharest", tour:"ATP", type:"M250", surf:"C", draw:28, wk:13, month:3, startDate:"2026-03-30", endDate:"2026-04-05", active:false, complete:true, apiId:{atp:21319} },
+ { id:"rouen26", name:"Open Capfinances Rouen Metropole - Rouen", short:"Rouen", tour:"WTA", type:"W250", surf:"H", draw:32, wk:16, month:4, startDate:"2026-04-13", endDate:"2026-04-19", active:false, complete:true, apiId:{wta:16720} },
+ { id:"ostrava26", name:"Ostrava Open - Ostrava", short:"Ostrava", tour:"WTA", type:"W500", surf:"H", draw:32, wk:42, month:10, startDate:"2026-10-19", endDate:"2026-10-25", active:false, complete:false, apiId:{wta:16708} },
+
+  // ── Late 2025 finals + missed M250s ─────────
+ { id:"athens25", name:"Hellenic Championship - Athens", short:"Athens", tour:"ATP", type:"M250", surf:"H", draw:32, wk:44, month:11, startDate:"2025-11-01", endDate:"2025-11-08", active:false, complete:true, apiId:{atp:20374} },
+ { id:"metz25", name:"Moselle Open - Metz", short:"Metz", tour:"ATP", type:"M250", surf:"H", draw:28, wk:44, month:11, startDate:"2025-11-01", endDate:"2025-11-08", active:false, complete:true, apiId:{atp:20373} },
+ { id:"wta_finals25", name:"WTA Finals - Riyadh", short:"WTA Finals", tour:"WTA", type:"WTAFinals", surf:"H", draw:8, wk:44, month:11, startDate:"2025-11-01", endDate:"2025-11-08", active:false, complete:true, apiId:{wta:15997} },
+ { id:"atp_finals25", name:"Nitto ATP Finals - Turin", short:"ATP Finals", tour:"ATP", type:"ATPFinals", surf:"H", draw:8, wk:46, month:11, startDate:"2025-11-09", endDate:"2025-11-16", active:false, complete:true, apiId:{atp:20375} },
 ];
 
 // Points lookup per tournament type
