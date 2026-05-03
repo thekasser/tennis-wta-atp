@@ -53,6 +53,107 @@ async function getBlob(env: Env, name: string): Promise<string | null> {
 }
 
 
+// Chunk size matches scripts/push_to_d1.py — D1 caps INSERT statements at
+// ~100KB; 40KB chunks leave plenty of headroom for SQL syntax + escaping.
+const CHUNK_SIZE = 40_000;
+
+
+/** Constant-time string compare (avoid timing attacks on the bearer token). */
+function constantTimeEq(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+
+/** POST /api/admin/sync handler. Accepts a JSON body of materialized blobs,
+ *  re-chunks each, and replaces the materialized table contents. Returns a
+ *  summary of what was written. */
+async function handleAdminSync(request: Request, env: Env): Promise<Response> {
+  // 1. Bearer auth
+  const expected = env.ADMIN_SYNC_TOKEN;
+  if (!expected) {
+    return new Response(
+      JSON.stringify({ error: "ADMIN_SYNC_TOKEN secret not configured on the worker" }),
+      { status: 500, headers: JSON_HEADERS },
+    );
+  }
+  const auth = request.headers.get("authorization") || "";
+  const presented = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!constantTimeEq(presented, expected)) {
+    return new Response(
+      JSON.stringify({ error: "unauthorized" }),
+      { status: 401, headers: JSON_HEADERS },
+    );
+  }
+
+  // 2. Parse body
+  let body: { blobs?: Record<string, string> };
+  try {
+    body = await request.json();
+  } catch (e) {
+    return new Response(
+      JSON.stringify({ error: "invalid JSON body" }),
+      { status: 400, headers: JSON_HEADERS },
+    );
+  }
+  const blobs = body?.blobs;
+  if (!blobs || typeof blobs !== "object" || Array.isArray(blobs)) {
+    return new Response(
+      JSON.stringify({ error: "body must have shape { blobs: { name: string, ... } }" }),
+      { status: 400, headers: JSON_HEADERS },
+    );
+  }
+
+  // 3. Build the batch: one DELETE for stale rows + one INSERT per chunk.
+  //    D1 batch() commits atomically — if any statement fails, none apply.
+  const now = new Date().toISOString();
+  const summary: Record<string, { bytes: number; chunks: number }> = {};
+  const stmts = [
+    env.DB.prepare("DELETE FROM materialized"),
+  ];
+
+  for (const [name, payload] of Object.entries(blobs)) {
+    if (typeof payload !== "string") {
+      return new Response(
+        JSON.stringify({ error: `blob '${name}' is not a string` }),
+        { status: 400, headers: JSON_HEADERS },
+      );
+    }
+    let chunkNo = 0;
+    for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
+      const piece = payload.slice(i, i + CHUNK_SIZE);
+      stmts.push(env.DB.prepare(
+        "INSERT INTO materialized (name, chunk_no, payload, size_bytes, updated_at) " +
+        "VALUES (?, ?, ?, ?, ?)"
+      ).bind(name, chunkNo, piece, piece.length, now));
+      chunkNo++;
+    }
+    summary[name] = { bytes: payload.length, chunks: chunkNo };
+  }
+
+  try {
+    await env.DB.batch(stmts);
+  } catch (e: any) {
+    return new Response(
+      JSON.stringify({ error: "D1 batch failed", detail: String(e) }),
+      { status: 500, headers: JSON_HEADERS },
+    );
+  }
+
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      updated_at: now,
+      blobs: summary,
+      total_chunks: Object.values(summary).reduce((n, b) => n + b.chunks, 0),
+    }),
+    { headers: JSON_HEADERS },
+  );
+}
+
+
 /** Wrap a blob fetch in a Response, with proper headers + 404 fallback. */
 async function blobResponse(env: Env, name: string): Promise<Response> {
   const payload = await getBlob(env, name);
@@ -114,12 +215,15 @@ export default {
         }
       }
 
-      // POST /api/admin/sync — Day 3 placeholder. Returns 501 for now.
+      // POST /api/admin/sync — receive a fresh set of materialized blobs
+      // from the cron pipeline and overwrite the materialized table.
+      // Auth: Bearer token compared against ADMIN_SYNC_TOKEN secret.
+      // Body shape:
+      //   { "blobs": { "season_atp": "<json string>", "season_wta": "...", ... } }
+      // Each blob is chunked server-side at CHUNK_SIZE and stored as
+      // multiple rows (D1's per-statement cap is ~100KB).
       if (path === "/api/admin/sync" && request.method === "POST") {
-        return new Response(
-          JSON.stringify({ error: "not implemented yet (Phase 2 Day 3)" }),
-          { status: 501, headers: JSON_HEADERS },
-        );
+        return handleAdminSync(request, env);
       }
 
       return new Response(JSON.stringify({ error: "not found", path }), {
