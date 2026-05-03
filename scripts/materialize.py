@@ -647,18 +647,42 @@ def _aggregate_year(matches: list[dict], mid: int,
                     if k in d and d[k] not in (None, "", "NA"):
                         return d[k]
                 return 0
+            def _i(d, *keys):
+                try:
+                    return int(_g(d, *keys) or 0)
+                except (TypeError, ValueError):
+                    try:
+                        return int(float(_g(d, *keys)))
+                    except (TypeError, ValueError):
+                        return 0
             try:
-                svpt        += int(_g(own, "firstServeOf","totalServePointsAttempted","serveOf","serveOfGm","svpt") or 0)
-                first_in    += int(_g(own, "firstServe","firstServeIn","1stIn") or 0)
-                first_won   += int(_g(own, "winningOnFirstServe","firstServeWon","1stWon") or 0)
-                second_won  += int(_g(own, "winningOnSecondServe","secondServeWon","2ndWon") or 0)
-                aces        += int(_g(own, "aces","ace") or 0)
-                df          += int(_g(own, "doubleFaults","doubleFault","df") or 0)
-                bp_faced    += int(_g(own, "breakPointFaced","breakPointsFaced","bpFaced") or 0)
-                bp_saved    += int(_g(own, "breakPointSaved","breakPointsSaved","bpSaved") or 0)
-                opp_svpt        += int(_g(opp, "firstServeOf","totalServePointsAttempted","svpt") or 0)
-                opp_first_won   += int(_g(opp, "winningOnFirstServe","firstServeWon","1stWon") or 0)
-                opp_second_won  += int(_g(opp, "winningOnSecondServe","secondServeWon","2ndWon") or 0)
+                # Per-side counters. Matchstat key names vary across endpoints,
+                # so we try multiple aliases in order.
+                own_bp_faced  = _i(own, "breakPointFaced","breakPointsFaced","bpFaced")
+                own_bp_saved  = _i(own, "breakPointSaved","breakPointsSaved","bpSaved")
+                opp_bp_conv   = _i(opp, "breakPointsConverted","breakPointConverted","bpConv")
+                opp_bp_attempt = _i(opp, "breakPointsConvertedOf","breakPointsAttempted",
+                                       "breakPointAttempted","bpAttempt")
+                # Backfill: if our bp counters are missing, use opponent's
+                # converted/attempted (which are recorded against our serve).
+                # This is the key fix that was lost when porting from
+                # fetch_match_stats_api.py — most rows only have one side.
+                if not own_bp_faced and opp_bp_attempt:
+                    own_bp_faced = opp_bp_attempt
+                if not own_bp_saved and own_bp_faced:
+                    own_bp_saved = own_bp_faced - opp_bp_conv
+
+                svpt        += _i(own, "firstServeOf","totalServePointsAttempted","serveOf","serveOfGm","svpt")
+                first_in    += _i(own, "firstServe","firstServeIn","1stIn")
+                first_won   += _i(own, "winningOnFirstServe","firstServeWon","1stWon")
+                second_won  += _i(own, "winningOnSecondServe","secondServeWon","2ndWon")
+                aces        += _i(own, "aces","ace")
+                df          += _i(own, "doubleFaults","doubleFault","df")
+                bp_faced    += own_bp_faced
+                bp_saved    += own_bp_saved
+                opp_svpt        += _i(opp, "firstServeOf","totalServePointsAttempted","svpt")
+                opp_first_won   += _i(opp, "winningOnFirstServe","firstServeWon","1stWon")
+                opp_second_won  += _i(opp, "winningOnSecondServe","secondServeWon","2ndWon")
                 used += 1
             except (TypeError, ValueError):
                 pass
@@ -836,7 +860,25 @@ def materialize_trapezoid(conn) -> bool:
         (-int(y) if y.isdigit() else 0, y)
     ))
 
-    hash_input = json.dumps({"atp": flat_atp, "wta": flat_wta}, sort_keys=True, separators=(",", ":"))
+    metrics = [
+        "matches", "servePtsWonPct", "returnPtsWonPct", "totalPtsWonPct",
+        "tbWinPct", "decSetWinPct", "acesPerSvGm", "bpSavedPct", "matchWinPct",
+    ]
+    labels = {
+        "matches":         "Matches Played",
+        "servePtsWonPct":  "Serve Points Won %",
+        "returnPtsWonPct": "Return Points Won %",
+        "totalPtsWonPct":  "Total Points Won %",
+        "tbWinPct":        "Tiebreak Win %",
+        "decSetWinPct":    "Deciding Set Win %",
+        "acesPerSvGm":     "Aces / Service Game",
+        "bpSavedPct":      "Break Points Saved %",
+        "matchWinPct":     "Match Win %",
+    }
+
+    hash_input = json.dumps({"atp": flat_atp, "wta": flat_wta,
+                             "metrics": metrics, "labels": labels},
+                            sort_keys=True, separators=(",", ":"))
     path = DATA_DIR / "trapezoid_data.js"
 
     def render(h: str) -> str:
@@ -852,6 +894,8 @@ def materialize_trapezoid(conn) -> bool:
             f"const TRAPEZOID_ATP = {json.dumps(flat_atp, separators=(',', ':'))};\n"
             f"const TRAPEZOID_WTA = {json.dumps(flat_wta, separators=(',', ':'))};\n"
             f"const TRAPEZOID_YEARS = {json.dumps(years_seen)};\n"
+            f"const TRAPEZOID_METRICS = {json.dumps(metrics)};\n"
+            f"const TRAPEZOID_LABELS = {json.dumps(labels, indent=2)};\n"
         )
 
     return _write_if_changed(path, hash_input, render, label="trapezoid")
