@@ -194,6 +194,8 @@ const TOURNAMENTS_DATA = [
  { id:"beijing_a25", name:"China Open - Beijing", short:"Beijing", tour:"ATP", type:"M500", surf:"H", draw:32, wk:39, month:9, startDate:"2025-09-23", endDate:"2025-10-01", active:false, complete:true, apiId:{atp:20365} },  // ATP 500
  { id:"beijing_w25", name:"China Open - Beijing", short:"Beijing", tour:"WTA", type:"W1000", surf:"H", draw:64, wk:39, month:9, startDate:"2025-09-22", endDate:"2025-10-05", active:false, complete:true, apiId:{wta:15988} },  // WTA 1000
  { id:"guadalajara25", name:"Guadalajara Open Akron - Guadalajara", short:"Guadalajara", tour:"WTA", type:"W500", surf:"H", draw:32, wk:36, month:9, startDate:"2025-09-08", endDate:"2025-09-14", active:false, complete:true, apiId:{wta:15985} },  // WTA 500
+
+   { id:"palermo25", name:"Palermo Ladies Open - Palermo", short:"Palermo", tour:"WTA", type:"W250", surf:"C", draw:32, wk:30, month:7, startDate:"2025-07-21", endDate:"2025-07-27", active:false, complete:true, apiId:{wta:16338} },  // 13 matches
 ];
 
 // Points lookup per tournament type

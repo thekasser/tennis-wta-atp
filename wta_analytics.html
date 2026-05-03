@@ -869,7 +869,7 @@ function renderLive() {
   if (!acts.length) {
     // No active events — show next upcoming + recent completed
     const completed = TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR) && t.complete);
-    const upcoming  = TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR) && !t.complete && !t.active);
+    const upcoming  = TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR) && !t.complete && !t.active).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||''));
     const next      = upcoming[0];
     el.innerHTML = `
       ${blufLive()}
@@ -878,7 +878,7 @@ function renderLive() {
         <h3>No ${TOUR} events currently in progress</h3>
         ${next ? `<p style="margin-top:6px">Next up: <strong style="color:var(--tc)">${next.name}</strong> — ${next.startDate}</p>` : ''}
       </div>
-      ${renderUpcoming(upcoming.slice(0,4))}
+      ${renderUpcoming(upcoming)}
     `;
     return;
   }
@@ -1037,19 +1037,89 @@ function renderLive() {
 
     <div style="margin-top:16px">
       <h2 style="margin-bottom:12px;font-size:18px;color:var(--ink)">Upcoming Events</h2>
-      ${renderUpcoming(TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR)&&!t.complete&&!t.active).slice(0,3))}
+      ${renderUpcoming(TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR)&&!t.complete&&!t.active).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||'')))}
     </div>
   `;
 }
 
 function renderUpcoming(list) {
   const surfEmoji = {H:'🔵 Hard',C:'🟤 Clay',G:'🟢 Grass'};
-  return list.map(t=>`
+  return list.map(t => {
+    // Points per round (uses inline PTS table + getTournamentPts logic).
+    let ptsKey = t.type;
+    if (t.type === 'M1000') ptsKey = t.draw === 128 ? 'M1000_128' : 'M1000_96';
+    const pts = PTS[ptsKey] || {};
+    const ROUND_ORDER = ['W','F','SF','QF','R16','R32','R64','R128','RR'];
+    const ptsList = ROUND_ORDER.filter(r => pts[r] !== undefined)
+      .map(r => `<span style="margin-right:14px"><strong style="color:var(--ink)">${r}</strong>&nbsp;${pts[r]}</span>`)
+      .join('');
+
+    // Prior-year podium: who won/F/SF the same tournament a year ago.
+    const podium = priorYearPodium(t);
+    const yy = parseInt((t.startDate || '').slice(0, 4)) - 1;
+    let podiumHtml = '';
+    if (podium && (podium.W.length || podium.F.length || podium.SF.length)) {
+      const line = (icon, label, names) => names.length
+        ? `<div style="margin-top:2px"><span style="opacity:.7;width:14px;display:inline-block">${icon}</span> ${names.join(', ')} <span style="opacity:.5;font-size:10px">(${label})</span></div>`
+        : '';
+      podiumHtml = `
+        <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px;line-height:1.5">
+          <div style="color:var(--muted);font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">${yy} podium</div>
+          ${line('🏆','W',podium.W)}
+          ${line('🥈','F',podium.F)}
+          ${line('•','SF',podium.SF)}
+        </div>`;
+    }
+
+    return `
     <div class="upcoming-card">
       <div class="ev-name">${t.name} <span class="badge">${t.type}</span></div>
       <div class="ev-meta">${surfEmoji[t.surf]||''} · ${t.startDate} – ${t.endDate} · Draw: ${t.draw}</div>
-    </div>
-  `).join('');
+      ${ptsList ? `<div class="ev-meta" style="margin-top:8px;font-size:11px">${ptsList}</div>` : ''}
+      ${podiumHtml}
+    </div>`;
+  }).join('');
+}
+
+// Find prior-year W/F/SF participants for a tournament. Returns
+// {W:[names], F:[names], SF:[names]} (each capped to a short list).
+// Tries multiple ID variants to handle split-tier / family-rename cases:
+//   madrid26 → madrid25 (BOTH stays BOTH across years)
+//   eastbourne26 → eastbourne_w25, eastbourne_a25 (split in prior year)
+function priorYearPodium(t) {
+  const m = (t.id || '').match(/^(.+?)(_a|_w)?(\d{2})$/);
+  if (!m) return null;
+  const family = m[1];
+  const tourSuffix = m[2] || '';
+  const yy = parseInt(m[3]);
+  if (isNaN(yy)) return null;
+  const prior = String(yy - 1).padStart(2, '0');
+  const candidates = [
+    `${family}${tourSuffix}${prior}`,   // exact-match prior (rome25, eastbourne_w25)
+    `${family}${prior}`,                // family without tour suffix (eastbourne25 if it existed)
+    `${family}_w${prior}`,              // split-WTA prior
+    `${family}_a${prior}`,              // split-ATP prior
+  ];
+
+  const tours = (t.tour === 'BOTH') ? [TOUR.toLowerCase()] : [t.tour.toLowerCase()];
+  const podium = { W: [], F: [], SF: [] };
+  if (typeof TOURNAMENT_HISTORY === 'undefined' || !TOURNAMENT_HISTORY) return podium;
+
+  for (const tour of tours) {
+    const histories = (TOURNAMENT_HISTORY[tour] || {});
+    const players = (tour === 'wta') ? (PLAYERS_WTA || []) : (PLAYERS_ATP || []);
+    for (const bioId in histories) {
+      for (const e of histories[bioId]) {
+        if (!candidates.includes(e.tid)) continue;
+        const bio = players.find(p => String(p.id) === bioId);
+        const name = bio ? (bio.ab || bio.name.split(' ').slice(-1)[0]) : `#${bioId}`;
+        if (e.round === 'Final' && e.won)      { if (podium.W.length < 2) podium.W.push(name); }
+        else if (e.round === 'Final')          { if (podium.F.length < 2) podium.F.push(name); }
+        else if (e.round === '1/2' && !e.won)  { if (podium.SF.length < 4) podium.SF.push(name); }
+      }
+    }
+  }
+  return podium;
 }
 
 // ═══════════════════════════════════════
