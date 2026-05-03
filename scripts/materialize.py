@@ -621,10 +621,28 @@ def _is_real_match(score: str | None) -> bool:
     s = score.upper()
     return not any(p in s for p in (" RET", " W/O", " DEF", "W/O", "RET", "DEF"))
 
+# Tier filter: matches at events in this set are "tour-level competition."
+# Anything else (W125, M125, ITF, Challenger, NULL) is excluded from the
+# trapezoid composite by default. See plan: ~/.claude/plans/the-match-history-for-async-pie.md
+TOUR_TIERS = {"GS", "M1000", "W1000", "M500", "W500", "M250", "W250",
+              "ATPFinals", "WTAFinals"}
+
+def _is_tour_level(m: dict) -> bool:
+    return (m.get("t_type") in TOUR_TIERS)
+
+def _is_main_draw(m: dict) -> bool:
+    """Drop qualifying rounds (Q1/Q2/Q3/Q4 — Matchstat 'round' values)."""
+    rd = m.get("round") or ""
+    return not rd.startswith("Q")
+
+
 def _aggregate_year(matches: list[dict], mid: int,
                     min_matches: int = MIN_MATCHES,
-                    min_tb: int = 3, min_dec: int = 3) -> dict | None:
+                    min_tb: int = 3, min_dec: int = 3,
+                    tour_only: bool = True) -> dict | None:
     real = [m for m in matches if _is_real_match(m.get("score"))]
+    if tour_only:
+        real = [m for m in real if _is_tour_level(m) and _is_main_draw(m)]
     if len(real) < min_matches:
         return None
     n = len(real); wins = 0
@@ -764,21 +782,25 @@ def _trapezoid_rows(conn, tour: str, all_year_matches: dict[int, list[dict]],
             window_ms = [m for m in all_ms if (d := _dt(m)) and d >= cutoff]
             if not window_ms:
                 continue
-            agg = _aggregate_year(window_ms, mid)
+            # Apply tier filter ONCE here so the per-surface threshold below
+            # also operates on tour-level matches only.
+            window_tour = [m for m in window_ms
+                           if _is_tour_level(m) and _is_main_draw(m)]
+            agg = _aggregate_year(window_tour, mid, tour_only=False)
             if agg:
                 rows_by[tag].append({
                     "id": str(mid), "bioId": bio_id, "name": b["name"],
                     "ioc": b["country"] or "", "year": tag, "tour": tour.upper(),
                     "surf": "All", **agg,
                 })
-            # Per-surface variants
+            # Per-surface variants — tier already applied
             by_surf: dict[str, list] = defaultdict(list)
-            for m in window_ms:
+            for m in window_tour:
                 by_surf[m["surface"] or "H"].append(m)
             for surf, surf_ms in by_surf.items():
                 if len(surf_ms) < 5:
                     continue
-                surf_agg = _aggregate_year(surf_ms, mid)
+                surf_agg = _aggregate_year(surf_ms, mid, tour_only=False)
                 if not surf_agg:
                     continue
                 rows_by[f"{tag}_{surf}"].append({
@@ -787,11 +809,15 @@ def _trapezoid_rows(conn, tour: str, all_year_matches: dict[int, list[dict]],
                     "surf": surf, **surf_agg,
                 })
 
-        # CURR — last 14 days, lower threshold to surface in-tournament players
+        # CURR — last 14 days, lower threshold to surface in-tournament players.
+        # Keep tour_only=False so a player active at a W125 still appears as
+        # "what they're doing right now" — this view is about presence, not metric ranking.
         curr_ms = [m for m in all_ms
                    if (d := _dt(m)) and d >= (today - timedelta(days=14))]
         if curr_ms:
-            curr_agg = _aggregate_year(curr_ms, mid, min_matches=1, min_tb=1, min_dec=1)
+            curr_agg = _aggregate_year(curr_ms, mid,
+                                       min_matches=1, min_tb=1, min_dec=1,
+                                       tour_only=False)
             if curr_agg:
                 rows_by["CURR"].append({
                     "id": str(mid), "bioId": bio_id, "name": b["name"],
@@ -827,13 +853,18 @@ def materialize_trapezoid(conn) -> bool:
     bios_atp = [dict(r) for r in bios_atp]
     bios_wta = [dict(r) for r in bios_wta]
 
-    # Pull all matches once per tour, group by mid
+    # Pull all matches once per tour, group by mid. Pull tournaments.type via
+    # LEFT JOIN so the tier filter in _aggregate_year can decide tour vs
+    # non-tour level. Unresolved matches (no tournament_id) get t_type=NULL
+    # which TOUR_TIERS rejects → automatically excluded.
     def _matches_by_mid(tour: str) -> dict[int, list[dict]]:
         cur = conn.execute("""
-            SELECT date, round, p1_id, p2_id, winner_id, score, surface, best_of,
-                   stat_p1, stat_p2
-            FROM matches
-            WHERE tour = ?
+            SELECT m.date, m.round, m.p1_id, m.p2_id, m.winner_id, m.score,
+                   m.surface, m.best_of, m.stat_p1, m.stat_p2,
+                   m.tournament_id, t.type AS t_type
+            FROM matches m
+            LEFT JOIN tournaments t ON t.id = m.tournament_id
+            WHERE m.tour = ?
         """, (tour,))
         out: dict[int, list[dict]] = defaultdict(list)
         for r in cur:

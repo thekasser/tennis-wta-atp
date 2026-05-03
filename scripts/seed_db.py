@@ -198,6 +198,24 @@ def seed_tournaments(conn) -> int:
     return n
 
 
+def reresolve_match_tournament_ids(conn) -> int:
+    """After tournaments table is updated, fill in tournament_id for any
+    existing matches whose tournament_api_id now resolves but didn't before.
+    Idempotent. Returns number of rows updated."""
+    cur = conn.execute("""
+        UPDATE matches
+           SET tournament_id = (
+               SELECT t.id FROM tournaments t
+               WHERE (matches.tour='atp' AND t.api_id_atp = matches.tournament_api_id)
+                  OR (matches.tour='wta' AND t.api_id_wta = matches.tournament_api_id)
+           )
+         WHERE tournament_id IS NULL
+           AND tournament_api_id IS NOT NULL
+    """)
+    conn.commit()
+    return cur.rowcount
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--only", choices=["players", "tournaments"], default=None)
@@ -212,6 +230,11 @@ def main() -> int:
     if args.only in (None, "tournaments"):
         n = seed_tournaments(conn)
         print(f"[seed] tournaments: {n}")
+        # Catalog expansion is the typical reason to re-seed tournaments —
+        # also re-resolve any existing matches whose api_id now matches.
+        m = reresolve_match_tournament_ids(conn)
+        if m:
+            print(f"[seed] re-resolved tournament_id on {m:,} existing matches")
 
     return 0
 
