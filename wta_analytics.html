@@ -5,15 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>ATP / WTA Analytics Dashboard · 2026</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="data/tournaments.js"></script>
-<script src="data/players_wta.js"></script>
-<script src="data/players_atp.js"></script>
-<script src="data/season_wta.js"></script>
-<script src="data/season_atp.js"></script>
-<script src="data/trapezoid_data.js"></script>
-<script src="data/recent_matches.js"></script>
-<script src="data/tournament_history.js"></script>
-<script src="data/h2h.js"></script>
+<!-- Phase 2: data is fetched from /api/* in the boot block at the top of
+     the inline <script> below, then rendered. Static data/*.js files are
+     no longer loaded as scripts. -->
+
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&family=Fraunces:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -485,6 +480,85 @@ select:focus{outline:none;border-color:var(--tc)}
 </footer>
 
 <script>
+// ═══════════════════════════════════════
+// PHASE 2 BOOT — fetch all data from /api/* in parallel before init.
+// ═══════════════════════════════════════
+//
+// Replaces the 9 `<script src="data/*.js">` tags that used to define these
+// globals at parse time. All endpoints are open (Cloudflare Access bypass
+// covers /api/*) and the Worker serves edge-cached JSON.
+//
+// Globals are declared `let` so we can assign after fetch resolves; the
+// rest of this script reads them after DOMContentLoaded which awaits boot.
+
+let TOURNAMENTS_DATA, PLAYERS_WTA, PLAYERS_ATP, SEASON_WTA, SEASON_ATP;
+let TRAPEZOID_ATP, TRAPEZOID_WTA, TRAPEZOID_YEARS, TRAPEZOID_METRICS,
+    TRAPEZOID_LABELS, TRAPEZOID_MIN_DEFAULTS;
+let RECENT_MATCHES, TOURNAMENT_HISTORY, H2H;
+
+// PTS table + getTournamentPts() helper used to live in data/tournaments.js
+// alongside the calendar data. They're stable lookup logic, not data, so
+// they're inlined here now that tournaments.js is fetched as JSON.
+const PTS = {
+  GS:         { W:2000, F:1300, SF:800,  QF:400, R16:200, R32:100, R64:50,  R128:10  },
+  M1000_128:  { W:1000, F:650,  SF:390,  QF:215, R16:120, R32:65,  R64:35,  R128:10  },
+  M1000_96:   { W:1000, F:650,  SF:390,  QF:215, R16:120, R32:65,  R64:10              },
+  W1000:      { W:1000, F:650,  SF:390,  QF:215, R16:120, R32:65,  R64:10              },
+  M500:       { W:500,  F:330,  SF:200,  QF:100, R16:50,  R32:20,  R64:5               },
+  W500:       { W:500,  F:325,  SF:195,  QF:108, R16:60,  R32:30,  R64:5               },
+  M250:       { W:250,  F:150,  SF:90,   QF:45,  R16:20,  R32:5                        },
+  W250:       { W:250,  F:165,  SF:100,  QF:55,  R16:28,  R32:14                       },
+  WTAFinals:  { W:1500, F:1000, SF:500,  RR:125                                        },
+  ATPFinals:  { W:1500, F:1000, SF:500,  RR:200                                        },
+};
+
+function getTournamentPts(tournId, round) {
+  const t = (TOURNAMENTS_DATA || []).find(x => x.id === tournId);
+  if (!t) return 0;
+  let ptsKey = t.type;
+  if (t.type === 'M1000') ptsKey = t.draw === 128 ? 'M1000_128' : 'M1000_96';
+  return (PTS[ptsKey] || {})[round] || 0;
+}
+
+async function loadDashboardData() {
+  // Origin-relative URLs so this works in dev (`wrangler dev`), preview,
+  // and production. The CF cache headers on the worker keep this fast on
+  // repeat visits.
+  const get = (path) => fetch(path, { credentials: 'omit' }).then(r => {
+    if (!r.ok) throw new Error(`${path} → HTTP ${r.status}`);
+    return r.json();
+  });
+  const [
+    tournaments, playersWTA, playersATP, seasonWTA, seasonATP,
+    trapezoid, recentMatches, tournamentHistory, h2h,
+  ] = await Promise.all([
+    get('/api/tournaments'),
+    get('/api/players/wta'),
+    get('/api/players/atp'),
+    get('/api/season/wta'),
+    get('/api/season/atp'),
+    get('/api/trapezoid'),
+    get('/api/recent-matches'),
+    get('/api/tournament-history'),
+    get('/api/h2h'),
+  ]);
+  TOURNAMENTS_DATA   = tournaments;
+  PLAYERS_WTA        = playersWTA;
+  PLAYERS_ATP        = playersATP;
+  SEASON_WTA         = seasonWTA;
+  SEASON_ATP         = seasonATP;
+  TRAPEZOID_ATP      = trapezoid.atp || [];
+  TRAPEZOID_WTA      = trapezoid.wta || [];
+  TRAPEZOID_YEARS    = trapezoid.years || [];
+  TRAPEZOID_METRICS  = trapezoid.metrics || [];
+  TRAPEZOID_LABELS   = trapezoid.labels || {};
+  TRAPEZOID_MIN_DEFAULTS = trapezoid.minDefaults || {};
+  RECENT_MATCHES     = recentMatches;
+  TOURNAMENT_HISTORY = tournamentHistory;
+  H2H                = h2h;
+}
+
+
 // ═══════════════════════════════════════
 // DATA HELPERS — merge bio + season
 // ═══════════════════════════════════════
@@ -1942,7 +2016,25 @@ function _enrichActiveTournaments_legacy() {
 // ═══════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════
-document.addEventListener('DOMContentLoaded', ()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
+  // Show loading state immediately (the body's already rendered an empty
+  // shell at this point). Fetch all /api/* data in parallel, then run the
+  // existing init.
+  const ts = document.getElementById('data-ts');
+  if (ts) ts.textContent = '· loading…';
+  try {
+    await loadDashboardData();
+  } catch (err) {
+    console.error('[boot] data load failed:', err);
+    document.body.insertAdjacentHTML('afterbegin',
+      `<div style="background:#7a2c2c;color:#fff;padding:14px 18px;font-family:Manrope,sans-serif;font-weight:600">
+         Could not load dashboard data: ${String(err).replace(/</g, '&lt;')}.
+         The Worker may be down or your network is offline. Retry in a minute or
+         check <code>/api/health</code>.
+       </div>`);
+    return;
+  }
+
   document.documentElement.style.setProperty('--tc','#406b5f');
   document.documentElement.style.setProperty('--tbg','#e1eee7');
   document.documentElement.style.setProperty('--tborder','rgba(64,107,95,0.35)');
