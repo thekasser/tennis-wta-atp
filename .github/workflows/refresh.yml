@@ -65,7 +65,29 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 scripts/validate.py
 
-      # ── Commit & push → triggers Cloudflare Pages auto-deploy ──────────
+      # ── Push fresh blobs to D1 via the Worker's /api/admin/sync ────────
+      # Phase 2: dashboard reads from D1, not from committed data/*.js files.
+      # This is what actually makes the cron run "live" for users.
+      - name: Push to Worker (D1)
+        env:
+          ADMIN_SYNC_TOKEN: ${{ secrets.ADMIN_SYNC_TOKEN }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          if [ -z "$ADMIN_SYNC_TOKEN" ]; then
+            echo "::warning::ADMIN_SYNC_TOKEN secret not set — skipping D1 push"
+          else
+            python3 scripts/upload_to_worker.py
+          fi
+
+      # ── Commit & push the DB snapshot + manifest ───────────────────────
+      # We only commit the things that drive future CI runs:
+      #   - data/tennis.db.gz       (rehydrated by restore_db.py next run)
+      #   - data/snapshot_summary.txt (PR-diffable manifest)
+      #   - data/players_*.js, data/tournaments.js (curated inputs only
+      #     change on manual edits — won't show up in `git status` here
+      #     unless an editor touched them)
+      # The derived data/*.js files (season_*, recent_matches, h2h, etc.)
+      # are gitignored — D1 is the canonical store now.
       - name: Commit and push
         run: |
           cd "$GITHUB_WORKSPACE"

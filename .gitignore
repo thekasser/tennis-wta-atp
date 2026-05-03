@@ -31,8 +31,20 @@ secrets/
 scripts/cache/
 *.csv
 
-# Allow specific data files we DO commit (recompute outputs, not raw inputs)
-!data/*.js
+# Phase 2: D1 is the canonical store for derived data. Materializer still
+# writes these locally (handy for debugging) but they don't get committed.
+# Curated INPUTS (players_*.js, tournaments.js) stay tracked — committed.
+data/season_atp.js
+data/season_wta.js
+data/recent_matches.js
+data/tournament_history.js
+data/h2h.js
+data/trapezoid_data.js
+
+# Curated input data files we DO commit (hand-edited)
+!data/players_atp.js
+!data/players_wta.js
+!data/tournaments.js
 
 # SQLite working DB — committed snapshot is data/tennis.db.gz only
 data/tennis.db
