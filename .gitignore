@@ -40,6 +40,16 @@ data/tennis.db-journal
 data/tennis.db-wal
 data/tennis.db-shm
 
+# D1 seed artifacts (regeneratable from data/tennis.db via scripts/export_for_d1.py)
+workers/seed/
+
+# Wrangler build/state — `.wrangler/` at repo root has wrangler-account.json
+# with credentials (NEVER commit)
+.wrangler/
+workers/.wrangler/
+workers/dist/
+workers/node_modules/
+
 # Local dev artifacts
 *.log
 node_modules/
