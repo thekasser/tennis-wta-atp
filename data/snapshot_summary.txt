@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-03T03:47:30.624454+00:00
+# Generated: 2026-05-03T05:13:06.546845+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       204
   tournaments                   117
   matches                    11,110
-  rankings_snapshots            204
-  api_fetch_log                 682
+  rankings_snapshots            408
+  api_fetch_log               1,114
 
-## Latest rankings snapshot: 2026-05-02
+## Latest rankings snapshot: 2026-05-03
 
 ## Active tournaments
   madrid26       Mutua Madrid Open                matches=206  latest=2026-05-02
