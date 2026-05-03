@@ -6,23 +6,23 @@
 
 const TOURNAMENTS_DATA = [
   // ── JANUARY ──────────────────────────────────────────────────────────────
-  { id:"ao26",       name:"Australian Open",    short:"AO",       tour:"BOTH", type:"GS",    surf:"H", draw:128, wk:2,  month:1,  startDate:"2026-01-12", endDate:"2026-01-25", active:false, complete:true  },
+  { id:"ao26",       name:"Australian Open",    short:"AO",       tour:"BOTH", type:"GS",    surf:"H", draw:128, wk:2,  month:1,  startDate:"2026-01-12", endDate:"2026-01-25", active:false, complete:true, apiId:{atp:21305, wta:16705} },
 
   // ── FEBRUARY ─────────────────────────────────────────────────────────────
-  { id:"doha26",     name:"Qatar TotalEnergies Open", short:"Doha", tour:"WTA", type:"W500",  surf:"H", draw:28,  wk:5,  month:2,  startDate:"2026-02-09", endDate:"2026-02-15", active:false, complete:true  },
-  { id:"dubai_w26",  name:"Dubai Duty Free",    short:"Dubai",    tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:6,  month:2,  startDate:"2026-02-16", endDate:"2026-02-22", active:false, complete:true  },
-  { id:"rdam26",     name:"ABN AMRO Open",      short:"Rotterdam",tour:"ATP", type:"M500",  surf:"H", draw:32,  wk:5,  month:2,  startDate:"2026-02-02", endDate:"2026-02-08", active:false, complete:true  },
-  { id:"dubai_a26",  name:"Dubai Duty Free",    short:"Dubai",    tour:"ATP", type:"M500",  surf:"H", draw:32,  wk:7,  month:2,  startDate:"2026-02-23", endDate:"2026-03-01", active:false, complete:true  },
-  { id:"buenosaires26", name:"Argentina Open",  short:"Buenos Aires", tour:"ATP", type:"M250", surf:"C", draw:28, wk:6, month:2, startDate:"2026-02-09", endDate:"2026-02-15", active:false, complete:true  },
+  { id:"doha26",     name:"Qatar TotalEnergies Open", short:"Doha", tour:"WTA", type:"W500",  surf:"H", draw:28,  wk:5,  month:2,  startDate:"2026-02-09", endDate:"2026-02-15", active:false, complete:true, apiId:{wta:16710} },
+  { id:"dubai_w26",  name:"Dubai Duty Free",    short:"Dubai",    tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:6,  month:2,  startDate:"2026-02-16", endDate:"2026-02-22", active:false, complete:true, apiId:{wta:16711} },
+  { id:"rdam26",     name:"ABN AMRO Open",      short:"Rotterdam",tour:"ATP", type:"M500",  surf:"H", draw:32,  wk:5,  month:2,  startDate:"2026-02-02", endDate:"2026-02-08", active:false, complete:true, apiId:{atp:21309} },
+  { id:"dubai_a26",  name:"Dubai Duty Free",    short:"Dubai",    tour:"ATP", type:"M500",  surf:"H", draw:32,  wk:7,  month:2,  startDate:"2026-02-23", endDate:"2026-03-01", active:false, complete:true, apiId:{atp:21315} },
+  { id:"buenosaires26", name:"Argentina Open",  short:"Buenos Aires", tour:"ATP", type:"M250", surf:"C", draw:28, wk:6, month:2, startDate:"2026-02-09", endDate:"2026-02-15", active:false, complete:true, apiId:{atp:21310} },
 
   // ── MARCH ─────────────────────────────────────────────────────────────────
-  { id:"iw26",       name:"Indian Wells",       short:"IW",       tour:"BOTH", type:"M1000", surf:"H", draw:96,  wk:9,  month:3,  startDate:"2026-03-04", endDate:"2026-03-15", active:false, complete:true  },
-  { id:"miami26",    name:"Miami Open",         short:"Miami",    tour:"BOTH", type:"M1000", surf:"H", draw:128, wk:11, month:3,  startDate:"2026-03-17", endDate:"2026-03-30", active:false, complete:true  },
+  { id:"iw26",       name:"Indian Wells",       short:"IW",       tour:"BOTH", type:"M1000", surf:"H", draw:96,  wk:9,  month:3,  startDate:"2026-03-04", endDate:"2026-03-15", active:false, complete:true, apiId:{atp:21317, wta:16714} },
+  { id:"miami26",    name:"Miami Open",         short:"Miami",    tour:"BOTH", type:"M1000", surf:"H", draw:128, wk:11, month:3,  startDate:"2026-03-17", endDate:"2026-03-30", active:false, complete:true, apiId:{atp:21318, wta:16715} },
 
   // ── APRIL (current) ────────────────────────────────────────────────────────
-  { id:"charleston26", name:"Credit One Charleston", short:"Charleston", tour:"WTA", type:"W500", surf:"C", draw:48, wk:13, month:4, startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true, wtaId:804, wtaSlug:"charleston" },
+  { id:"charleston26", name:"Credit One Charleston", short:"Charleston", tour:"WTA", type:"W500", surf:"C", draw:48, wk:13, month:4, startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true, wtaId:804, wtaSlug:"charleston", apiId:{wta:16716} },
   { id:"houston26",  name:"Houston Open",       short:"Houston",  tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true  },
-  { id:"marrakech26",name:"Grand Prix Hassan II",short:"Marrakech",tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true  },
+  { id:"marrakech26",name:"Grand Prix Hassan II",short:"Marrakech",tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true, apiId:{atp:21321} },
 
   { id:"madrid26",   name:"Mutua Madrid Open",  short:"Madrid",   tour:"BOTH", type:"M1000", surf:"C", draw:96,  wk:16, month:4,  startDate:"2026-04-22", endDate:"2026-05-03", active:true,  complete:false, wtaId:"madrid-open", wtaSlug:"", apiId:{atp:21325, wta:16721} },
 
@@ -161,7 +161,6 @@ const TOURNAMENTS_DATA = [
   { id:"cluj26", name:"Transylvania Open - Cluj-Napoca", short:"Cluj", tour:"WTA", type:"W250", surf:"C", draw:32, wk:5, month:1, startDate:"2026-01-31", endDate:"2026-02-07", active:false, complete:true, apiId:{wta:16709} },  // 29 matches
 
   // ── 2026-02 ─────────────────────────
-  { id:"doha_w26", name:"Qatar TotalEnergies Open - Doha", short:"Doha", tour:"WTA", type:"W500", surf:"H", draw:32, wk:6, month:2, startDate:"2026-02-06", endDate:"2026-02-14", active:false, complete:true, apiId:{wta:16710} },  // 76 matches
   { id:"dallas26", name:"Dallas Open - Dallas", short:"Dallas", tour:"ATP", type:"M250", surf:"H", draw:28, wk:6, month:2, startDate:"2026-02-07", endDate:"2026-02-15", active:false, complete:true, apiId:{atp:21308} },  // 31 matches
   { id:"delraybeach26", name:"Delray Beach Open - Delray Beach", short:"Delray", tour:"ATP", type:"M250", surf:"H", draw:32, wk:7, month:2, startDate:"2026-02-14", endDate:"2026-02-22", active:false, complete:true, apiId:{atp:21313} },  // 32 matches
   { id:"doha_a26", name:"Qatar ExxonMobil Open - Doha", short:"Doha", tour:"ATP", type:"M500", surf:"H", draw:32, wk:7, month:2, startDate:"2026-02-14", endDate:"2026-02-21", active:false, complete:true, apiId:{atp:21311} },  // 32 matches
