@@ -9,7 +9,7 @@ const TOURNAMENTS_DATA = [
   { id:"ao26",       name:"Australian Open",    short:"AO",       tour:"BOTH", type:"GS",    surf:"H", draw:128, wk:2,  month:1,  startDate:"2026-01-12", endDate:"2026-01-25", active:false, complete:true, apiId:{atp:21305, wta:16705} },
 
   // ── FEBRUARY ─────────────────────────────────────────────────────────────
-  { id:"doha26",     name:"Qatar TotalEnergies Open", short:"Doha", tour:"WTA", type:"W500",  surf:"H", draw:28,  wk:5,  month:2,  startDate:"2026-02-09", endDate:"2026-02-15", active:false, complete:true, apiId:{wta:16710} },
+  { id:"doha26",     name:"Qatar TotalEnergies Open", short:"Doha", tour:"WTA", type:"W1000",  surf:"H", draw:28,  wk:5,  month:2,  startDate:"2026-02-09", endDate:"2026-02-15", active:false, complete:true, apiId:{wta:16710} },
   { id:"dubai_w26",  name:"Dubai Duty Free",    short:"Dubai",    tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:6,  month:2,  startDate:"2026-02-16", endDate:"2026-02-22", active:false, complete:true, apiId:{wta:16711} },
   { id:"rdam26",     name:"ABN AMRO Open",      short:"Rotterdam",tour:"ATP", type:"M500",  surf:"H", draw:32,  wk:5,  month:2,  startDate:"2026-02-02", endDate:"2026-02-08", active:false, complete:true, apiId:{atp:21309} },
   { id:"dubai_a26",  name:"Dubai Duty Free",    short:"Dubai",    tour:"ATP", type:"M500",  surf:"H", draw:32,  wk:7,  month:2,  startDate:"2026-02-23", endDate:"2026-03-01", active:false, complete:true, apiId:{atp:21315} },
@@ -31,7 +31,7 @@ const TOURNAMENTS_DATA = [
   { id:"rg26",       name:"Roland Garros",      short:"RG",       tour:"BOTH", type:"GS",    surf:"C", draw:128, wk:21, month:5,  startDate:"2026-05-24", endDate:"2026-06-07", active:false, complete:false },
 
   // ── JUNE ──────────────────────────────────────────────────────────────────
-  { id:"eastbourne26", name:"Eastbourne",       short:"Eastbourne",tour:"WTA", type:"W500",  surf:"G", draw:28,  wk:24, month:6,  startDate:"2026-06-14", endDate:"2026-06-20", active:false, complete:false },
+  { id:"eastbourne26", name:"Eastbourne",       short:"Eastbourne",tour:"WTA", type:"W250",  surf:"G", draw:28,  wk:24, month:6,  startDate:"2026-06-14", endDate:"2026-06-20", active:false, complete:false },
   { id:"queens26",   name:"cinch Championships",short:"Queen's",  tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false },
   { id:"halle26",    name:"Terra Wortmann Open",short:"Halle",    tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false },
   { id:"wimbledon26",name:"Wimbledon",          short:"Wimbledon",tour:"BOTH", type:"GS",    surf:"G", draw:128, wk:26, month:6,  startDate:"2026-06-29", endDate:"2026-07-12", active:false, complete:false },
@@ -48,7 +48,6 @@ const TOURNAMENTS_DATA = [
   { id:"uso26",      name:"US Open",            short:"US Open",  tour:"BOTH", type:"GS",    surf:"H", draw:128, wk:35, month:8,  startDate:"2026-08-24", endDate:"2026-09-06", active:false, complete:false },
 
   // ── SEPTEMBER / OCTOBER ───────────────────────────────────────────────────
-  { id:"beijing26",  name:"China Open",         short:"Beijing",  tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:40, month:9,  startDate:"2026-09-21", endDate:"2026-09-27", active:false, complete:false },
   { id:"shanghai26", name:"Rolex Shanghai Masters",short:"Shanghai",tour:"ATP",type:"M1000",surf:"H", draw:96,  wk:41, month:10, startDate:"2026-10-05", endDate:"2026-10-11", active:false, complete:false },
   { id:"wuhan26",    name:"Wuhan Open",         short:"Wuhan",    tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:41, month:10, startDate:"2026-10-05", endDate:"2026-10-11", active:false, complete:false },
 
@@ -74,16 +73,16 @@ const TOURNAMENTS_DATA = [
   // ── 2025-02 ─────────────────────────
   { id:"abudhabi25", name:"Mubadala Abu Dhabi Open - Abu Dhabi", short:"Abu Dhabi", tour:"WTA", type:"W500", surf:"H", draw:32, wk:5, month:2, startDate:"2025-02-01", endDate:"2025-02-08", active:false, complete:true, apiId:{wta:15949} },  // 38 matches
   { id:"cluj25", name:"Transylvania Open - Cluj-Napoca", short:"Cluj", tour:"WTA", type:"W250", surf:"C", draw:32, wk:5, month:2, startDate:"2025-02-01", endDate:"2025-02-09", active:false, complete:true, apiId:{wta:15950} },  // 39 matches
-  { id:"dallas25", name:"Dallas Open - Dallas", short:"Dallas", tour:"ATP", type:"M250", surf:"H", draw:28, wk:5, month:2, startDate:"2025-02-01", endDate:"2025-02-09", active:false, complete:true, apiId:{atp:20318} },  // 31 matches
+  { id:"dallas25", name:"Dallas Open - Dallas", short:"Dallas", tour:"ATP", type:"M500", surf:"H", draw:28, wk:5, month:2, startDate:"2025-02-01", endDate:"2025-02-09", active:false, complete:true, apiId:{atp:20318} },  // 31 matches
   { id:"rdam25", name:"ABN AMRO Open - Rotterdam", short:"Rotterdam", tour:"ATP", type:"M500", surf:"H", draw:32, wk:5, month:2, startDate:"2025-02-01", endDate:"2025-02-09", active:false, complete:true, apiId:{atp:20319} },  // 35 matches
-  { id:"doha_w25", name:"Qatar TotalEnergies Open - Doha", short:"Doha", tour:"WTA", type:"W500", surf:"H", draw:32, wk:6, month:2, startDate:"2025-02-07", endDate:"2025-02-15", active:false, complete:true, apiId:{wta:15951} },  // 76 matches
+  { id:"doha_w25", name:"Qatar TotalEnergies Open - Doha", short:"Doha", tour:"WTA", type:"W1000", surf:"H", draw:32, wk:6, month:2, startDate:"2025-02-07", endDate:"2025-02-15", active:false, complete:true, apiId:{wta:15951} },  // 76 matches
   { id:"buenosaires25", name:"Argentina Open - Buenos Aires", short:"Buenos Aires", tour:"ATP", type:"M250", surf:"C", draw:28, wk:6, month:2, startDate:"2025-02-08", endDate:"2025-02-16", active:false, complete:true, apiId:{atp:20320} },  // 25 matches
   { id:"delraybeach25", name:"Delray Beach Open - Delray Beach", short:"Delray", tour:"ATP", type:"M250", surf:"H", draw:32, wk:6, month:2, startDate:"2025-02-08", endDate:"2025-02-16", active:false, complete:true, apiId:{atp:20321} },  // 25 matches
   { id:"dubai_w25", name:"Dubai Duty Free Championships - Dubai", short:"Dubai", tour:"WTA", type:"W1000", surf:"H", draw:56, wk:7, month:2, startDate:"2025-02-14", endDate:"2025-02-22", active:false, complete:true, apiId:{wta:15952} },  // 73 matches
   { id:"doha_a25", name:"Qatar ExxonMobil Open - Doha", short:"Doha", tour:"ATP", type:"M500", surf:"H", draw:32, wk:7, month:2, startDate:"2025-02-15", endDate:"2025-02-22", active:false, complete:true, apiId:{atp:20323} },  // 40 matches
   { id:"acapulco25", name:"Abierto Mexicano Telcel - Acapulco", short:"Acapulco", tour:"ATP", type:"M500", surf:"H", draw:32, wk:8, month:2, startDate:"2025-02-22", endDate:"2025-03-01", active:false, complete:true, apiId:{atp:20325} },  // 38 matches
   { id:"dubai_a25", name:"Dubai Duty Free Tennis Championships - Dubai", short:"Dubai", tour:"ATP", type:"M500", surf:"H", draw:32, wk:8, month:2, startDate:"2025-02-22", endDate:"2025-03-01", active:false, complete:true, apiId:{atp:20326} },  // 40 matches
-  { id:"merida25", name:"Merida Open Akron - Merida", short:"Mérida", tour:"WTA", type:"W250", surf:"H", draw:32, wk:8, month:2, startDate:"2025-02-22", endDate:"2025-03-02", active:false, complete:true, apiId:{wta:15996} },  // 37 matches
+  { id:"merida25", name:"Merida Open Akron - Merida", short:"Mérida", tour:"WTA", type:"W500", surf:"H", draw:32, wk:8, month:2, startDate:"2025-02-22", endDate:"2025-03-02", active:false, complete:true, apiId:{wta:15996} },  // 37 matches
 
   // ── 2025-03 ─────────────────────────
   { id:"iw25", name:"BNP Paribas Open - Indian Wells", short:"IW", tour:"BOTH", type:"M1000", surf:"H", draw:96, wk:9, month:3, startDate:"2025-03-02", endDate:"2025-03-16", active:false, complete:true, apiId:{atp:20328, wta:15955} },  // 213 matches
@@ -94,14 +93,14 @@ const TOURNAMENTS_DATA = [
   // ── 2025-04 ─────────────────────────
   { id:"montecarlo25", name:"Monte-Carlo Rolex Masters - Monte-Carlo", short:"Monte-Carlo", tour:"ATP", type:"M1000", surf:"C", draw:56, wk:14, month:4, startDate:"2025-04-05", endDate:"2025-04-13", active:false, complete:true, apiId:{atp:20333} },  // 71 matches
   { id:"barcelona25", name:"Barcelona Open Banc Sabadell - Barcelona", short:"Barcelona", tour:"ATP", type:"M500", surf:"C", draw:48, wk:15, month:4, startDate:"2025-04-12", endDate:"2025-04-20", active:false, complete:true, apiId:{atp:20334} },  // 40 matches
-  { id:"munich25", name:"BMW Open - Munich", short:"Munich", tour:"ATP", type:"M250", surf:"C", draw:28, wk:15, month:4, startDate:"2025-04-12", endDate:"2025-04-20", active:false, complete:true, apiId:{atp:20335} },  // 37 matches
+  { id:"munich25", name:"BMW Open - Munich", short:"Munich", tour:"ATP", type:"M500", surf:"C", draw:28, wk:15, month:4, startDate:"2025-04-12", endDate:"2025-04-20", active:false, complete:true, apiId:{atp:20335} },  // 37 matches
   { id:"stuttgart_w25", name:"Porsche Tennis Grand Prix - Stuttgart", short:"Stuttgart", tour:"WTA", type:"W500", surf:"H", draw:32, wk:15, month:4, startDate:"2025-04-12", endDate:"2025-04-21", active:false, complete:true, apiId:{wta:15959} },  // 34 matches
   { id:"madrid25", name:"Mutua Madrid Open - Madrid", short:"Madrid", tour:"BOTH", type:"M1000", surf:"C", draw:96, wk:17, month:4, startDate:"2025-04-21", endDate:"2025-05-04", active:false, complete:true, apiId:{atp:20336, wta:15961} },  // 228 matches
 
   // ── 2025-05 ─────────────────────────
   { id:"rome25", name:"Internazionali BNL d'Italia - Rome", short:"Rome", tour:"BOTH", type:"M1000", surf:"C", draw:96, wk:19, month:5, startDate:"2025-05-05", endDate:"2025-05-18", active:false, complete:true, apiId:{atp:20337, wta:15962} },  // 214 matches
   { id:"hamburg25", name:"Hamburg Open - Hamburg", short:"Hamburg", tour:"ATP", type:"M500", surf:"C", draw:32, wk:20, month:5, startDate:"2025-05-17", endDate:"2025-05-24", active:false, complete:true, apiId:{atp:20338} },  // 36 matches
-  { id:"strasbourg25", name:"Internationaux de Strasbourg - Strasbourg", short:"Strasbourg", tour:"WTA", type:"W250", surf:"H", draw:32, wk:20, month:5, startDate:"2025-05-17", endDate:"2025-05-24", active:false, complete:true, apiId:{wta:15963} },  // 37 matches
+  { id:"strasbourg25", name:"Internationaux de Strasbourg - Strasbourg", short:"Strasbourg", tour:"WTA", type:"W500", surf:"H", draw:32, wk:20, month:5, startDate:"2025-05-17", endDate:"2025-05-24", active:false, complete:true, apiId:{wta:15963} },  // 37 matches
   { id:"rg25", name:"French Open - Paris", short:"RG", tour:"BOTH", type:"GS", surf:"C", draw:128, wk:21, month:5, startDate:"2025-05-19", endDate:"2025-06-08", active:false, complete:true, apiId:{atp:20340, wta:15965} },  // 293 matches
 
   // ── 2025-06 ─────────────────────────
@@ -113,7 +112,7 @@ const TOURNAMENTS_DATA = [
   { id:"queens25", name:"cinch Championships - London", short:"Queen's", tour:"ATP", type:"M500", surf:"G", draw:32, wk:24, month:6, startDate:"2025-06-14", endDate:"2025-06-22", active:false, complete:true, apiId:{atp:20345} },  // 41 matches
   { id:"badhomburg25", name:"Bad Homburg Open - Bad Homburg", short:"Bad Homburg", tour:"WTA", type:"W500", surf:"G", draw:32, wk:25, month:6, startDate:"2025-06-21", endDate:"2025-06-28", active:false, complete:true, apiId:{wta:15971} },  // 38 matches
   { id:"eastbourne_a25", name:"Rothesay International - Eastbourne", short:"Eastbourne", tour:"ATP", type:"M250", surf:"G", draw:32, wk:25, month:6, startDate:"2025-06-21", endDate:"2025-06-28", active:false, complete:true, apiId:{atp:20347} },  // 32 matches
-  { id:"eastbourne_w25", name:"Rothesay International - Eastbourne", short:"Eastbourne", tour:"WTA", type:"W500", surf:"G", draw:32, wk:25, month:6, startDate:"2025-06-21", endDate:"2025-06-28", active:false, complete:true, apiId:{wta:15972} },  // 45 matches
+  { id:"eastbourne_w25", name:"Rothesay International - Eastbourne", short:"Eastbourne", tour:"WTA", type:"W250", surf:"G", draw:32, wk:25, month:6, startDate:"2025-06-21", endDate:"2025-06-28", active:false, complete:true, apiId:{wta:15972} },  // 45 matches
   { id:"mallorca25", name:"Mallorca Championships - Mallorca", short:"Mallorca", tour:"ATP", type:"M250", surf:"G", draw:28, wk:25, month:6, startDate:"2025-06-21", endDate:"2025-06-28", active:false, complete:true, apiId:{atp:20346} },  // 32 matches
   { id:"wimbledon25", name:"Wimbledon - London", short:"Wimbledon", tour:"BOTH", type:"GS", surf:"G", draw:128, wk:26, month:6, startDate:"2025-06-23", endDate:"2025-07-13", active:false, complete:true, apiId:{atp:20348, wta:15973} },  // 307 matches
 
@@ -127,13 +126,12 @@ const TOURNAMENTS_DATA = [
   // ── 2025-08 ─────────────────────────
   { id:"cincinnati25", name:"Cincinnati Open - Cincinnati", short:"Cincinnati", tour:"BOTH", type:"M1000", surf:"H", draw:96, wk:32, month:8, startDate:"2025-08-05", endDate:"2025-08-18", active:false, complete:true, apiId:{atp:20357, wta:15980} },  // 208 matches
   { id:"cleveland25", name:"Tennis in the Land - Cleveland", short:"Cleveland", tour:"WTA", type:"W250", surf:"H", draw:32, wk:33, month:8, startDate:"2025-08-16", endDate:"2025-08-23", active:false, complete:true, apiId:{wta:15982} },  // 37 matches
-  { id:"monterrey25", name:"Abierto GNP Seguros - Monterrey", short:"Monterrey", tour:"WTA", type:"W250", surf:"H", draw:32, wk:33, month:8, startDate:"2025-08-16", endDate:"2025-08-23", active:false, complete:true, apiId:{wta:15981} },  // 33 matches
+  { id:"monterrey25", name:"Abierto GNP Seguros - Monterrey", short:"Monterrey", tour:"WTA", type:"W500", surf:"H", draw:32, wk:33, month:8, startDate:"2025-08-16", endDate:"2025-08-23", active:false, complete:true, apiId:{wta:15981} },  // 33 matches
   { id:"winstonsalem25", name:"Winston-Salem Open - Winston-Salem", short:"Winston-Salem", tour:"ATP", type:"M250", surf:"H", draw:48, wk:33, month:8, startDate:"2025-08-16", endDate:"2025-08-23", active:false, complete:true, apiId:{atp:20358} },  // 40 matches
   { id:"uso25", name:"U.S. Open - New York", short:"US Open", tour:"BOTH", type:"GS", surf:"H", draw:128, wk:34, month:8, startDate:"2025-08-18", endDate:"2025-09-07", active:false, complete:true, apiId:{atp:20359, wta:15983} },  // 291 matches
 
   // ── 2025-09 ─────────────────────────
-  { id:"seoul25", name:"Korea Open - Seoul", short:"Seoul", tour:"WTA", type:"W500", surf:"H", draw:32, wk:37, month:9, startDate:"2025-09-13", endDate:"2025-09-21", active:false, complete:true, apiId:{wta:15987} },  // 38 matches
-  { id:"beijing25", name:"China Open - Beijing", short:"Beijing", tour:"BOTH", type:"M1000", surf:"H", draw:64, wk:39, month:9, startDate:"2025-09-22", endDate:"2025-10-05", active:false, complete:true, apiId:{atp:20365, wta:15988} },  // 155 matches
+  { id:"seoul25", name:"Korea Open - Seoul", short:"Seoul", tour:"WTA", type:"W250", surf:"H", draw:32, wk:37, month:9, startDate:"2025-09-13", endDate:"2025-09-21", active:false, complete:true, apiId:{wta:15987} },  // 38 matches
   { id:"tokyo_a25", name:"Japan Open Tennis Championships - Tokyo", short:"Tokyo", tour:"ATP", type:"M500", surf:"H", draw:32, wk:39, month:9, startDate:"2025-09-22", endDate:"2025-09-30", active:false, complete:true, apiId:{atp:20364} },  // 39 matches
   { id:"shanghai25", name:"Shanghai Rolex Masters - Shanghai", short:"Shanghai", tour:"ATP", type:"M1000", surf:"H", draw:96, wk:40, month:9, startDate:"2025-09-29", endDate:"2025-10-12", active:false, complete:true, apiId:{atp:20366} },  // 100 matches
 
@@ -161,17 +159,17 @@ const TOURNAMENTS_DATA = [
   { id:"cluj26", name:"Transylvania Open - Cluj-Napoca", short:"Cluj", tour:"WTA", type:"W250", surf:"C", draw:32, wk:5, month:1, startDate:"2026-01-31", endDate:"2026-02-07", active:false, complete:true, apiId:{wta:16709} },  // 29 matches
 
   // ── 2026-02 ─────────────────────────
-  { id:"dallas26", name:"Dallas Open - Dallas", short:"Dallas", tour:"ATP", type:"M250", surf:"H", draw:28, wk:6, month:2, startDate:"2026-02-07", endDate:"2026-02-15", active:false, complete:true, apiId:{atp:21308} },  // 31 matches
+  { id:"dallas26", name:"Dallas Open - Dallas", short:"Dallas", tour:"ATP", type:"M500", surf:"H", draw:28, wk:6, month:2, startDate:"2026-02-07", endDate:"2026-02-15", active:false, complete:true, apiId:{atp:21308} },  // 31 matches
   { id:"delraybeach26", name:"Delray Beach Open - Delray Beach", short:"Delray", tour:"ATP", type:"M250", surf:"H", draw:32, wk:7, month:2, startDate:"2026-02-14", endDate:"2026-02-22", active:false, complete:true, apiId:{atp:21313} },  // 32 matches
   { id:"doha_a26", name:"Qatar ExxonMobil Open - Doha", short:"Doha", tour:"ATP", type:"M500", surf:"H", draw:32, wk:7, month:2, startDate:"2026-02-14", endDate:"2026-02-21", active:false, complete:true, apiId:{atp:21311} },  // 32 matches
   { id:"acapulco26", name:"Abierto Mexicano Telcel - Acapulco", short:"Acapulco", tour:"ATP", type:"M500", surf:"H", draw:32, wk:8, month:2, startDate:"2026-02-21", endDate:"2026-02-28", active:false, complete:true, apiId:{atp:21314} },  // 36 matches
-  { id:"merida26", name:"Merida Open Akron - Merida", short:"Mérida", tour:"WTA", type:"W250", surf:"H", draw:32, wk:8, month:2, startDate:"2026-02-21", endDate:"2026-03-01", active:false, complete:true, apiId:{wta:16712} },  // 32 matches
+  { id:"merida26", name:"Merida Open Akron - Merida", short:"Mérida", tour:"WTA", type:"W500", surf:"H", draw:32, wk:8, month:2, startDate:"2026-02-21", endDate:"2026-03-01", active:false, complete:true, apiId:{wta:16712} },  // 32 matches
 
   // ── 2026-04 ─────────────────────────
   { id:"montecarlo26", name:"Monte-Carlo Rolex Masters - Monte-Carlo", short:"Monte-Carlo", tour:"ATP", type:"M1000", surf:"C", draw:56, wk:14, month:4, startDate:"2026-04-04", endDate:"2026-04-12", active:false, complete:true, apiId:{atp:21322} },  // 68 matches
   { id:"linz26", name:"Upper Austria Ladies Linz - Linz", short:"Linz", tour:"WTA", type:"W500", surf:"C", draw:32, wk:14, month:4, startDate:"2026-04-05", endDate:"2026-04-12", active:false, complete:true, apiId:{wta:16718} },  // 32 matches
   { id:"barcelona26", name:"Barcelona Open Banc Sabadell - Barcelona", short:"Barcelona", tour:"ATP", type:"M500", surf:"C", draw:48, wk:15, month:4, startDate:"2026-04-11", endDate:"2026-04-19", active:false, complete:true, apiId:{atp:21323} },  // 38 matches
-  { id:"munich26", name:"BMW Open - Munich", short:"Munich", tour:"ATP", type:"M250", surf:"C", draw:28, wk:15, month:4, startDate:"2026-04-11", endDate:"2026-04-19", active:false, complete:true, apiId:{atp:21324} },  // 32 matches
+  { id:"munich26", name:"BMW Open - Munich", short:"Munich", tour:"ATP", type:"M500", surf:"C", draw:28, wk:15, month:4, startDate:"2026-04-11", endDate:"2026-04-19", active:false, complete:true, apiId:{atp:21324} },  // 32 matches
   { id:"stuttgart_w26", name:"Porsche Tennis Grand Prix - Stuttgart", short:"Stuttgart", tour:"WTA", type:"W500", surf:"H", draw:32, wk:15, month:4, startDate:"2026-04-11", endDate:"2026-04-19", active:false, complete:true, apiId:{wta:16719} },  // 34 matches
 
 
@@ -191,6 +189,11 @@ const TOURNAMENTS_DATA = [
  { id:"metz25", name:"Moselle Open - Metz", short:"Metz", tour:"ATP", type:"M250", surf:"H", draw:28, wk:44, month:11, startDate:"2025-11-01", endDate:"2025-11-08", active:false, complete:true, apiId:{atp:20373} },
  { id:"wta_finals25", name:"WTA Finals - Riyadh", short:"WTA Finals", tour:"WTA", type:"WTAFinals", surf:"H", draw:8, wk:44, month:11, startDate:"2025-11-01", endDate:"2025-11-08", active:false, complete:true, apiId:{wta:15997} },
  { id:"atp_finals25", name:"Nitto ATP Finals - Turin", short:"ATP Finals", tour:"ATP", type:"ATPFinals", surf:"H", draw:8, wk:46, month:11, startDate:"2025-11-09", endDate:"2025-11-16", active:false, complete:true, apiId:{atp:20375} },
+
+  // ── Tier-corrected backfill (Wikipedia-verified) ─────────
+ { id:"beijing_a25", name:"China Open - Beijing", short:"Beijing", tour:"ATP", type:"M500", surf:"H", draw:32, wk:39, month:9, startDate:"2025-09-23", endDate:"2025-10-01", active:false, complete:true, apiId:{atp:20365} },  // ATP 500
+ { id:"beijing_w25", name:"China Open - Beijing", short:"Beijing", tour:"WTA", type:"W1000", surf:"H", draw:64, wk:39, month:9, startDate:"2025-09-22", endDate:"2025-10-05", active:false, complete:true, apiId:{wta:15988} },  // WTA 1000
+ { id:"guadalajara25", name:"Guadalajara Open Akron - Guadalajara", short:"Guadalajara", tour:"WTA", type:"W500", surf:"H", draw:32, wk:36, month:9, startDate:"2025-09-08", endDate:"2025-09-14", active:false, complete:true, apiId:{wta:15985} },  // WTA 500
 ];
 
 // Points lookup per tournament type
