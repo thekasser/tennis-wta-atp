@@ -38,6 +38,17 @@ LATEST_MATCH_AGE_DAYS    = 14
 LATEST_RANKING_AGE_DAYS  = 2
 ACTIVE_TOURNAMENT_MIN_MATCHES = 1
 
+# Resolution-rate floor: of last-180d matches, % that resolve to a known
+# tournament. Below this means tournaments.js is missing real tour events
+# (the bug class that broke the trapezoid tab today).
+MIN_RESOLUTION_RATE_PCT = 55.0   # warn floor; matches at W125/Challenger/ITF stay unresolved
+
+# Tier-pass-through floor: of bios with bio_id ≤ 200, how many should clear
+# the dashboard's default min-matches in T6M (≥10 tour-level main-draw
+# matches). If this drops dramatically vs prior runs, the materializer
+# tier filter probably broke (today's regression: this dropped to 1).
+MIN_T6M_TOUR_PLAYERS_PER_TOUR = 15
+
 
 def _check(label: str, ok: bool, msg: str) -> tuple[bool, str]:
     icon = "✓" if ok else "✗"
@@ -128,6 +139,49 @@ def main() -> int:
     for t in actives:
         warn(f"active: {t['id']}", t["n"] >= ACTIVE_TOURNAMENT_MIN_MATCHES,
              f"{t['n']:>3} matches")
+
+    # 7. Resolution-rate floor (last 180d matches that resolve to a tournament)
+    # Catches the class of bug where tournaments.js entries lack apiId — would
+    # have caught today's regression that left only 1 player in T6M view.
+    rate = conn.execute("""
+        SELECT
+            CAST(SUM(CASE WHEN tournament_id IS NOT NULL THEN 1 ELSE 0 END) AS REAL)
+            / NULLIF(COUNT(*), 0) * 100.0 AS pct,
+            COUNT(*) AS total
+        FROM matches WHERE date >= date('now', '-180 days')
+    """).fetchone()
+    if rate["total"]:
+        warn("resolution rate (180d)",
+             rate["pct"] >= MIN_RESOLUTION_RATE_PCT,
+             f"{rate['pct']:.1f}% of {rate['total']:,} matches "
+             f"(warn <{MIN_RESOLUTION_RATE_PCT}%)")
+    else:
+        warn("resolution rate (180d)", False, "no recent matches")
+
+    # 8. T6M tour-level pass-through: how many bios have ≥10 tour-level
+    # main-draw matches in last 180d. Today's bug dropped this to 1 (was 30).
+    # Catches tier-filter regressions before they hit the dashboard.
+    for tour in ("atp", "wta"):
+        cnt = conn.execute("""
+            SELECT COUNT(*) FROM (
+                SELECT p.bio_id, COUNT(*) AS n
+                FROM players p
+                JOIN matches m ON (m.p1_id=p.mid OR m.p2_id=p.mid)
+                JOIN tournaments t ON t.id = m.tournament_id
+                WHERE p.tour = ?
+                  AND p.bio_id <= 200
+                  AND m.date >= date('now', '-180 days')
+                  AND m.round NOT LIKE 'Q%'
+                  AND t.type IN ('GS','M1000','W1000','M500','W500',
+                                 'M250','W250','ATPFinals','WTAFinals')
+                GROUP BY p.bio_id
+                HAVING n >= 10
+            )
+        """, (tour,)).fetchone()[0]
+        warn(f"T6M tour-level players ({tour})",
+             cnt >= MIN_T6M_TOUR_PLAYERS_PER_TOUR,
+             f"{cnt:>3} bios with ≥10 tour-level main-draw matches "
+             f"(warn <{MIN_T6M_TOUR_PLAYERS_PER_TOUR})")
 
     print()
     if failures:

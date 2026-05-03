@@ -381,15 +381,18 @@ select:focus{outline:none;border-color:var(--tc)}
         </select>
       </div>
       <div class="trap-group">
-        <label>Min Matches</label>
+        <label title="Auto-set per window to the 25th percentile of match counts. Lower to surface more players, raise to keep only large samples.">Min Matches</label>
         <select id="trap-min" onchange="trapApp && trapApp.update()">
           <option value="2">2+</option>
           <option value="5">5+</option>
           <option value="10">10+</option>
           <option value="20">20+</option>
-          <option value="30" selected>30+</option>
+          <option value="30">30+</option>
           <option value="50">50+</option>
         </select>
+        <div id="trap-min-hint" style="font-size:11px;color:var(--muted);margin-top:2px;letter-spacing:0;text-transform:none">
+          default = 25th pct for window
+        </div>
       </div>
       <div class="trap-group">
         <label>X-Axis</label>
@@ -2075,35 +2078,19 @@ class TrapezoidApp {
   }
 
   // Map a year-tag → sensible default for the Min Matches dropdown.
-  // Snaps to the available option list (5/10/20/30/50).
+  // Reads TRAPEZOID_MIN_DEFAULTS, which the materializer pre-computes as the
+  // 25th percentile of match counts in each window (combined ATP+WTA),
+  // snapped to a dropdown option. ~75% of rows surface by default while
+  // tiny-sample noise stays out. See scripts/materialize.py.
   defaultMinForYear(yearVal) {
-    const OPTS = [5, 10, 20, 30, 50];
-    const snap = (n) => OPTS.reduce((best, o) =>
-      Math.abs(o - n) < Math.abs(best - n) ? o : best, OPTS[0]);
-    if (yearVal === 'CURR') return 2;   // pipeline floor is 1; UI floor 2 filters single-match noise
-    if (yearVal === 'T3M')  return snap((() => {  // same 40th-pct logic as current calendar year
-      const cohort = this.allData.filter(p => p.year === 'T3M').map(p => p.matches).filter(n => Number.isFinite(n)).sort((a,b) => a-b);
-      return cohort.length ? cohort[Math.floor(0.4 * cohort.length)] : 10;
-    })());
-    if (yearVal === 'T6M')  return 20;
-    if (yearVal === 'T12M') return 30;
-    // Current calendar year is incomplete → use 40th-percentile of matches
-    // played by the cohort, so most of the field stays visible early.
-    const currentYear = new Date().getFullYear();
-    const isCurrent = (typeof yearVal === 'number' && yearVal === currentYear)
-                   || (typeof yearVal === 'string' && parseInt(yearVal) === currentYear);
-    if (isCurrent) {
-      const cohort = this.allData
-        .filter(p => p.year === yearVal || p.year === parseInt(yearVal))
-        .map(p => p.matches)
-        .filter(n => Number.isFinite(n))
-        .sort((a, b) => a - b);
-      if (cohort.length) {
-        const p40 = cohort[Math.floor(0.4 * cohort.length)];
-        return snap(p40);
-      }
-    }
-    return 30; // Full calendar year (2024, 2025) — same as before.
+    const key = (typeof yearVal === 'number') ? String(yearVal) : yearVal;
+    const fromMaterializer = (typeof TRAPEZOID_MIN_DEFAULTS !== 'undefined' &&
+                              TRAPEZOID_MIN_DEFAULTS && TRAPEZOID_MIN_DEFAULTS[key]);
+    if (fromMaterializer) return fromMaterializer;
+    // Fallback if the materializer hasn't run on this trapezoid_data.js yet:
+    // pre-rebuild defaults so the page still loads sensibly.
+    const FALLBACK = {CURR: 2, T3M: 5, T6M: 10, T12M: 20};
+    return FALLBACK[key] || 10;
   }
 
   applyDefaultMin() {

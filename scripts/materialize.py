@@ -907,8 +907,32 @@ def materialize_trapezoid(conn) -> bool:
         "matchWinPct":     "Match Win %",
     }
 
+    # Per-window min-matches default = 25th percentile of match counts
+    # across both tours combined for each window. Surfaces ~75% of rows
+    # while filtering tiny-sample noise. Snapped to the nearest dropdown
+    # option ≤ p25 in wta_analytics.html (options: 2, 5, 10, 20, 30, 50).
+    # Combined ATP+WTA so the chart shows a consistent threshold
+    # regardless of TOUR toggle. Falls back to 5 if a window has too few
+    # rows to compute a percentile.
+    DROPDOWN_OPTS = [2, 5, 10, 20, 30, 50]
+    min_defaults: dict[str, int] = {}
+    for window in years_seen:
+        # Combine ATP+WTA all-surface rows for this window.
+        rows = [r for r in flat_atp + flat_wta
+                if r.get("year") == window and r.get("surf") == "All"]
+        counts = sorted(r["matches"] for r in rows if "matches" in r)
+        if len(counts) < 4:
+            min_defaults[window] = 5
+            continue
+        # 25th percentile (nearest-rank method).
+        p25 = counts[max(0, int(len(counts) * 0.25) - 1)]
+        # Snap down to the largest dropdown option ≤ p25; floor at 2.
+        snap = max((o for o in DROPDOWN_OPTS if o <= p25), default=2)
+        min_defaults[window] = snap
+
     hash_input = json.dumps({"atp": flat_atp, "wta": flat_wta,
-                             "metrics": metrics, "labels": labels},
+                             "metrics": metrics, "labels": labels,
+                             "min_defaults": min_defaults},
                             sort_keys=True, separators=(",", ":"))
     path = DATA_DIR / "trapezoid_data.js"
 
@@ -927,6 +951,11 @@ def materialize_trapezoid(conn) -> bool:
             f"const TRAPEZOID_YEARS = {json.dumps(years_seen)};\n"
             f"const TRAPEZOID_METRICS = {json.dumps(metrics)};\n"
             f"const TRAPEZOID_LABELS = {json.dumps(labels, indent=2)};\n"
+            "// Per-window default min-matches = 25th percentile of match\n"
+            "// counts in that window (combined ATP+WTA), snapped down to a\n"
+            "// dropdown option. Surfaces ~75% of rows while keeping samples\n"
+            "// statistically meaningful. Falls back to 5 if too few rows.\n"
+            f"const TRAPEZOID_MIN_DEFAULTS = {json.dumps(min_defaults, indent=2)};\n"
         )
 
     return _write_if_changed(path, hash_input, render, label="trapezoid")
