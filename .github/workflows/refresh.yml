@@ -2,7 +2,10 @@ name: Tennis Dashboard Refresh
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # 10pm PST (6am UTC)
+    # 6× per day at 4-hour intervals — keeps active-tournament status fresh
+    # within ~30 min of cron + match completion. ~50–100 API calls/day total
+    # (incremental sync only refetches recently-active players).
+    - cron: '0 */4 * * *'
   workflow_dispatch:       # allow manual trigger from Actions tab
 
 jobs:
@@ -10,47 +13,64 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      # Prevent two scheduled runs from racing on git push.
+      group: refresh
+      cancel-in-progress: false
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # ── Step 1: Rankings (~4 API calls) ──────────────────────────────────
-      - name: Step 1 — Rankings refresh
+      # ── Restore the SQLite DB from the committed snapshot ──────────────
+      - name: Restore DB snapshot
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/restore_db.py
+
+      # ── Sync rankings (~4 API calls) ───────────────────────────────────
+      - name: Sync rankings
         env:
           MATCHSTAT_API_KEY: ${{ secrets.MATCHSTAT_API_KEY }}
         run: |
           cd "$GITHUB_WORKSPACE"
-          python3 scripts/refresh_rankings_api.py --tour both
+          python3 scripts/sync_rankings.py --tour both
 
-      # ── Step 2: Match stats (~240 API calls, mostly cache hits) ──────────
-      - name: Step 2 — Match stats fetch
+      # ── Sync matches (~30–50 API calls during active tournaments) ──────
+      # Smart heuristic in sync_matches skips players who haven't moved
+      # since last fetch. Active-tournament players get refetched every run.
+      - name: Sync matches
         env:
           MATCHSTAT_API_KEY: ${{ secrets.MATCHSTAT_API_KEY }}
         run: |
           cd "$GITHUB_WORKSPACE"
-          python3 scripts/fetch_match_stats_api.py --tour both --years 2026
+          python3 scripts/sync_matches.py --tour both --years 2025 2026
 
-      # ── Step 3: Trapezoid merge (no API calls) ────────────────────────────
-      # 2024 Sackmann aggregates live only on Connor's Mac; omit that year here.
-      # The existing trapezoid_data.js already has 2024 data baked in from the
-      # last local run — this step updates only the 2025/2026 aggregates.
-      - name: Step 3 — Trapezoid merge
+      # ── Materialize all data/*.js files from the DB ────────────────────
+      # Hash-based change detection means files only rewrite if data changed.
+      - name: Materialize data files
         run: |
           cd "$GITHUB_WORKSPACE"
-          python3 scripts/write_trapezoid_from_json.py --years 2025 2026
+          python3 scripts/materialize.py
 
-      # ── H2H rebuild (no API calls) ────────────────────────────────────────
-      - name: H2H rebuild
+      # ── Update the committed DB snapshot ───────────────────────────────
+      - name: Snapshot DB
         run: |
           cd "$GITHUB_WORKSPACE"
-          python3 scripts/build_h2h.py
+          python3 scripts/snapshot_db.py
 
-      # ── Commit & push → triggers Cloudflare Pages auto-deploy ─────────────
-      - name: Commit and push data files
+      # ── Pre-commit sanity gate ─────────────────────────────────────────
+      - name: Validate DB
         run: |
-          git config user.name "github-actions[bot]"
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/validate.py
+
+      # ── Commit & push → triggers Cloudflare Pages auto-deploy ──────────
+      - name: Commit and push
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/
           git diff --staged --quiet && echo "No data changes — skipping commit" || \
-            git commit -m "chore: data refresh $(date +%Y-%m-%d)" && git push
+            (git commit -m "chore: data refresh $(date -u +%Y-%m-%dT%H:%MZ)" && git push)

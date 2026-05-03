@@ -13,11 +13,17 @@ Single-file HTML dashboard (`wta_analytics.html`) deployed as a static site on C
 
 ---
 
-## Architecture
+## Architecture (Phase 1 — SQLite-backed pipeline)
 
-Python scripts → JSON cache → `data/*.js` → committed to git → Cloudflare Pages serves them → `wta_analytics.html` renders in the browser.
+Python scripts → SQLite DB (`data/tennis.db`) → materializer → `data/*.js` → committed to git → Cloudflare Pages serves them → `wta_analytics.html` renders in the browser.
+
+The DB is the **single source of truth**. The committed `data/tennis.db.gz` snapshot lets CI rehydrate the DB on each run. The `data/*.js` files are pure projections via `scripts/materialize.py` — never edit them by hand.
 
 The API key (`.env`) lives only on Connor's Mac. Never in the repo. Never on Cloudflare.
+
+> **Phase 2** (planned): promote SQLite → Cloudflare D1, port the materializer
+> to Workers, dashboard fetches `/api/*` instead of static `data/*.js`. See
+> `~/.claude/plans/the-match-history-for-async-pie.md`.
 
 ---
 
@@ -34,22 +40,36 @@ Click any player name → drill-down modal: bio, metrics by period/surface, last
 
 ---
 
-## Data files (auto-generated, committed to repo)
+## Data files
 
+**Inputs (hand-curated, committed):**
 ```
 data/
 ├── tournaments.js          # 2026 calendar — set active:true to surface in Live Events
-├── players_atp.js          # 110 ATP bios (top-100 + recent top-50 absentees)
-├── players_wta.js          # 111 WTA bios
-├── season_atp.js           # T12M rankings + YTD race + activeTournaments
-├── season_wta.js           # same
-├── rank_baseline_atp.json  # weekly snapshot for rankMove computation
-├── rank_baseline_wta.json  # same
-├── trapezoid_data.js       # all metrics × period × surface (2024 Sackmann + 2025+ API)
-├── recent_matches.js       # last 30 matches per bio (form-bar hover + Live Events draw)
-├── tournament_history.js   # per-bio tournament results across years
-└── h2h.js                  # head-to-head records
+├── players_atp.js          # ATP bios (top-100ish + recent top-50 absentees)
+└── players_wta.js          # WTA bios
 ```
+
+**The DB (durable state, committed as compressed snapshot):**
+```
+data/
+├── tennis.db.gz            # gzipped SQLite dump — rehydrated by restore_db.py
+├── snapshot_summary.txt    # human-readable manifest (PR-diffable)
+└── tennis.db               # working DB — gitignored; built by restore_db.py
+```
+
+**Outputs (materialized from the DB, committed):**
+```
+data/
+├── season_atp.js           # T12M rankings + YTD race + activeTournaments
+├── season_wta.js
+├── recent_matches.js       # last 30 matches per top-200 bio
+├── tournament_history.js   # per-bio deepest round per (tournament, year)
+├── h2h.js                  # head-to-head pair records
+└── trapezoid_data.js       # metrics × period × surface (2024 Sackmann + 2025+ API)
+```
+
+**Never edit `data/*.js` by hand.** The materializer overwrites them on each pipeline run. To change a value, edit the DB or the input files (`tournaments.js` / `players_*.js`) and re-run the pipeline.
 
 ---
 
@@ -57,19 +77,20 @@ data/
 
 ```
 scripts/
-├── api_client.py                # Matchstat API wrapper — auth, cache, rate-limit retry
-├── refresh_rankings_api.py      # Rankings refresh (STEP 1 of pipeline)
-├── fetch_match_stats_api.py     # Match-level stats fetch (STEP 2 of pipeline)
-├── write_trapezoid_from_json.py # Merge aggregates → trapezoid_data.js (STEP 3)
-├── build_h2h.py                 # H2H aggregator — no API calls, reads cache only
-├── patch_wta_active.py          # Manual: inject WTA active-tournament status
-├── link_bios_to_api.py          # One-time: match bio names → Matchstat IDs
-├── link_bios_to_sackmann.py     # One-time: match bio names → Sackmann IDs
-├── recompute_trapezoid.py       # DEPRECATED Sackmann CSV fallback — do not run
-└── update_season.py             # DEPRECATED Chrome scraper — do not run
+├── db.py                  # SQLite connection + migration runner (entry point: `init`/`status`/`shell`)
+├── matchstat.py           # Matchstat API client — throttle + 429 retry, no JSON file cache
+├── seed_db.py             # Bootstrap players + tournaments from data/players_*.js + data/tournaments.js
+├── sync_rankings.py       # Pull T12M + race rankings → rankings_snapshots
+├── sync_matches.py        # Smart-fetch past-matches → matches (INSERT OR IGNORE; idempotent)
+├── materialize.py         # Read DB → write all data/*.js (hash-based change detection)
+├── snapshot_db.py         # data/tennis.db → data/tennis.db.gz (+ snapshot_summary.txt)
+├── restore_db.py          # data/tennis.db.gz → data/tennis.db (CI rehydration)
+├── validate.py            # Pre-commit sanity gate (row counts, recency, dup-mid checks)
+├── link_bios_to_api.py    # One-time: match new bio names → Matchstat ids
+├── link_bios_to_sackmann.py  # One-time: match new bio names → Sackmann ids (legacy 2024)
+└── migrations/
+    └── 001_initial.sql    # base schema. Add 002_*.sql to evolve.
 ```
-
-**Never run** `recompute_trapezoid.py` or `update_season.py` — both replaced by the API pipeline.
 
 ---
 
@@ -82,7 +103,7 @@ scripts/
 | Tournament calendar | Manual entry | N/A |
 | Player bios | Manual curation | N/A |
 
-**Budget:** Matchstat Pro = $10/mo. `player/past-matches` has a 6-hour TTL cache — mid-week runs of step 2 cost ~10–50 API calls (only players who played in the last 6 hours need fresh fetches). Weekly full pipeline ≈ 500 API calls on a cold cache. Daily runs during active tournaments ≈ 50–100/day. Keep total under ~3k/month to stay well within the 10k cap.
+**Budget:** Matchstat Pro = $10/mo, 10k calls/mo cap. The new pipeline does **incremental sync only** — `sync_matches.py` skips players whose latest DB match is < 24h old AND who aren't in an active tournament. Steady-state: ~30–50 calls per cron run during active tournaments, ~5–15 calls between. With 6×/day cron, monthly usage ≈ 1.5–3k calls (well under 10k).
 
 **License hard stop:** `data/trapezoid_data.js` inherits CC BY-NC-SA 4.0 from Sackmann. Commercial use is prohibited and cannot be unlocked without replacing the entire match-level data layer. Don't propose monetization features without flagging this.
 
@@ -90,51 +111,37 @@ scripts/
 
 ## Refresh pipeline
 
-### Scheduled task (auto)
-`tennis-dashboard-update` runs **every day at 10pm PST** via Cowork Scheduled Tasks. Runs all three steps + QA check + git commit + push → Cloudflare Pages auto-deploys. The 6-hour `past-matches` cache makes daily step 2 runs cheap (~10–50 calls on non-Monday runs).
+### Scheduled (auto)
+`.github/workflows/refresh.yml` runs **every 4 hours** (6×/day) via GitHub Actions. Each run:
+1. Restores `data/tennis.db` from `data/tennis.db.gz`.
+2. Syncs rankings + matches from Matchstat (incremental — skips quiet players).
+3. Materializes all `data/*.js` files from the DB.
+4. Updates the snapshot.
+5. Validates row counts and recency.
+6. Commits + pushes only if any data file actually changed.
 
-### Manual refresh
+Cloudflare Pages auto-deploys on push.
+
+### Manual refresh (Connor's Mac)
 ```bash
 cd "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard"
 
-# Step 1 — Rankings (~4 API calls)
-python3 scripts/refresh_rankings_api.py --tour both
+# (Optional) restore the latest committed snapshot. Skip if your local
+# data/tennis.db is already current.
+python3 scripts/restore_db.py --force
 
-# Step 2 — Match-level stats (cache-aware: ~10–50 API calls mid-week, ~500 cold)
-python3 scripts/fetch_match_stats_api.py --tour both --years 2025 2026
+# Sync (~30–50 API calls during active tournaments, ~5–15 quiet)
+python3 scripts/sync_rankings.py --tour both
+python3 scripts/sync_matches.py  --tour both --years 2025 2026
 
-# Step 3 — Merge trapezoid metrics (no API calls)
-python3 scripts/write_trapezoid_from_json.py --years 2024 2025 2026
+# Materialize all data/*.js (no API calls)
+python3 scripts/materialize.py
 
-# H2H rebuild (no API calls, run after step 2)
-python3 scripts/build_h2h.py
+# Update the committed DB snapshot
+python3 scripts/snapshot_db.py
 
-# QA — verify alive/eliminated counts look sane before committing
-python3 -c "
-import re
-from pathlib import Path
-ok = True
-for tour in ['atp', 'wta']:
-    c = Path(f'data/season_{tour}.js').read_text()
-    m = re.search(r'activeTournaments:\s*\[([\s\S]*?)\],', c)
-    if not m:
-        print(f'{tour.upper()}: WARNING — no activeTournaments block found')
-        ok = False
-        continue
-    block = m.group(0)
-    alive = block.count('elim:false')
-    elim  = block.count('elim:true')
-    stage = re.search(r'stage:\s*\"([^\"]+)\"', block)
-    stage = stage.group(1) if stage else '?'
-    print(f'{tour.upper()}: stage={stage}, alive={alive}, eliminated={elim}')
-    if alive == 0 and elim == 0:
-        print(f'  WARNING — players block is empty, draw status will come from recent_matches only')
-        ok = False
-    if alive > 64:
-        print(f'  WARNING — alive count suspiciously high ({alive}), check for stale elim:false entries')
-        ok = False
-print('QA passed' if ok else 'QA FAILED — review before committing')
-"
+# Pre-commit gate
+python3 scripts/validate.py
 
 # Commit + push → triggers Cloudflare Pages auto-deploy
 git add data/
@@ -142,19 +149,29 @@ git commit -m "chore: data refresh $(date +%Y-%m-%d)"
 git push
 ```
 
+### Bootstrap (first time, or after wiping `data/tennis.db`)
+```bash
+python3 scripts/db.py init        # apply migrations
+python3 scripts/seed_db.py        # populate players + tournaments
+python3 scripts/sync_rankings.py --tour both
+python3 scripts/sync_matches.py  --tour both --years 2025 2026
+python3 scripts/materialize.py
+python3 scripts/snapshot_db.py
+```
+
 ---
 
 ## Making common changes
 
-**Add a player:** Edit `data/players_atp.js` or `data/players_wta.js`. Assign a unique integer ID (no conflicts). Then run `link_bios_to_api.py` to match the new name to a Matchstat ID. Do not hardcode players inside the HTML.
+**Add a player:** Edit `data/players_atp.js` or `data/players_wta.js`. Assign a unique integer `id` (no conflicts within the tour). Then run `link_bios_to_api.py` to match the new name to a Matchstat `mid`. Re-run `seed_db.py` to push the bio into the DB. Do not hardcode players inside the HTML.
 
-**Add a tournament:** Edit `data/tournaments.js` only — update both `TOURNAMENTS_DATA[]` and `PTS{}` lookup.
+**Add a tournament:** Edit `data/tournaments.js` only — update both `TOURNAMENTS_DATA[]` and `PTS{}` lookup. Re-run `seed_db.py` to push it into the DB.
 
-**Activate a live tournament:** Set `active: true` in `data/tournaments.js`. For WTA (API doesn't expose draw status), use `patch_wta_active.py` or set manually.
+**Activate a live tournament:** Set `active: true` in `data/tournaments.js`, re-run `seed_db.py`. The pipeline auto-derives draw status from match data — no `patch_wta_active.py` step needed (that script was deleted in the SQLite rebuild).
 
-**Modify dashboard UI:** Edit `wta_analytics.html` directly — it is the compiled output. `wta_analytics_dashboard.jsx` is a JSX reference source only; it is not used in deployment.
+**Modify dashboard UI:** Edit `wta_analytics.html` directly — it is the compiled output. `wta_analytics_dashboard.jsx` is a JSX reference source only; it is not used in deployment. The `enrichActiveTournaments()` function is now a no-op stub — server is authoritative for activeTournaments[].
 
-**Before modifying any pipeline script:** Check whether data flows from `season_*.js` vs `players_*.js` vs `trapezoid_data.js`. Getting the source wrong produces stale or missing data. `refresh_rankings_api.py` preserves `results{}` history — don't overwrite it with a naive rewrite.
+**Before modifying any pipeline script:** All data flows through `data/tennis.db`. The DB is the authority. `data/*.js` files are projections via `scripts/materialize.py` and get overwritten on every pipeline run — never edit them by hand. The committed snapshot (`tennis.db.gz`) is regenerated by `snapshot_db.py`.
 
 ---
 
@@ -184,13 +201,14 @@ rm -f "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard/.g
 
 ## Known gotchas
 
-- **WTA rankings partial results:** API sometimes returns top-50 only when pagination doesn't advance. Fallback: `api.wtatennis.com` undocumented endpoint. See comments in `refresh_rankings_api.py`.
-- **WTA active draw status:** Not in Matchstat API. Set manually in `tournaments.js` or use `patch_wta_active.py`.
-- **`SvGms` field missing:** Per-match service games count isn't always in the API payload. If `acesPerSvGm` looks wrong, check what `fetch_match_stats_api.py` is actually receiving.
-- **Cloudflare 1010 errors:** User-Agent rejection — already mitigated in `api_client.py`. If it recurs, update the UA string there.
-- **Race tab heatmap sparse:** Requires per-tournament results data; fills in during active events.
-- **`scripts/cache/` is gitignored:** Local only. Don't delete it — saves ~500 API calls on every weekly run.
-- **`.env` is gitignored:** `MATCHSTAT_API_KEY` lives only on Connor's Mac. Never commit it.
+- **WTA T12M points are scaled ×100** in the API response — `sync_rankings.py` divides by 100 to match official WTA values. Race points are NOT scaled. Don't fix this in two places.
+- **WTA active draw status not in Matchstat API:** the rebuild solved this by deriving status from match results in the DB rather than scraping. The dashboard is correct as soon as a match is in the DB. See `_compute_active_tournaments` in `scripts/materialize.py`.
+- **`SvGms` field missing:** Per-match service-games count isn't always in the API payload. `_aggregate_year` in `materialize.py` falls back to estimating from `svpt / 6.5`. If `acesPerSvGm` looks wrong, check the raw stat blob in `matches.stat_p1` / `stat_p2`.
+- **Cloudflare 1010 errors:** User-Agent rejection — mitigated in `matchstat.py` with a browser-like UA. If it recurs, update the UA there.
+- **Rate limit (HTTP 429):** Pro plan caps ~5 req/s. `matchstat.py` throttles to ≥250ms between requests + retries 429s with `Retry-After` (or 2/4/8s backoff). If you see persistent 429s, raise `_min_interval` to 0.4s.
+- **Trapezoid 2024 data is preserved from the existing file**, not in the DB. Sackmann CSVs were the source for 2024; the rebuild keeps those rows untouched. If 2024 data is ever needed in the DB, write a separate Sackmann importer.
+- **`.env` is gitignored:** `MATCHSTAT_API_KEY` lives only on Connor's Mac and in GitHub Actions secrets. Never commit it.
+- **`data/tennis.db` is gitignored** — only the `.gz` snapshot is committed. If you want to inspect data, restore first: `python3 scripts/restore_db.py --force`.
 
 ---
 

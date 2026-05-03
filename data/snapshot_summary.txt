@@ -1,0 +1,23 @@
+# Tennis DB snapshot summary
+# Generated: 2026-05-03T03:11:06.820275+00:00
+# Source DB: data/tennis.db
+# Compressed: data/tennis.db.gz
+
+## Row counts
+  players                       204
+  tournaments                    30
+  matches                    11,110
+  rankings_snapshots            204
+  api_fetch_log                 682
+
+## Latest rankings snapshot: 2026-05-02
+
+## Active tournaments
+  madrid26       Mutua Madrid Open                matches=206  latest=2026-05-02
+
+## 5 most recent matches anywhere in DB
+  2026-05-02  Final     p1=47742 p2=77934 winner=47742  (Mutua Madrid Open - Madrid)
+  2026-05-02  1/2       p1=26473 p2=70705 winner=26473  (Cagliari Challenger)
+  2026-05-02  1/2       p1=47752 p2=19689 winner=47752  (Jiujiang Challenger)
+  2026-05-02  1/2       p1=30087 p2=82269 winner=30087  (Aix En Provence Challenger)
+  2026-05-02  1/2       p1=73956 p2=96517 winner=73956  (Cagliari Challenger)

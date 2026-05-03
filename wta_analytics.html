@@ -1804,17 +1804,23 @@ function decorateTrapezoidComposite(rows) {
 }
 
 // ═══════════════════════════════════════
-// LIVE EVENTS — derive draw status from RECENT_MATCHES
+// LIVE EVENTS — server is now authoritative
 // ═══════════════════════════════════════
-// The WTA rankings pages don't expose draw status, so `activeTournaments[].players`
-// arrives empty. We back-fill it at page load by scanning each bio's last-10
-// recent matches for entries within the active tournament's date window.
-//   • Most recent match WON  → bio is alive at the NEXT round.
-//   • Most recent match LOST → bio is eliminated at that round.
-// Round-string → standard code mapping is draw-size dependent: a 96-draw M1000
-// has "Second" = R32, but a 128-draw Slam has "Second" = R64.
-// LIMIT: only top-100 bios + only matches captured in their last 10 records.
+// `season_*.js activeTournaments[].players[bioId]` is computed by
+// scripts/materialize.py from match data in data/tennis.db. The dashboard
+// just renders what it's given. The previous client-side back-fill
+// (enrichActiveTournaments) was deleted in the SQLite rebuild — see
+// ~/.claude/plans/the-match-history-for-async-pie.md for context.
 function enrichActiveTournaments() {
+  // No-op: kept as a stub so any cached page that tries to call it doesn't
+  // throw. Safe to remove after a few cron cycles.
+  return;
+}
+
+/* DEAD CODE — original client-side derivation, kept commented for one
+   cycle in case the materializer needs the SEMANTICS table as a reference.
+   See git history if you need to resurrect it.
+function _enrichActiveTournaments_legacy() {
   if (typeof RECENT_MATCHES === 'undefined' || !RECENT_MATCHES) return;
 
   // Per-draw status table: for each Matchstat round string, what stage was the
@@ -1928,6 +1934,7 @@ function enrichActiveTournaments() {
     });
   }
 }
+*/
 
 // ═══════════════════════════════════════
 // INIT
