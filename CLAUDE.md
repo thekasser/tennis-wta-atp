@@ -9,21 +9,43 @@ Personal-use ATP/WTA analytics dashboard. **Data accuracy is the primary constra
 Single-file HTML dashboard (`wta_analytics.html`) deployed as a static site on Cloudflare Pages, gated by Cloudflare Zero Trust (email allowlist, ~10 family/friends). No server-side compute. No build step. Data is pre-materialized into `data/*.js` files and committed to the repo.
 
 **Live URL:** `https://tennis-wta-atp.kasserconnor.workers.dev/wta_analytics`
-**Repo:** private GitHub → auto-deploys to Cloudflare Pages on push to `main`
+**Repo:** **public** GitHub at `github.com/thekasser/tennis-wta-atp`. Cloudflare Workers builds + deploys on push to `main`.
+
+> **Public-repo posture:** All match/ranking data and pipeline code is public — fine, it's all derived from a paid Matchstat API + Sackmann's CC-licensed CSVs. Secrets stay out of the repo: `MATCHSTAT_API_KEY` and `ADMIN_SYNC_TOKEN` live only in (a) `.env` on Connor's Mac (gitignored), (b) GitHub Actions repo secrets, (c) `wrangler secret put` for the Worker. The D1 `database_id` in `wrangler.toml` is committed but is not a secret — it's useless without Cloudflare account auth, similar to a Postgres database name. The `/api/*` read endpoints are intentionally public (Cloudflare Access bypass policy on `/api/*`); the dashboard at `/wta_analytics*` stays gated by email allowlist for ~10 family/friends. `/api/admin/*` requires a bearer token.
 
 ---
 
-## Architecture (Phase 1 — SQLite-backed pipeline)
+## Architecture (Phase 2 — D1 + Workers, live)
 
-Python scripts → SQLite DB (`data/tennis.db`) → materializer → `data/*.js` → committed to git → Cloudflare Pages serves them → `wta_analytics.html` renders in the browser.
+```
+Python pipeline (cron) ───▶ SQLite (data/tennis.db) ───▶ materialize.py ───▶ data/*.js
+       │                                                                       │
+       │                                                                       ▼
+       └─────────▶ scripts/upload_to_worker.py ──▶ POST /api/admin/sync ──▶ D1.materialized
+                                                          │
+                                                          ▼
+                  Dashboard ◀── fetch('/api/*') ◀── Worker (workers/src/index.ts) ◀── D1
+```
 
-The DB is the **single source of truth**. The committed `data/tennis.db.gz` snapshot lets CI rehydrate the DB on each run. The `data/*.js` files are pure projections via `scripts/materialize.py` — never edit them by hand.
+**Source of truth:** local `data/tennis.db` (driven by Matchstat). It rehydrates from `data/tennis.db.gz` at the start of every CI cron, then incrementally syncs from Matchstat, then materializes derived JSON, then pushes to D1 over HTTP.
 
-The API key (`.env`) lives only on Connor's Mac. Never in the repo. Never on Cloudflare.
+**Serving:** Cloudflare Worker (`tennis-wta-atp`) serves the static dashboard from `[assets]` AND `/api/*` JSON endpoints backed by D1's `materialized` table (chunked because D1 caps statements at ~100KB; reassembled on read). Edge cache: 60s browser / 5min CF.
 
-> **Phase 2** (planned): promote SQLite → Cloudflare D1, port the materializer
-> to Workers, dashboard fetches `/api/*` instead of static `data/*.js`. See
-> `~/.claude/plans/the-match-history-for-async-pie.md`.
+**Auth:** Cloudflare Access gates `/wta_analytics*` (email allowlist, ~10 family/friends). A Bypass policy on `/api/*` lets the dashboard's own fetches through unauthenticated. `POST /api/admin/sync` requires a `Bearer ADMIN_SYNC_TOKEN` (Workers Secret matches a GH Actions secret of the same name).
+
+**API endpoints** (open):
+- `GET /api/season/:tour` (atp|wta)
+- `GET /api/players/:tour` · `GET /api/tournaments`
+- `GET /api/recent-matches` · `GET /api/h2h`
+- `GET /api/tournament-history` · `GET /api/trapezoid`
+- `GET /api/health` — quick liveness probe
+
+**API endpoints** (auth-gated):
+- `POST /api/admin/sync` — body `{blobs: {name: jsonString, …}}`, replaces D1's `materialized` table.
+
+**Local development:** `python3 scripts/db.py status` to inspect the local SQLite. `wrangler dev` to run the Worker locally against remote D1. `python3 scripts/upload_to_worker.py --dry-run` to preview a sync without sending. Don't edit `data/*.js` by hand — they're materializer output, gitignored as of phase 2 (D1 is canonical).
+
+The Matchstat API key (`.env`) lives only on Connor's Mac and as a GitHub Actions secret. Never in the repo. Never on Cloudflare.
 
 ---
 
