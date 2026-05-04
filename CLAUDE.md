@@ -206,26 +206,43 @@ python3 scripts/snapshot_db.py
 **The cron-collision problem.** GitHub Actions runs `.github/workflows/refresh.yml` every 4 hours and pushes data-refresh commits to `main`. This means a stale local clone (no pull in >4h) will fail any `git push` with `non-fast-forward`. This is structural, not occasional — assume it on every push.
 
 **Correct pattern (every commit/push, no exceptions):**
-1. Claude edits files using Read/Edit/Write tools only.
-2. Claude instructs Connor with a `pull --rebase` prefix baked in:
-   ```bash
-   git pull --rebase && git add -A && git commit -m "message" && git push
-   ```
-   The `pull --rebase` is **mandatory**, not optional. If local is already in sync, it's a no-op (~50ms). If cron has pushed since the last sync, it replays the local commit on top — clean, no conflicts (cron only touches `data/*.js` and `data/tennis.db.gz`).
 
-3. **If `pull --rebase` fails with "you have unstaged changes":** stash, rebase, pop. (The cron doesn't touch source files, so a pop conflict is essentially never going to happen.)
-   ```bash
-   git stash && git pull --rebase && git stash pop
-   git add -A && git commit -m "message" && git push
-   ```
+Claude has just edited files via Read/Edit/Write. The working tree is dirty. Stage + commit FIRST, then rebase, then push:
 
-4. **One-time setup** (run once, never think about it again):
-   ```bash
-   git config --global pull.rebase true
-   ```
-   Now any stray `git pull` rebases by default — no accidental merge commits from this race.
+```bash
+git add <files> && git commit -m "message" && git pull --rebase && git push
+```
 
-**Do NOT use `git fetch && git reset --hard origin/main` as a recovery.** That deletes any local commits the user has already made and forces them to redo the work. The previous version of this doc recommended it; it was wrong. Use rebase.
+This order is mandatory because of a subtle bug: if you put `git pull --rebase` first, it fails with "you have unstaged changes" — Claude's own edit blocks the rebase. Stage + commit first to clean the working tree, THEN rebase.
+
+**Bulletproof variant (works regardless of staging order):**
+```bash
+git pull --rebase --autostash && git add <files> && git commit -m "message" && git push
+```
+
+`--autostash` auto-stashes any dirty working tree, rebases, and pops the stash. Works even if Claude forgets to tell you to stage first. Use this as the default — it's defensive against pattern errors.
+
+**One-time setup** (run once, never think about it again):
+```bash
+git config --global pull.rebase true
+git config --global rebase.autostash true
+```
+
+Now `git pull` always rebases-with-autostash by default. The full pattern collapses to `git pull && git push` and just works. **This is the right answer.** If these configs are set, the `--rebase --autostash` flags are redundant but harmless.
+
+**Recovery patterns:**
+
+- **"you have unstaged changes" during pull:** caused by ordering. Stage + commit Claude's edits first, then re-run pull.
+  ```bash
+  git add -A && git commit -m "message" && git pull && git push
+  ```
+
+- **"non-fast-forward" during push:** cron pushed while you were working. With `pull.rebase=true` set, just:
+  ```bash
+  git pull && git push
+  ```
+
+**Do NOT use `git fetch && git reset --hard origin/main` as a recovery.** That deletes any local commits the user has already made and forces them to redo the work. The original version of this doc recommended it; it was wrong. Always use rebase.
 
 **If lock files appear** (from a previous session where Claude violated rule #1):
 ```bash
