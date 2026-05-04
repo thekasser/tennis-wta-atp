@@ -166,6 +166,8 @@ python3 scripts/snapshot_db.py
 python3 scripts/validate.py
 
 # Commit + push → triggers Cloudflare Pages auto-deploy
+# (pull --rebase first to absorb any cron-pushed data refresh)
+git pull --rebase
 git add data/
 git commit -m "chore: data refresh $(date +%Y-%m-%d)"
 git push
@@ -201,19 +203,31 @@ python3 scripts/snapshot_db.py
 
 **Claude must never run `git` commands from the sandbox.** The sandbox mounts the macOS filesystem via Linux; any git lock files it creates have macOS ownership and cannot be removed by the sandbox (`Operation not permitted`). Partial git operations from the sandbox leave permanent `HEAD.lock` / `index.lock` files that block all subsequent git use until Connor manually removes them.
 
-**Correct pattern:**
+**The cron-collision problem.** GitHub Actions runs `.github/workflows/refresh.yml` every 4 hours and pushes data-refresh commits to `main`. This means a stale local clone (no pull in >4h) will fail any `git push` with `non-fast-forward`. This is structural, not occasional — assume it on every push.
+
+**Correct pattern (every commit/push, no exceptions):**
 1. Claude edits files using Read/Edit/Write tools only.
-2. Claude tells Connor to commit and push from Mac Terminal:
+2. Claude instructs Connor with a `pull --rebase` prefix baked in:
    ```bash
-   git add -A && git commit -m "message" && git push
+   git pull --rebase && git add -A && git commit -m "message" && git push
    ```
-3. If push fails with non-fast-forward (remote is ahead due to prior plumbing commits), Connor runs:
+   The `pull --rebase` is **mandatory**, not optional. If local is already in sync, it's a no-op (~50ms). If cron has pushed since the last sync, it replays the local commit on top — clean, no conflicts (cron only touches `data/*.js` and `data/tennis.db.gz`).
+
+3. **If `pull --rebase` fails with "you have unstaged changes":** stash, rebase, pop. (The cron doesn't touch source files, so a pop conflict is essentially never going to happen.)
    ```bash
-   git fetch && git reset --hard origin/main
+   git stash && git pull --rebase && git stash pop
    git add -A && git commit -m "message" && git push
    ```
 
-**If lock files appear** (from a previous session where this rule wasn't followed):
+4. **One-time setup** (run once, never think about it again):
+   ```bash
+   git config --global pull.rebase true
+   ```
+   Now any stray `git pull` rebases by default — no accidental merge commits from this race.
+
+**Do NOT use `git fetch && git reset --hard origin/main` as a recovery.** That deletes any local commits the user has already made and forces them to redo the work. The previous version of this doc recommended it; it was wrong. Use rebase.
+
+**If lock files appear** (from a previous session where Claude violated rule #1):
 ```bash
 rm -f "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard/.git/HEAD.lock"
 rm -f "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard/.git/index.lock"

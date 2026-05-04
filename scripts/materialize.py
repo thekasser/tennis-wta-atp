@@ -479,14 +479,21 @@ def materialize_tournament_history(conn) -> bool:
     for b in bios:
         mid = b["mid"]
         rows = list(conn.execute("""
-            SELECT m.date, m.round, m.tournament_name, m.winner_id, m.p1_id, m.p2_id
+            SELECT m.date, m.round, m.tournament_name, m.tournament_id,
+                   m.winner_id, m.p1_id, m.p2_id
             FROM matches m
             WHERE (m.p1_id = ? OR m.p2_id = ?) AND m.round IS NOT NULL
         """, (mid, mid)))
-        # group by (tn, year) → deepest round
-        by_te: dict[tuple[str, int], tuple[int, str, bool]] = {}
+        # Group by (tournament_key, year) → deepest round.
+        # Prefer tournament_id when resolved (stable across renames); fall
+        # back to tournament_name when not (W125 / Challenger / unresolved).
+        # The dashboard uses tournament_id to look up prior-year podiums
+        # by stripping the year suffix (e.g. "rome26" → "rome25").
+        by_te: dict[tuple[str, int], tuple[int, str, bool, str | None]] = {}
         for r in rows:
-            tn = r["tournament_name"] or ""
+            tn  = r["tournament_name"] or ""
+            tid = r["tournament_id"]
+            key = tid or tn  # group by id when we have one; else by name
             try:
                 yr = int(r["date"][:4])
             except (ValueError, TypeError):
@@ -495,12 +502,13 @@ def materialize_tournament_history(conn) -> bool:
             if depth == 0:
                 continue
             won = (r["winner_id"] == mid) if r["winner_id"] else False
-            cur = by_te.get((tn, yr))
+            cur = by_te.get((key, yr))
             if not cur or depth > cur[0]:
-                by_te[(tn, yr)] = (depth, r["round"], won)
+                by_te[(key, yr)] = (depth, r["round"], won, tid, tn)
         items = []
-        for (tn, yr), (_d, rd, won) in by_te.items():
-            items.append({"tn": tn, "year": yr, "round": rd, "won": won})
+        for (_key, yr), (_d, rd, won, tid, tn) in by_te.items():
+            items.append({"tn": tn, "year": yr, "round": rd, "won": won,
+                          "tid": tid})
         if items:
             out[b["tour"]][str(b["bio_id"])] = items
 
