@@ -2234,16 +2234,26 @@ class TrapezoidApp {
   }
 
   setupYearDropdown() {
-    const years = (typeof TRAPEZOID_YEARS !== 'undefined' && TRAPEZOID_YEARS.length)
-      ? [...TRAPEZOID_YEARS]
-      : [...new Set(this.allData.map(p => p.year))];
+    // Source of truth = years actually present in the loaded data. The
+    // materializer's `years` array sometimes contains legacy surface-suffixed
+    // variants ('T12M_C', 'T6M_H') from an older data shape — those don't map
+    // to anything since `year` and `surf` are separate fields now. Filter to
+    // years that have at least one row.
+    const yearsInData = new Set(this.allData.map(p => p.year));
+    const baseYears  = (typeof TRAPEZOID_YEARS !== 'undefined' && TRAPEZOID_YEARS.length)
+      ? TRAPEZOID_YEARS
+      : [...yearsInData];
+    const years = baseYears.filter(y => !String(y).includes('_') && yearsInData.has(y));
     const sel = document.getElementById('trap-year');
     if (!sel) return;
-    // Order: rolling windows first (T12M → T6M), then calendar years descending.
+    sel.innerHTML = '';   // wipe before rebuild — onYearChange may re-call us
+    // Order: rolling windows first (CURR → T3M → T6M → T12M), then calendar years descending.
     const ROLL_ORDER = {CURR: 0, T3M: 1, T6M: 2, T12M: 3};
     years.sort((a, b) => {
-      const ar = (typeof a === 'string') ? ROLL_ORDER[a] ?? 99 : 100 - a;
-      const br = (typeof b === 'string') ? ROLL_ORDER[b] ?? 99 : 100 - b;
+      const ar = (typeof a === 'string' && ROLL_ORDER[a] != null) ? ROLL_ORDER[a]
+               : (typeof a === 'string' && /^\d+$/.test(a) ? 100 - parseInt(a) : 99);
+      const br = (typeof b === 'string' && ROLL_ORDER[b] != null) ? ROLL_ORDER[b]
+               : (typeof b === 'string' && /^\d+$/.test(b) ? 100 - parseInt(b) : 99);
       return ar - br;
     });
     const LABELS = {CURR: 'Current Tournament', T3M: 'T3M (Last 3 Months)', T6M: 'T6M (Last 6 Months)', T12M: 'T12M (Last 12 Months)'};
@@ -2295,9 +2305,8 @@ class TrapezoidApp {
     const yearEl = document.getElementById('trap-year');
     const minEl  = document.getElementById('trap-min');
     if (!yearEl || !minEl) return;
-    const yearRaw = yearEl.value;
-    const yearVal = /^\d+$/.test(yearRaw) ? parseInt(yearRaw) : yearRaw;
-    const target = String(this.defaultMinForYear(yearVal));
+    // Year is always a string now. defaultMinForYear normalizes internally.
+    const target = String(this.defaultMinForYear(yearEl.value));
     // Only set if it's a valid option in the select
     if ([...minEl.options].some(o => o.value === target)) {
       minEl.value = target;
@@ -2353,11 +2362,11 @@ class TrapezoidApp {
     const yKey = document.getElementById('trap-y').value;
     const yearEl = document.getElementById('trap-year');
     const cmpEl  = document.getElementById('trap-compare');
-    // Year may be a calendar int (2024) OR a rolling-window string ('T12M'/'T6M').
-    const yearRaw = yearEl && yearEl.value ? yearEl.value : null;
-    const year = (yearRaw && /^\d+$/.test(yearRaw)) ? parseInt(yearRaw) : yearRaw;
-    const cmpRaw = cmpEl && cmpEl.value ? cmpEl.value : null;
-    const compareYear = (cmpRaw && /^\d+$/.test(cmpRaw)) ? parseInt(cmpRaw) : cmpRaw;
+    // Year is always a string in the data ('2026', 'T12M', 'CURR'). Older code
+    // parseInt'd numeric-looking values and silently broke string equality
+    // against the data — keep both sides as strings.
+    const year = yearEl && yearEl.value ? yearEl.value : null;
+    const compareYear = cmpEl && cmpEl.value ? cmpEl.value : null;
 
     // Surface filter — only T12M/T6M have per-surface variants. For calendar
     // years (no surface aggregates), surface=All matches every row; surface=H/C/G
