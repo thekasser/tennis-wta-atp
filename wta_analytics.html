@@ -2859,21 +2859,46 @@ function _resolveTournFromEntry(entry, tour) {
     const t = TOURNAMENTS_DATA.find(x => x.id === entry.tid);
     if (t) return t;
   }
-  // Fallback: match by tournament-name prefix + year suffix in id, narrowed
-  // by tour (China Open / Brisbane / Stuttgart all exist for both tours).
-  // The catalog is inconsistent — some entries use "Mutua Madrid Open" and
-  // others "Wuhan Open - Wuhan" — so split BOTH names at " - " and compare
-  // the head.
+  // Fallback: match by year+tour, then any of these shapes:
+  //   - exact name match (TH "Mutua Madrid Open - Madrid" == catalog name)
+  //   - catalog name appears IN TH name ("Indian Wells" in "BNP Paribas Open - Indian Wells")
+  //   - heads match after splitting on " - " (sponsor-name match)
+  //   - tails match after splitting on " - " (city match)
+  // Narrowed by year suffix on id (always 2 digits) + tour (handles Beijing,
+  // Brisbane, Stuttgart which all exist for both tours).
   const yr = String(entry.year || '').slice(-2);
   if (!yr) return null;
-  const splitHead = s => (s || '').toLowerCase().split(' - ')[0].trim();
-  const tnPrefix = splitHead(entry.tn);
-  if (!tnPrefix) return null;
+  const tnLower = (entry.tn || '').toLowerCase().trim();
+  if (!tnLower) return null;
   const tourUp = (tour || TOUR || '').toUpperCase();
-  return TOURNAMENTS_DATA.find(t =>
-    String(t.id || '').endsWith(yr) &&
-    splitHead(t.name) === tnPrefix &&
-    (t.tour === 'BOTH' || t.tour === tourUp));
+  const splitHead = s => (s || '').split(' - ')[0].trim();
+  const splitTail = s => { const p = (s || '').split(' - '); return p[p.length - 1].trim(); };
+  const tnHead = splitHead(tnLower);
+  const tnTail = splitTail(tnLower);
+  return TOURNAMENTS_DATA.find(t => {
+    if (!String(t.id || '').endsWith(yr)) return false;
+    if (t.tour !== 'BOTH' && t.tour !== tourUp) return false;
+    const cn = (t.name || '').toLowerCase();
+    if (tnLower === cn) return true;            // exact
+    if (tnLower.includes(cn) && cn) return true; // "Indian Wells" inside "BNP Paribas Open - Indian Wells"
+    if (cn.includes(tnLower) && tnLower) return true; // reverse direction
+    const cnHead = splitHead(cn), cnTail = splitTail(cn);
+    if (cnHead && cnHead === tnHead) return true; // sponsor match
+    if (cnTail && cnTail === tnTail) return true; // city match
+    return false;
+  });
+}
+
+// Normalize raw round labels (mix of "1/2", "Fourth", "Final") into the same
+// keys the PTS table uses, plus a champion variant for Final wins.
+function _displayRound(round, won) {
+  if (round === 'Final' && won) return { label: 'Champion', badge: 'champion' };
+  if (round === 'Final')        return { label: 'Final',    badge: 'final' };
+  const MAP = {
+    '1/2': 'SF', '1/4': 'QF', '1/8': 'R16',
+    Fourth: 'R16', Third: 'R32', Second: 'R64', First: 'R128',
+  };
+  return { label: MAP[round] || round || '—', badge: 'normal' };
 }
 
 // Convert one TOURNAMENT_HISTORY entry → pts breakdown row.
@@ -3032,7 +3057,12 @@ function openPtsBreakdownModal(bioId, tour, type) {
   }
 
   const SURF_DOT = { H: '🔵', C: '🟤', G: '🟢' };
-  const wlIcon = w => w === true ? '<span style="color:var(--accent-green);font-weight:700">✓</span>' : '';
+  const roundBadge = (round, won) => {
+    const d = _displayRound(round, won);
+    if (d.badge === 'champion') return `<span class="round-badge" style="font-size:10px;background:rgba(64,107,95,0.18);color:var(--accent-green);font-weight:700">🏆 ${d.label}</span>`;
+    if (d.badge === 'final')    return `<span class="round-badge" style="font-size:10px;background:rgba(143,90,82,0.12);color:var(--tc-b,#8f5a52);font-weight:600">${d.label}</span>`;
+    return `<span class="round-badge" style="font-size:10px">${d.label}</span>`;
+  };
 
   const tableRows = displayRows.map(r => {
     const dateStr = r.endDate ? r.endDate.slice(0, 10) : `${r.year}`;
@@ -3042,7 +3072,7 @@ function openPtsBreakdownModal(bioId, tour, type) {
       <td style="font-size:11px;color:var(--muted)">${dateStr}</td>
       <td style="font-size:11px">${SURF_DOT[r.surf]||'·'} ${r.tn}${fallTag}${replacingTag}</td>
       <td style="font-size:10px;color:var(--muted)">${r.type || '—'}</td>
-      <td><span class="round-badge" style="font-size:10px">${r.round || '—'}</span> ${wlIcon(r.won)}</td>
+      <td>${roundBadge(r.round, r.won)}</td>
       <td style="font-weight:700;color:var(--tc);text-align:right">${(r.pts||0).toLocaleString()}</td>
     </tr>`;
   }).join('');
@@ -3053,14 +3083,15 @@ function openPtsBreakdownModal(bioId, tour, type) {
       <table>
         <thead><tr><th>Tournament</th><th>Tier</th><th>Status</th><th style="text-align:right">Earned so far</th></tr></thead>
         <tbody>
-          ${data.projRows.map(p => `
-            <tr style="background:rgba(64,107,95,0.06)">
+          ${data.projRows.map(p => {
+            const rd = _displayRound(p.round, false).label;
+            return `<tr style="background:rgba(64,107,95,0.06)">
               <td style="font-size:11px">${SURF_DOT[p.surf]||'·'} ${p.tn}</td>
               <td style="font-size:10px;color:var(--muted)">${p.type || '—'}</td>
-              <td style="font-size:11px">${p.status?.elim ? `Eliminated · ${p.round}` : `Alive · ${p.round}`}</td>
+              <td style="font-size:11px">${p.status?.elim ? `Eliminated · ${rd}` : `Alive · ${rd}`}</td>
               <td style="font-weight:700;color:var(--accent-green);text-align:right">+${(p.pts||0).toLocaleString()}</td>
-            </tr>
-          `).join('')}
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
       ${data.projectedDelta !== 0 ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">
@@ -3090,7 +3121,7 @@ function openPtsBreakdownModal(bioId, tour, type) {
     <div class="modal-stat-grid" style="grid-template-columns:repeat(3,1fr)">
       <div class="modal-stat"><div class="lbl">Headline</div><div class="val">${(headline||0).toLocaleString()}</div></div>
       <div class="modal-stat"><div class="lbl">Tournaments</div><div class="val">${data.rows.length}${data.projRows.length ? ` + ${data.projRows.length} live` : ''}</div></div>
-      <div class="modal-stat"><div class="lbl">Sum of breakdown</div><div class="val">${(data.total + (type==='projected'?data.projectedDelta:0)).toLocaleString()}</div></div>
+      <div class="modal-stat" data-tooltip="Headline is the official ranking pts from the API. Breakdown sums what we can resolve to cataloged tournaments. Diffs come from: (a) early-round exits the materializer doesn't record, (b) data lag between rankings and match feed, (c) round-robin events where the Final winner flag isn't always set."><div class="lbl">Sum of breakdown</div><div class="val">${(data.total + (type==='projected'?data.projectedDelta:0)).toLocaleString()}</div></div>
     </div>
 
     ${inProgressBlock}
