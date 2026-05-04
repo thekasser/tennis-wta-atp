@@ -109,6 +109,8 @@ tr:hover td{background:rgba(36,43,42,.03)}
 /* Clickable player names — open the drill-down modal */
 .player-link{cursor:pointer;border-bottom:1px dashed transparent;transition:border-color .15s,color .15s}
 .player-link:hover{border-bottom-color:var(--tc);color:var(--tc)}
+.pts-clickable{transition:background .15s}
+.pts-clickable:hover{background:rgba(64,107,95,0.08)}
 /* Player drill-down modal */
 .modal-backdrop{position:fixed;inset:0;background:rgba(36,43,42,0.55);z-index:5000;display:none;align-items:flex-start;justify-content:center;padding:5vh 2vw;overflow-y:auto}
 .modal-backdrop.active{display:flex}
@@ -1474,7 +1476,7 @@ function renderRankingsTable() {
       }
       tip = tip.replace(/"/g,'&quot;');
       const inDrawStyle = !p.inDraw ? 'opacity:.55;font-style:italic' : '';
-      projCell = `<td class="proj-cell" data-tooltip="${tip}" style="font-weight:700;color:${color};${inDrawStyle}">${p.projT12M.toLocaleString()}</td>`;
+      projCell = `<td class="proj-cell pts-clickable" data-tooltip="${tip}" onclick="openPtsBreakdownModal(${p.id}, TOUR, 'projected')" style="cursor:pointer;font-weight:700;color:${color};${inDrawStyle}">${p.projT12M.toLocaleString()}</td>`;
     }
 
     return `<tr>
@@ -1483,9 +1485,9 @@ function renderRankingsTable() {
       <td>
         <div style="font-weight:600"><span class="player-link" onclick="openPlayerModal(${p.id}, TOUR)">${p.name}</span>${injIcon(p)}</div>
       </td>
-      <td style="font-weight:700;color:var(--tc)">${p.pts.toLocaleString()}</td>
+      <td class="pts-clickable" onclick="openPtsBreakdownModal(${p.id}, TOUR, 't12m')" style="cursor:pointer;font-weight:700;color:var(--tc)" title="Click for tournament breakdown">${p.pts.toLocaleString()}</td>
       ${projCell}
-      <td style="font-weight:700;color:var(--accent-amber)">${(USE_PROJ_RANKINGS ? p.projYtd : p.ytd).toLocaleString()}</td>
+      <td class="pts-clickable" onclick="openPtsBreakdownModal(${p.id}, TOUR, 'ytd')" style="cursor:pointer;font-weight:700;color:var(--accent-amber)" title="Click for tournament breakdown">${(USE_PROJ_RANKINGS ? p.projYtd : p.ytd).toLocaleString()}</td>
       <td style="font-weight:700;color:var(--ink)">${p.ytdRank!=null?'#'+p.ytdRank:'—'}</td>
       ${deltaCell(p.rankDelta)}
       <td><div class="form-row">${formBarHTML(p.form, p.id)}</div><div title="Rolling 5-match win rate (last ~30 matches)">${formSparkline(p.form)}</div></td>
@@ -2828,8 +2830,283 @@ function closePlayerModal() {
 
 // Esc key closes the modal
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closePlayerModal();
+  if (e.key === 'Escape') { closePlayerModal(); closePtsBreakdownModal(); }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PTS BREAKDOWN MODAL — "where do these points come from?"
+// Click on T12M Pts / YTD Race / Projected T12M cell → modal shows the
+// per-tournament contributions that sum to the headline number.
+// Sources: TOURNAMENT_HISTORY (per-bio per-tournament round + tid) + PTS table.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Map raw Matchstat round labels → PTS-table round key. Draw-size aware.
+// Mirrors logic in computeDefending() — kept in one helper so the breakdown
+// and the live projection always agree.
+const _ROUND_TO_KEY = {
+  128: {First:'R128',Second:'R64',Third:'R32',Fourth:'R16','1/8':'R16','1/4':'QF','1/2':'SF',Final:'F'},
+  96:  {First:'R64', Second:'R64',Third:'R32',Fourth:'R16','1/8':'R16','1/4':'QF','1/2':'SF',Final:'F'},
+  64:  {First:'R64', Second:'R32',Third:'R16','1/4':'QF','1/2':'SF',Final:'F'},
+  32:  {First:'R32', Second:'R16','1/4':'QF','1/2':'SF',Final:'F'},
+};
+
+// Convert one TOURNAMENT_HISTORY entry → pts breakdown row.
+// Returns null if the tournament isn't in our catalog (United Cup, ITF/W125
+// not yet cataloged) — the caller decides whether to surface "unresolved" rows
+// in a footer.
+function _ptsBreakdownRow(entry) {
+  const tid = entry.tid;
+  const tourn = tid ? TOURNAMENTS_DATA.find(t => t.id === tid) : null;
+  if (!tourn) {
+    return { tn: entry.tn, year: entry.year, round: entry.round, won: entry.won,
+             pts: null, type: '?', tid: null, startDate: null, unresolved: true };
+  }
+  const drawSize = tourn.draw || 96;
+  const rkBucket = drawSize >= 128 ? 128 : drawSize >= 96 ? 96 : drawSize >= 64 ? 64 : 32;
+  let ptsKey = _ROUND_TO_KEY[rkBucket][entry.round];
+  if (entry.won && entry.round === 'Final') ptsKey = 'W';
+  const ptsTableKey = tourn.type === 'M1000'
+    ? (tourn.draw === 128 ? 'M1000_128' : 'M1000_96')
+    : tourn.type;
+  const pts = ptsKey ? ((PTS[ptsTableKey] || PTS.M1000_96)[ptsKey] || 0) : 0;
+  return {
+    tn: tourn.name || entry.tn,
+    short: tourn.short || tourn.name,
+    type: tourn.type,
+    drawSize,
+    surf: tourn.surf,
+    year: entry.year,
+    round: entry.round,
+    ptsKey: ptsKey || '?',
+    won: entry.won,
+    pts,
+    tid: tourn.id,
+    startDate: tourn.startDate,
+    endDate:   tourn.endDate,
+    unresolved: false,
+  };
+}
+
+// Rolling 12-month / YTD / projected windows. Returns { rows, total, fallingOffPts }.
+//   type='t12m'      → tournaments with endDate within [today-365d, today]
+//   type='ytd'       → tournaments with year == current calendar year
+//   type='projected' → t12m + synthetic "in progress" rows for active draws
+function buildPtsBreakdown(bioId, tour, type) {
+  const tk = (tour || TOUR).toLowerCase();
+  const hist = ((typeof TOURNAMENT_HISTORY !== 'undefined' && TOURNAMENT_HISTORY)
+                ? (TOURNAMENT_HISTORY[tk] || {}) : {})[bioId] || [];
+  const today = new Date();
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - 365);
+  const inWindow = r => {
+    if (!r.endDate) return false;
+    const d = new Date(r.endDate);
+    if (type === 'ytd')  return d.getFullYear() === today.getFullYear();
+    return d >= cutoff && d <= today;  // t12m + projected
+  };
+
+  let rows = hist.map(_ptsBreakdownRow).filter(r => !r.unresolved && inWindow(r));
+
+  // Tag entries about to fall off — within ±14 days of cutoff anniversary.
+  // These are the events whose pts a player is "defending" right now in the
+  // T12M sense (separate from the per-active-tournament defending logic).
+  const fallingSoon = new Date(cutoff); fallingSoon.setDate(fallingSoon.getDate() + 14);
+  rows.forEach(r => {
+    const d = new Date(r.endDate);
+    r.fallingOff = d >= cutoff && d <= fallingSoon;
+  });
+
+  // Projected: prepend "in progress" rows for active tournaments where the
+  // player is in the draw, showing earned-so-far + defending-loss. Avoid
+  // double-counting: drop the current-year same-tournament row from the
+  // historical list — projRows handle it.
+  const projRows = [];
+  if (type === 'projected') {
+    const activeIds = new Set(((typeof seasonData==='function'?seasonData():null)?.activeTournaments || [])
+                                .map(e => e.id));
+    rows = rows.filter(r => !activeIds.has(r.tid));
+  }
+  const total = rows.reduce((s, r) => s + (r.pts || 0), 0);
+
+  if (type === 'projected') {
+    const sd = (typeof seasonData === 'function') ? seasonData() : null;
+    (sd?.activeTournaments || []).forEach(evData => {
+      const tourn = TOURNAMENTS_DATA.find(t => t.id === evData.id);
+      if (!tourn) return;
+      const status = (evData.players || {})[bioId];
+      if (!status) return;  // not in this draw
+      const ptsKey   = tourn.type === 'M1000' ? (tourn.draw === 128 ? 'M1000_128' : 'M1000_96') : tourn.type;
+      const ptsTable = PTS[ptsKey] || PTS.M1000_96;
+      let earned;
+      if (status.elim) {
+        earned = ptsTable[status.r] || 0;
+      } else {
+        const allBios = TOUR === 'WTA' ? PLAYERS_WTA : PLAYERS_ATP;
+        const allSeas = TOUR === 'WTA' ? SEASON_WTA  : SEASON_ATP;
+        const bio = allBios.find(p => p.id === bioId);
+        const seas = (allSeas.players || {})[bioId] || {};
+        const p = {...bio, ...seas};
+        const projInfo = computeProjection(p, tourn, status, ptsTable);
+        earned = projInfo.projected;
+      }
+      projRows.push({
+        tn: tourn.name, short: tourn.short, type: tourn.type, surf: tourn.surf,
+        year: today.getFullYear(), round: status.r || (status.elim ? 'eliminated' : 'in progress'),
+        pts: earned, inProgress: true, status,
+      });
+    });
+  }
+
+  // Sum totals: T12M sum is rows; projected adds earned and subtracts defending
+  // (defending pts are last-year entries inside fallingOff window for the same tids).
+  let projectedDelta = 0;
+  if (type === 'projected') {
+    projRows.forEach(p => { projectedDelta += p.pts; });
+    // For each in-progress tournament, find last year's same-name entry → that's
+    // the defending. Subtract from total to get "post-this-week" T12M.
+    projRows.forEach(p => {
+      const sameTournLastYr = rows.find(r =>
+        (r.tn || '').toLowerCase() === (p.tn || '').toLowerCase() &&
+        r.year === today.getFullYear() - 1);
+      if (sameTournLastYr) {
+        sameTournLastYr.beingReplaced = true;
+        projectedDelta -= sameTournLastYr.pts;
+      }
+    });
+  }
+
+  return {
+    rows: rows.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || '')),
+    projRows,
+    total,
+    projectedDelta,
+    projectedTotal: total + projectedDelta,
+    type,
+  };
+}
+
+let _ptsBreakdownSort = 'date';  // 'date' | 'pts'
+
+function openPtsBreakdownModal(bioId, tour, type) {
+  const t = (tour || TOUR).toUpperCase();
+  const tk = t.toLowerCase();
+  const bioArr   = t === 'WTA' ? PLAYERS_WTA : PLAYERS_ATP;
+  const seasonObj = t === 'WTA' ? SEASON_WTA : SEASON_ATP;
+  const bio  = bioArr.find(p => p.id === bioId);
+  if (!bio) return;
+  const seas = (seasonObj.players || {})[bioId] || {};
+
+  const data = buildPtsBreakdown(bioId, tour, type);
+  const TYPE_LABEL = { t12m: 'T12M Points', ytd: 'YTD Race Points', projected: 'Projected T12M (after active draw)' };
+  const headline =
+      type === 'projected' ? data.projectedTotal
+    : type === 'ytd'       ? seas.ytd
+    :                        seas.pts;
+
+  let displayRows = [...data.rows];
+  if (_ptsBreakdownSort === 'pts') {
+    displayRows.sort((a, b) => (b.pts || 0) - (a.pts || 0));
+  }
+
+  const SURF_DOT = { H: '🔵', C: '🟤', G: '🟢' };
+  const wlIcon = w => w === true ? '<span style="color:var(--accent-green);font-weight:700">✓</span>' : '';
+
+  const tableRows = displayRows.map(r => {
+    const dateStr = r.endDate ? r.endDate.slice(0, 10) : `${r.year}`;
+    const fallTag = r.fallingOff ? `<span style="font-size:9px;color:var(--accent-rose);background:rgba(196,89,82,0.1);padding:1px 5px;border-radius:8px;margin-left:6px">falling off</span>` : '';
+    const replacingTag = r.beingReplaced ? `<span style="font-size:9px;color:var(--accent-amber);background:rgba(212,164,82,0.1);padding:1px 5px;border-radius:8px;margin-left:6px">replaced this week</span>` : '';
+    return `<tr ${r.beingReplaced ? 'style="opacity:.55;text-decoration:line-through"' : ''}>
+      <td style="font-size:11px;color:var(--muted)">${dateStr}</td>
+      <td style="font-size:11px">${SURF_DOT[r.surf]||'·'} ${r.tn}${fallTag}${replacingTag}</td>
+      <td style="font-size:10px;color:var(--muted)">${r.type || '—'}</td>
+      <td><span class="round-badge" style="font-size:10px">${r.round || '—'}</span> ${wlIcon(r.won)}</td>
+      <td style="font-weight:700;color:var(--tc);text-align:right">${(r.pts||0).toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+
+  const inProgressBlock = data.projRows.length ? `
+    <div class="modal-section">
+      <div class="modal-section-title" style="color:var(--accent-green)">In progress (this week)</div>
+      <table>
+        <thead><tr><th>Tournament</th><th>Tier</th><th>Status</th><th style="text-align:right">Earned so far</th></tr></thead>
+        <tbody>
+          ${data.projRows.map(p => `
+            <tr style="background:rgba(64,107,95,0.06)">
+              <td style="font-size:11px">${SURF_DOT[p.surf]||'·'} ${p.tn}</td>
+              <td style="font-size:10px;color:var(--muted)">${p.type || '—'}</td>
+              <td style="font-size:11px">${p.status?.elim ? `Eliminated · ${p.round}` : `Alive · ${p.round}`}</td>
+              <td style="font-weight:700;color:var(--accent-green);text-align:right">+${(p.pts||0).toLocaleString()}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ${data.projectedDelta !== 0 ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">
+        Net projected change: ${data.projectedDelta >= 0 ? '+' : ''}${data.projectedDelta.toLocaleString()} pts
+        (earned − replaced)
+      </div>` : ''}
+    </div>
+  ` : '';
+
+  const sortBtn = (key, label) => `
+    <button onclick="setPtsBreakdownSort('${key}', ${bioId}, '${tk}', '${type}')"
+            style="background:${_ptsBreakdownSort===key ? 'var(--ink)' : 'transparent'};
+                   color:${_ptsBreakdownSort===key ? '#fff' : 'var(--ink)'};
+                   border:1px solid var(--ink);border-radius:14px;
+                   padding:3px 10px;font-size:11px;cursor:pointer;margin-right:6px">${label}</button>`;
+
+  const note = data.rows.some(r => r.unresolved)
+    ? `<div style="font-size:10px;color:var(--muted);margin-top:8px;font-style:italic">
+         (Tournaments outside our catalog are excluded — usually exhibitions, ITF events, or unresolved.)
+       </div>` : '';
+
+  document.getElementById('pts-breakdown-content').innerHTML = `
+    <button class="modal-close" aria-label="Close" onclick="closePtsBreakdownModal()">×</button>
+    <h2>${bio.name} <span style="font-size:13px;color:var(--muted);font-weight:500">— ${TYPE_LABEL[type]}</span></h2>
+    <div class="modal-meta">${t} · #${seas.rank || '—'} · ${bio.nat}</div>
+
+    <div class="modal-stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="modal-stat"><div class="lbl">Headline</div><div class="val">${(headline||0).toLocaleString()}</div></div>
+      <div class="modal-stat"><div class="lbl">Tournaments</div><div class="val">${data.rows.length}${data.projRows.length ? ` + ${data.projRows.length} live` : ''}</div></div>
+      <div class="modal-stat"><div class="lbl">Sum of breakdown</div><div class="val">${(data.total + (type==='projected'?data.projectedDelta:0)).toLocaleString()}</div></div>
+    </div>
+
+    ${inProgressBlock}
+
+    <div class="modal-section">
+      <div class="modal-section-title" style="display:flex;align-items:center;gap:8px">
+        <span>Tournament breakdown (last 12 months)</span>
+        <span style="margin-left:auto">
+          ${sortBtn('date', '↓ Date')}
+          ${sortBtn('pts',  '↓ Pts')}
+        </span>
+      </div>
+      ${displayRows.length ? `
+        <table>
+          <thead><tr><th>Date</th><th>Tournament</th><th>Tier</th><th>Round</th><th style="text-align:right">Pts</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      ` : `<div style="color:var(--muted);font-size:12px">No tournaments in the last 12 months — likely a returning player or one whose history is sparse in our data.</div>`}
+      ${note}
+    </div>
+  `;
+  document.getElementById('pts-breakdown-modal').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function setPtsBreakdownSort(key, bioId, tour, type) {
+  _ptsBreakdownSort = key;
+  openPtsBreakdownModal(bioId, tour, type);
+}
+
+function closePtsBreakdownModal() {
+  const el = document.getElementById('pts-breakdown-modal');
+  if (el) el.classList.remove('active');
+  document.body.style.overflow = '';
+}
 </script>
+
+<!-- Pts breakdown modal (separate from player drill-down) -->
+<div class="modal-backdrop" id="pts-breakdown-modal" onclick="if(event.target===this)closePtsBreakdownModal()">
+  <div class="modal" id="pts-breakdown-content"></div>
+</div>
 </body>
 </html>
