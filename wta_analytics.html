@@ -1144,7 +1144,9 @@ function toggleProjRankings() {
 }
 
 // Build a map of bioId → projT12M using the same logic as renderLive().
-// Only includes players present in an active tournament draw.
+// Includes BOTH players in active draws AND players defending points from
+// prior year who didn't enter this year (their defending pts roll off when
+// the tournament ends → projected = current − defending, ptsEarned = 0).
 function buildProjRankingsMap() {
   const map = new Map();
   const sd  = seasonData();
@@ -1157,6 +1159,7 @@ function buildProjRankingsMap() {
     const ptsKey   = tourn.type === 'M1000' ? (tourn.draw === 128 ? 'M1000_128' : 'M1000_96') : tourn.type;
     const ptsTable = PTS[ptsKey] || PTS.M1000_96;
 
+    // Pass 1: players IN the active draw (alive or eliminated this year).
     Object.entries(evData.players || {}).forEach(([pidStr, status]) => {
       const pid = parseInt(pidStr);
       const bio = allBios.find(p => p.id === pid);
@@ -1165,7 +1168,6 @@ function buildProjRankingsMap() {
       const p = {...bio, ...seas};
       const isElim = status.elim;
 
-      // Use projected pts if still alive, guaranteed if eliminated
       let ptsEarned;
       if (isElim) {
         ptsEarned = ptsTable[status.r] || 0;
@@ -1177,7 +1179,29 @@ function buildProjRankingsMap() {
       const defending = computeDefending(pid, tourn);
       const currPts   = seas.pts || 0;
       const projT12M  = currPts + ptsEarned - defending;
-      map.set(pid, { projT12M, ptsEarned, defending, currPts, isElim });
+      map.set(pid, { projT12M, ptsEarned, defending, currPts, isElim, inDraw: true });
+    });
+
+    // Pass 2: players NOT in this year's draw but defending points from
+    // last year. Bug fix (2026-05-04): previously these players showed
+    // projected = current, masking the upcoming -defending hit and
+    // breaking sort order on the Projected Rankings toggle.
+    const inDrawIds = new Set(Object.keys(evData.players || {}).map(s => parseInt(s)));
+    allBios.forEach(bio => {
+      if (inDrawIds.has(bio.id)) return;
+      if (map.has(bio.id)) return;  // already projected against an earlier active tournament
+      const defending = computeDefending(bio.id, tourn);
+      if (!defending) return;
+      const seas = allSeas.players[bio.id] || {};
+      const currPts = seas.pts || 0;
+      map.set(bio.id, {
+        projT12M: currPts - defending,
+        ptsEarned: 0,
+        defending,
+        currPts,
+        isElim: false,
+        inDraw: false,
+      });
     });
   });
 
@@ -1271,7 +1295,9 @@ function renderScatter() {
   const data = ps.map(p => {
     const proj = projMap.get(p.id);
     const yPts  = USE_PROJ_RANKINGS ? (proj ? proj.projT12M : p.pts) : p.pts;
-    const inDraw = projMap.has(p.id);
+    // inDraw = literally playing matches this week. Pass-2 (defending-only)
+    // players have proj.inDraw === false even though they have a projection.
+    const inDraw = proj ? proj.inDraw : false;
     return {
       x: p.ytd,
       y: yPts,
@@ -1369,7 +1395,9 @@ function renderRankingsTable() {
     const proj = projMap.get(p.id);
     const projT12M = proj ? proj.projT12M : p.pts;  // fallback to current pts
     const projYtd  = proj ? p.ytd + proj.ptsEarned : p.ytd;
-    const inDraw   = projMap.has(p.id);
+    // inDraw = literally playing matches this week. Pass-2 (defending-only)
+    // players have proj.inDraw === false even though they have a projection.
+    const inDraw   = proj ? proj.inDraw : false;
     return {
       ...p,
       ytdRank: ytdRankById[p.id],
@@ -1436,9 +1464,15 @@ function renderRankingsTable() {
                   : p.projT12M < p.pts ? 'var(--accent-rose)'
                   : 'var(--muted)';
       const netPts = proj ? proj.ptsEarned - proj.defending : 0;
-      const tip = proj
-        ? `Earned: +${proj.ptsEarned} · Defending: -${proj.defending} · Net: ${netPts >= 0 ? '+' : ''}${netPts}`.replace(/"/g,'&quot;')
-        : 'Not in active draw — current pts used';
+      let tip;
+      if (!proj) {
+        tip = 'Not in active draw — current pts used';
+      } else if (proj.inDraw) {
+        tip = `Earned: +${proj.ptsEarned} · Defending: -${proj.defending} · Net: ${netPts >= 0 ? '+' : ''}${netPts}`;
+      } else {
+        tip = `Not in active draw — losing -${proj.defending} defending pts`;
+      }
+      tip = tip.replace(/"/g,'&quot;');
       const inDrawStyle = !p.inDraw ? 'opacity:.55;font-style:italic' : '';
       projCell = `<td class="proj-cell" data-tooltip="${tip}" style="font-weight:700;color:${color};${inDrawStyle}">${fmtPts(p.projT12M)}</td>`;
     }
