@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-04T16:38:19.003046+00:00
+# Generated: 2026-05-04T20:35:21.670021+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       204
   tournaments                   133
-  matches                    11,182
+  matches                    11,192
   rankings_snapshots            408
-  api_fetch_log               2,958
+  api_fetch_log               3,446
 
 ## Latest rankings snapshot: 2026-05-04
 
@@ -17,7 +17,7 @@
 
 ## 5 most recent matches anywhere in DB
   2026-05-04  Q1        p1=94493 p2=24721 winner=94493  (Internazionali BNL d'Italia - Rome)
-  2026-05-03  Final     p1=47275 p2=24008 winner=47275  (Mutua Madrid Open - Madrid)
-  2026-05-03  Final     p1=73956 p2=26473 winner=73956  (Cagliari Challenger)
-  2026-05-03  Final     p1=30087 p2=37741 winner=30087  (Aix En Provence Challenger)
-  2026-05-03  Final     p1=28900 p2=83795 winner=28900  (Mauthausen Challenger)
+  2026-05-04  Q1        p1=18477 p2=82371 winner=18477  (Internazionali BNL d'Italia - Rome)
+  2026-05-04  Q1        p1=39152 p2=100196 winner=39152  (Internazionali BNL d'Italia - Rome)
+  2026-05-04  Q1        p1=58149 p2=111954 winner=58149  (Internazionali BNL d'Italia - Rome)
+  2026-05-04  Q1        p1=83223 p2=18094 winner=83223  (Internazionali BNL d'Italia - Rome)
