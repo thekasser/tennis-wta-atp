@@ -3046,10 +3046,19 @@ function openPtsBreakdownModal(bioId, tour, type) {
 
   const data = buildPtsBreakdown(bioId, tour, type);
   const TYPE_LABEL = { t12m: 'T12M Points', ytd: 'YTD Race Points', projected: 'Projected T12M (after active draw)' };
-  const headline =
-      type === 'projected' ? data.projectedTotal
-    : type === 'ytd'       ? seas.ytd
-    :                        seas.pts;
+  // For projected mode pull the OFFICIAL projT12M from the same source the
+  // rankings table uses (buildProjRankingsMap) — keeps the modal headline
+  // in lockstep with the table cell that opened it.
+  let headline;
+  if (type === 'projected') {
+    const projMap = (typeof buildProjRankingsMap === 'function') ? buildProjRankingsMap() : new Map();
+    const proj = projMap.get(bioId);
+    headline = proj ? proj.projT12M : (seas.pts || 0);
+  } else if (type === 'ytd') {
+    headline = seas.ytd;
+  } else {
+    headline = seas.pts;
+  }
 
   let displayRows = [...data.rows];
   if (_ptsBreakdownSort === 'pts') {
