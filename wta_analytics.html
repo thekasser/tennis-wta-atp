@@ -2850,13 +2850,37 @@ const _ROUND_TO_KEY = {
   32:  {First:'R32', Second:'R16','1/4':'QF','1/2':'SF',Final:'F'},
 };
 
+// Resolve a TH entry → tournament metadata. Prefers entry.tid (added in a
+// recent materialize.py change). Falls back to name+year matching for older
+// data not yet re-materialized, so the modal works even before the next cron
+// refresh.
+function _resolveTournFromEntry(entry, tour) {
+  if (entry.tid) {
+    const t = TOURNAMENTS_DATA.find(x => x.id === entry.tid);
+    if (t) return t;
+  }
+  // Fallback: match by tournament-name prefix + year suffix in id, narrowed
+  // by tour (China Open / Brisbane / Stuttgart all exist for both tours).
+  // The catalog is inconsistent — some entries use "Mutua Madrid Open" and
+  // others "Wuhan Open - Wuhan" — so split BOTH names at " - " and compare
+  // the head.
+  const yr = String(entry.year || '').slice(-2);
+  if (!yr) return null;
+  const splitHead = s => (s || '').toLowerCase().split(' - ')[0].trim();
+  const tnPrefix = splitHead(entry.tn);
+  if (!tnPrefix) return null;
+  const tourUp = (tour || TOUR || '').toUpperCase();
+  return TOURNAMENTS_DATA.find(t =>
+    String(t.id || '').endsWith(yr) &&
+    splitHead(t.name) === tnPrefix &&
+    (t.tour === 'BOTH' || t.tour === tourUp));
+}
+
 // Convert one TOURNAMENT_HISTORY entry → pts breakdown row.
-// Returns null if the tournament isn't in our catalog (United Cup, ITF/W125
-// not yet cataloged) — the caller decides whether to surface "unresolved" rows
-// in a footer.
-function _ptsBreakdownRow(entry) {
-  const tid = entry.tid;
-  const tourn = tid ? TOURNAMENTS_DATA.find(t => t.id === tid) : null;
+// Returns an "unresolved" row if the tournament isn't in our catalog (United
+// Cup, ITF/W125 not yet cataloged) — the caller filters those out.
+function _ptsBreakdownRow(entry, tour) {
+  const tourn = _resolveTournFromEntry(entry, tour);
   if (!tourn) {
     return { tn: entry.tn, year: entry.year, round: entry.round, won: entry.won,
              pts: null, type: '?', tid: null, startDate: null, unresolved: true };
@@ -2904,7 +2928,7 @@ function buildPtsBreakdown(bioId, tour, type) {
     return d >= cutoff && d <= today;  // t12m + projected
   };
 
-  let rows = hist.map(_ptsBreakdownRow).filter(r => !r.unresolved && inWindow(r));
+  let rows = hist.map(e => _ptsBreakdownRow(e, tour)).filter(r => !r.unresolved && inWindow(r));
 
   // Tag entries about to fall off — within ±14 days of cutoff anniversary.
   // These are the events whose pts a player is "defending" right now in the
