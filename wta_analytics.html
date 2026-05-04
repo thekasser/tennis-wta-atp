@@ -1466,7 +1466,7 @@ function renderRankingsTable() {
       const netPts = proj ? proj.ptsEarned - proj.defending : 0;
       let tip;
       if (!proj) {
-        tip = 'Not in active draw — current pts used';
+        tip = 'Not in active draw — defending 0 pts (projection = current)';
       } else if (proj.inDraw) {
         tip = `Earned: +${proj.ptsEarned} · Defending: -${proj.defending} · Net: ${netPts >= 0 ? '+' : ''}${netPts}`;
       } else {
@@ -1474,7 +1474,7 @@ function renderRankingsTable() {
       }
       tip = tip.replace(/"/g,'&quot;');
       const inDrawStyle = !p.inDraw ? 'opacity:.55;font-style:italic' : '';
-      projCell = `<td class="proj-cell" data-tooltip="${tip}" style="font-weight:700;color:${color};${inDrawStyle}">${fmtPts(p.projT12M)}</td>`;
+      projCell = `<td class="proj-cell" data-tooltip="${tip}" style="font-weight:700;color:${color};${inDrawStyle}">${p.projT12M.toLocaleString()}</td>`;
     }
 
     return `<tr>
