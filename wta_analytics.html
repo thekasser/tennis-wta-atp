@@ -3081,7 +3081,13 @@ function computeDefending(bioId, tourn) {
 // bucket, so a clay-only composite reflects how a player ranks AGAINST clay
 // peers — not against the whole tour. That's the more useful framing.
 function decorateTrapezoidComposite(rows) {
-  const COMP = ['totalPtsWonPct','bpSavedPct','tbWinPct','decSetWinPct','matchWinPct'];
+  // bpSavedPct = defensive break-point efficiency (we hold serve under pressure)
+  // bpWonPct   = offensive break-point efficiency (we break opponent's serve)
+  // Including both gives a balanced view of clutch play. Pre-2026-05 versions
+  // only had bpSaved → composite over-rewarded big servers and under-rewarded
+  // returners (e.g. Carreno Busta vs Wawrinka where market favors the better
+  // returner but our model didn't see it).
+  const COMP = ['totalPtsWonPct','bpSavedPct','bpWonPct','tbWinPct','decSetWinPct','matchWinPct'];
   const groups = new Map();
   rows.forEach(r => {
     const surf = r.surf || 'All';
@@ -3768,6 +3774,7 @@ class TrapezoidApp {
       {key:'decSetWinPct', label:'Dec Set %'},
       {key:'acesPerSvGm', label:'Aces/SvGm'},
       {key:'bpSavedPct', label:'BP Saved %'},
+      {key:'bpWonPct', label:'BP Won %'},
       {key:'matchWinPct', label:'Win %'},
     ];
     const seen = new Set();

@@ -717,6 +717,7 @@ def _aggregate_year(matches: list[dict], mid: int,
         return None
     n = len(real); wins = 0
     svpt = first_in = first_won = second_won = aces = bp_saved = bp_faced = df = 0
+    bp_won = bp_chances = 0   # offensive break-point efficiency (own conversions)
     opp_svpt = opp_first_won = opp_second_won = 0
     tb_played = tb_won = dec_played = dec_won = 0
     used = 0
@@ -751,6 +752,17 @@ def _aggregate_year(matches: list[dict], mid: int,
                 opp_bp_conv   = _i(opp, "breakPointsConverted","breakPointConverted","bpConv")
                 opp_bp_attempt = _i(opp, "breakPointsConvertedOf","breakPointsAttempted",
                                        "breakPointAttempted","bpAttempt")
+                # OFFENSIVE break-point counters — what we converted on
+                # opponent's serve. Mirrors the defensive bp_faced/bp_saved
+                # block above. Symmetric backfill: if our offensive counters
+                # are missing, the opponent's defensive counters tell the
+                # same story (opp_bp_faced was BPs we created against them,
+                # opp_bp_saved was BPs we failed to convert).
+                own_bp_conv    = _i(own, "breakPointsConverted","breakPointConverted","bpConv")
+                own_bp_attempt = _i(own, "breakPointsConvertedOf","breakPointsAttempted",
+                                        "breakPointAttempted","bpAttempt")
+                opp_bp_faced   = _i(opp, "breakPointFaced","breakPointsFaced","bpFaced")
+                opp_bp_saved   = _i(opp, "breakPointSaved","breakPointsSaved","bpSaved")
                 # Backfill: if our bp counters are missing, use opponent's
                 # converted/attempted (which are recorded against our serve).
                 # This is the key fix that was lost when porting from
@@ -759,6 +771,11 @@ def _aggregate_year(matches: list[dict], mid: int,
                     own_bp_faced = opp_bp_attempt
                 if not own_bp_saved and own_bp_faced:
                     own_bp_saved = own_bp_faced - opp_bp_conv
+                # Symmetric backfill for offensive side.
+                if not own_bp_attempt and opp_bp_faced:
+                    own_bp_attempt = opp_bp_faced
+                if not own_bp_conv and opp_bp_faced and opp_bp_saved:
+                    own_bp_conv = opp_bp_faced - opp_bp_saved
 
                 svpt        += _i(own, "firstServeOf","totalServePointsAttempted","serveOf","serveOfGm","svpt")
                 first_in    += _i(own, "firstServe","firstServeIn","1stIn")
@@ -768,6 +785,8 @@ def _aggregate_year(matches: list[dict], mid: int,
                 df          += _i(own, "doubleFaults","doubleFault","df")
                 bp_faced    += own_bp_faced
                 bp_saved    += own_bp_saved
+                bp_won      += own_bp_conv
+                bp_chances  += own_bp_attempt
                 opp_svpt        += _i(opp, "firstServeOf","totalServePointsAttempted","svpt")
                 opp_first_won   += _i(opp, "winningOnFirstServe","firstServeWon","1stWon")
                 opp_second_won  += _i(opp, "winningOnSecondServe","secondServeWon","2ndWon")
@@ -803,6 +822,7 @@ def _aggregate_year(matches: list[dict], mid: int,
                                      svpt + opp_svpt),
         "acesPerSvGm":     round(aces / sv_gms, 2) if sv_gms else None,
         "bpSavedPct":      _safe_pct(bp_saved, bp_faced),
+        "bpWonPct":        _safe_pct(bp_won, bp_chances),
         "tbWinPct":        _safe_pct(tb_won, tb_played) if tb_played >= min_tb else None,
         "decSetWinPct":    _safe_pct(dec_won, dec_played) if dec_played >= min_dec else None,
     }
@@ -963,7 +983,7 @@ def materialize_trapezoid(conn) -> bool:
 
     metrics = [
         "matches", "servePtsWonPct", "returnPtsWonPct", "totalPtsWonPct",
-        "tbWinPct", "decSetWinPct", "acesPerSvGm", "bpSavedPct", "matchWinPct",
+        "tbWinPct", "decSetWinPct", "acesPerSvGm", "bpSavedPct", "bpWonPct", "matchWinPct",
     ]
     labels = {
         "matches":         "Matches Played",
@@ -974,6 +994,7 @@ def materialize_trapezoid(conn) -> bool:
         "decSetWinPct":    "Deciding Set Win %",
         "acesPerSvGm":     "Aces / Service Game",
         "bpSavedPct":      "Break Points Saved %",
+        "bpWonPct":        "Break Points Won %",
         "matchWinPct":     "Match Win %",
     }
 
