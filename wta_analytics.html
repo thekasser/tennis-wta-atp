@@ -1070,12 +1070,28 @@ function matchProbBreakdown(pA, pB, surf) {
     Object.keys(weights).forEach(k => weights[k] = weights[k] / sumW);
   }
 
-  const rawProb =
-      weights.elo  * eloP
-    + weights.surf * surfP
-    + weights.form * formP
-    + weights.h2h  * h2hP
-    + weights.comp * compP;
+  // Logit (log-odds) blending instead of linear probability averaging. Linear
+  // blends of bounded inputs systematically compress predictions toward 0.5 —
+  // calibration showed +28 pp underconfidence in 60-70% bins even after the
+  // Pythagorean k=1.5 expanded each signal's dynamic range. The Bayesian
+  // way to combine probability estimates is on the log-odds scale, so a
+  // strong signal (Elo at 99%) translates to a large logit (4.6) that
+  // dominates the blend instead of being diluted by neutral signals.
+  // Math: prob = sigmoid(Σ wᵢ · logit(pᵢ)) where logit(p) = ln(p/(1-p)).
+  // For all-neutral signals (p=0.5 each), logit=0, sigmoid(0)=0.5 — close
+  // matches stay close. For strongly-asymmetric signals, the prediction
+  // pushes toward the limits where it belongs.
+  const _logit = p => {
+    const c = Math.max(0.02, Math.min(0.98, p));
+    return Math.log(c / (1 - c));
+  };
+  const sumLogit =
+      weights.elo  * _logit(eloP)
+    + weights.surf * _logit(surfP)
+    + weights.form * _logit(formP)
+    + weights.h2h  * _logit(h2hP)
+    + weights.comp * _logit(compP);
+  const rawProb = 1 / (1 + Math.exp(-sumLogit));
   const prob = Math.min(.95, Math.max(.05, rawProb));
 
   // Breakdown rows ordered by contribution magnitude relative to 50% (the
