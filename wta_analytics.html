@@ -490,12 +490,20 @@ select:focus{outline:none;border-color:var(--tc)}
     <div class="two-col">
       <div class="card">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px">Player A</div>
-        <select id="pred-a" onchange="renderPredict()" style="width:100%;margin-bottom:8px"></select>
+        <input id="pred-a-search" list="pred-a-list" placeholder="Search by name or rank…" autocomplete="off"
+               style="width:100%;margin-bottom:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:var(--bg-elev)"
+               oninput="onPredSearch('a')">
+        <datalist id="pred-a-list"></datalist>
+        <select id="pred-a" onchange="renderPredict()" style="display:none"></select>
         <div id="pred-a-stats"></div>
       </div>
       <div class="card">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px">Player B</div>
-        <select id="pred-b" onchange="renderPredict()" style="width:100%;margin-bottom:8px"></select>
+        <input id="pred-b-search" list="pred-b-list" placeholder="Search by name or rank…" autocomplete="off"
+               style="width:100%;margin-bottom:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:var(--bg-elev)"
+               oninput="onPredSearch('b')">
+        <datalist id="pred-b-list"></datalist>
+        <select id="pred-b" onchange="renderPredict()" style="display:none"></select>
         <div id="pred-b-stats"></div>
       </div>
     </div>
@@ -893,14 +901,40 @@ function ytdRankFor(bioId) {
   return idx >= 0 ? idx + 1 : null;
 }
 
-// Pts-based Elo. T12M + YTD captures both rolling-12mo strength and recent
-// trajectory (YTD double-counts the calendar-year subset, naturally weighting
-// recent results). √ flattens the top so #1 vs #2 stays close while #2 vs #3
-// chasms remain — rank-position-based elo couldn't see those gaps. Scale 8
-// chosen so #1 vs #100 ≈ 90%, #1 vs #2 ≈ 55%.
+// Pts-based Elo with trajectory awareness.
+//
+// The naive `T12M + YTD` formula was blind to trajectory: a comeback player
+// like Pliskova (T12M 590 / YTD 574 — i.e. all her points are this year) and
+// a fading vet like JBM (T12M 1186 / YTD 233 — most of her T12M is pre-2026)
+// would land close because the sums are similar. Reality: Pliskova is
+// playing better RIGHT NOW.
+//
+// Hybrid formula:
+//   trajectory = 0.3 × T12M + 3.0 × YTD     (annualizes recent rate; the
+//                                            T12M weight stops January from
+//                                            collapsing the formula)
+//   strength   = max(T12M, trajectory)      (T12M as a floor protects
+//                                            injured-comeback players whose
+//                                            YTD is low but body-of-work
+//                                            shows real strength)
+//   elo        = √strength × 8
+//
+// Examples:
+//   Pliskova (590/574)   → max(590, 1899) = 1899 → elo 348  (rising)
+//   JBM      (1186/233)  → max(1186, 1055) = 1186 → elo 275 (T12M floor wins)
+//   Sabalenka (10k/4k)   → max(10000, 15000) = 15000 → elo 980 (mild proj)
+//   Injured (5000/200)   → max(5000, 2100) = 5000 → preserved level
+//
+// Returns { elo, strength, source } so the UI can show whether T12M floor or
+// trajectory was the binding constraint.
 function effectiveElo(p) {
-  const pts = (p.pts || 0) + (p.ytd || 0);
-  return pts > 0 ? Math.sqrt(pts) * 8 : 0;
+  const t12m = p.pts || 0;
+  const ytd  = p.ytd || 0;
+  if (t12m + ytd === 0) return { elo: 0, strength: 0, source: 'none' };
+  const trajectory = 0.3 * t12m + 3.0 * ytd;
+  const strength   = Math.max(t12m, trajectory);
+  const source     = strength === t12m ? 't12m-floor' : 'trajectory';
+  return { elo: Math.sqrt(strength) * 8, strength, source };
 }
 
 // Win-prob model with full breakdown. Returns { prob, breakdown } so the
@@ -922,9 +956,10 @@ function matchProbBreakdown(pA, pB, surf) {
   const lo=Math.min(pA.id,pB.id),hi=Math.max(pA.id,pB.id);
   const h2d=h2hDb()[`${lo}-${hi}`];
 
-  // 1. Elo from points
-  const eloA = effectiveElo(pA);
-  const eloB = effectiveElo(pB);
+  // 1. Elo from points (hybrid trajectory-aware formula)
+  const eA = effectiveElo(pA);
+  const eB = effectiveElo(pB);
+  const eloA = eA.elo, eloB = eB.elo;
   const eloP = 1/(1+Math.pow(10,(eloB-eloA)/400));
 
   // 2. Surface
@@ -954,11 +989,14 @@ function matchProbBreakdown(pA, pB, surf) {
     if (tot > 0) { h2hP = aW/tot; h2hAvail = true; }
   }
 
-  // 6. Weight blend depends on signal availability
+  // 6. Weight blend — composite is the most predictive single signal we have
+  // (it aggregates 6 metrics over a sample-aware T6M window), so when it's
+  // available it gets the heaviest weight. Elo is now a tiebreaker (~12-14%)
+  // rather than a primary signal — recent form should drive predictions.
   let weights;
-  if (h2hAvail && compAvail)      weights = { elo:.15, surf:.22, form:.18, h2h:.15, comp:.30 };
+  if (h2hAvail && compAvail)      weights = { elo:.12, surf:.20, form:.18, h2h:.12, comp:.38 };
   else if (h2hAvail)              weights = { elo:.20, surf:.30, form:.25, h2h:.25, comp:0 };
-  else if (compAvail)             weights = { elo:.18, surf:.27, form:.22, h2h:0,   comp:.33 };
+  else if (compAvail)             weights = { elo:.14, surf:.24, form:.22, h2h:0,   comp:.40 };
   else                            weights = { elo:.25, surf:.40, form:.35, h2h:0,   comp:0 };
 
   const rawProb =
@@ -979,11 +1017,15 @@ function matchProbBreakdown(pA, pB, surf) {
     const nudge = w * (sigP - 0.5) * 100;  // +ve = toward A, in % points
     rows.push({ key, label, rawA, rawB, sigP, weight: w, nudge, note });
   };
-  pushRow('elo',  'Elo (T12M + YTD pts)',
-          `${pA.pts.toLocaleString()} + ${pA.ytd.toLocaleString()}`,
-          `${pB.pts.toLocaleString()} + ${pB.ytd.toLocaleString()}`,
+  // Elo source: ▲ = trajectory (rising/projecting from YTD), else T12M floor.
+  const arrowFor = e => e.source === 'trajectory'
+    ? '<span style="color:var(--accent-green);font-size:9px;margin-left:3px" title="Trajectory mode: strength projected from YTD pace; player is rising relative to T12M body of work">▲</span>'
+    : '';
+  pushRow('elo',  'Elo (recency-weighted)',
+          `${Math.round(eA.strength).toLocaleString()}${arrowFor(eA)}`,
+          `${Math.round(eB.strength).toLocaleString()}${arrowFor(eB)}`,
           eloP, weights.elo,
-          `${pA.ab} elo ${Math.round(eloA)} vs ${pB.ab} elo ${Math.round(eloB)}`);
+          `Hybrid strength = max(T12M, 0.3×T12M + 3.0×YTD); ${pA.ab} ${eA.source} → elo ${Math.round(eloA)}; ${pB.ab} ${eB.source} → elo ${Math.round(eloB)}`);
   pushRow('surf', `${surf} win %`,
           `${Math.round(sA*100)}%`, `${Math.round(sB*100)}%`,
           surfP, weights.surf, null);
@@ -1778,6 +1820,9 @@ function buildSelects() {
 
   predPs = [...predPs].sort((a,b)=>(a.rank||9999)-(b.rank||9999));
   const predOpts = predPs.map(p=>`<option value="${p.id}">#${p.rank} ${p.name}</option>`).join('');
+  // datalist options use a label-as-value pattern so what the user types
+  // matches what the browser shows. We resolve back to id in onPredSearch.
+  const dlOpts = predPs.map(p=>`<option value="#${p.rank} ${p.name}"></option>`).join('');
   ['pred-a','pred-b'].forEach((id,i)=>{
     const el=document.getElementById(id);
     if(!el) return;
@@ -1785,7 +1830,35 @@ function buildSelects() {
     el.innerHTML=predOpts;
     if(prev&&predPs.find(p=>p.id===prev)) el.value=prev;
     else el.value=predPs[i]?predPs[i].id:'';
+    const dl = document.getElementById(id+'-list');
+    if (dl) dl.innerHTML = dlOpts;
+    // Sync the search input to whatever player is currently selected.
+    const search = document.getElementById(id+'-search');
+    if (search) {
+      const cur = predPs.find(p => p.id === parseInt(el.value));
+      search.value = cur ? `#${cur.rank} ${cur.name}` : '';
+    }
   });
+}
+
+// Datalist input → resolve typed text back to a bio_id and update the hidden
+// <select>, then re-render. We accept any prefix-or-substring match so the
+// user can type "rybak" and pick "#2 Elena Rybakina" from the suggestion.
+function onPredSearch(side) {
+  const search = document.getElementById(`pred-${side}-search`);
+  const select = document.getElementById(`pred-${side}`);
+  if (!search || !select) return;
+  const txt = (search.value || '').trim().toLowerCase();
+  if (!txt) return;
+  // Exact match against the datalist value first (when user clicked a suggestion)
+  const opts = [...select.options];
+  let pick = opts.find(o => o.textContent.toLowerCase() === txt);
+  // Fallback: any option whose text contains the typed string
+  if (!pick) pick = opts.find(o => o.textContent.toLowerCase().includes(txt));
+  if (!pick) return;        // no match yet — keep typing
+  select.value = pick.value;
+  search.value = pick.textContent;     // normalize display
+  renderPredict();
 }
 
 function renderPredict() {
@@ -1902,7 +1975,8 @@ function renderPredict() {
       </div>
       ${rowHtml}
       <div style="font-size:10px;color:var(--muted);margin-top:10px;font-style:italic;line-height:1.5">
-        Signals: Elo derived from <code>√(T12M_pts + YTD_pts) × 8</code>; surface and form use head-to-head fractional splits;
+        Signals: Elo from <code>√(max(T12M, 0.3·T12M + 3·YTD)) × 8</code> (trajectory-aware: ▲ means YTD pace projects above T12M body of work);
+        surface and form use head-to-head fractional splits;
         composite is z-score across serve/return/BP-saved/TB/dec-set/match-win, sigmoid-mapped (1z lead ≈ 67%).
         Weights: ${Object.entries(breakdown.weights).filter(([,w]) => w > 0).map(([k,w]) => `${k} ${Math.round(w*100)}%`).join(' · ')}.
       </div>
@@ -1957,13 +2031,18 @@ function renderPredict() {
             <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">${x.s}</div>
           </div>`).join('')}
       </div>
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px">Last 5 Meetings</div>
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px">Last 5 Meetings ${h2d.last ? `<span style="font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;margin-left:6px">most recent: ${h2d.last}</span>` : ''}</div>
       <div class="recent-row">
-        ${h2d.rec.map(wid=>{
-          const wp=players().find(p=>p.id===wid);
-          const isA=wid===pA.id;
-          const c=isA?TC:TC_B;
-          return `<span class="recent-pill" style="background:${c}1a;color:${c};border:1px solid ${c}55">${wp?wp.ab:'?'}</span>`;
+        ${h2d.rec.map(outcome => {
+          // h2h.js stores outcomes as 1 (lower-bio_id won) or 2 (higher won),
+          // NOT bio_ids. Bug fix: map to actual winner by canonical pair order.
+          const lo = Math.min(pA.id, pB.id);
+          const hi = Math.max(pA.id, pB.id);
+          const winId = outcome === 1 ? lo : hi;
+          const wp = players().find(p => p.id === winId);
+          const isA = winId === pA.id;
+          const c = isA ? TC : TC_B;
+          return `<span class="recent-pill" style="background:${c}1a;color:${c};border:1px solid ${c}55">${wp ? wp.ab : '?'}</span>`;
         }).join('')}
       </div>`;
   } else {

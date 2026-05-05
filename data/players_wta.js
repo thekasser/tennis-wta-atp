@@ -155,5 +155,6 @@ const PLAYERS_WTA = [
   {id:150, mid:72881, name:"Tatiana Prozorova", ab:"Prozorova", nat:"RUS", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/2, last: 2025-07-26)
   {id:151, mid:11449, name:"Ons Jabeur", ab:"Jabeur", nat:"TUN", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-06-20)
   {id:152, mid:11575, name:"Danielle Rose Collins", ab:"Collins", nat:"USA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/2, last: 2025-05-23)
+  {id:153, mid:32633, name:"Lucrezia Stefanini", ab:"Stefanini", nat:"ITA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},   // manual add per user request
 
 ];
