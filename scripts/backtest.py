@@ -724,7 +724,8 @@ def backtest(conn, tour: str, year: int, limit: int | None,
              use_composite: bool = True, soft: bool = False,
              sharpen: float = DEFAULT_SHARPEN,
              bare_elo: float = DEFAULT_BARE_ELO_WEIGHT,
-             composite_only: bool = False) -> dict:
+             composite_only: bool = False,
+             show_misses: int = 10) -> dict:
     """Convenience wrapper for single-config runs."""
     features, _ = collect_features(conn, tour, year, limit,
                                    window_months=window_months,
@@ -732,7 +733,8 @@ def backtest(conn, tour: str, year: int, limit: int | None,
     rows = score_features(features, sharpen=sharpen, bare_elo=bare_elo)
     write_csv(rows, output_csv)
     return summarize(rows, composite_only=composite_only,
-                     sharpen=sharpen, bare_elo=bare_elo)
+                     sharpen=sharpen, bare_elo=bare_elo,
+                     show_misses=show_misses)
 
 
 # ─── Brier + calibration ─────────────────────────────────────────────────────
@@ -771,9 +773,65 @@ def calibration_table(rows: list[BacktestRow], n_bins: int = 10
     return out
 
 
+def top_misses(rows: list[BacktestRow], n: int = 10) -> list[dict]:
+    """Find the model's worst calls — matches where the picked side had the
+    highest pre-match confidence but lost. Useful sanity check: if the top
+    misses are dominated by injury withdrawals or known upsets, the model
+    isn't broken; if they look like normal matchups the model badly
+    miscalled, that's a real signal of model weakness.
+
+    Returns a list of dicts ordered by descending confidence-on-wrong-side.
+    """
+    misses = []
+    for r in rows:
+        # p_pred is prob of slot A winning. Picked side = whichever is favored.
+        if r.p_pred >= 0.5:
+            picked_won = (r.won == 1)
+            confidence = r.p_pred
+            picked_name, picked_pts   = r.p1_name, r.p1_pts
+            actual_name, actual_pts   = r.p2_name, r.p2_pts
+            picked_comp, actual_comp  = r.comp_p1, r.comp_p2
+        else:
+            picked_won = (r.won == 0)
+            confidence = 1 - r.p_pred
+            picked_name, picked_pts   = r.p2_name, r.p2_pts
+            actual_name, actual_pts   = r.p1_name, r.p1_pts
+            picked_comp, actual_comp  = r.comp_p2, r.comp_p1
+        if picked_won:
+            continue
+        misses.append({
+            "date": r.date, "tour": r.tour, "surface": r.surface,
+            "confidence": confidence,
+            "picked": picked_name, "picked_pts": picked_pts,
+            "picked_comp": picked_comp,
+            "actual": actual_name, "actual_pts": actual_pts,
+            "actual_comp": actual_comp,
+        })
+    misses.sort(key=lambda x: -x["confidence"])
+    return misses[:n]
+
+
+def print_top_misses(rows: list[BacktestRow], n: int = 10) -> None:
+    misses = top_misses(rows, n)
+    if not misses:
+        print("\n[misses] no losing favorites in this set")
+        return
+    print(f"\n[misses] top {len(misses)} highest-confidence wrong calls:")
+    print(f"  date        tour  surf  conf    favored (pts, comp)         →  winner (pts, comp)")
+    print(f"  " + "─" * 100)
+    for m in misses:
+        pc = f"{m['picked_comp']:+.2f}" if m['picked_comp'] is not None else "  — "
+        ac = f"{m['actual_comp']:+.2f}" if m['actual_comp'] is not None else "  — "
+        picked_str = f"{m['picked']} ({m['picked_pts']:,}, {pc})"
+        actual_str = f"{m['actual']} ({m['actual_pts']:,}, {ac})"
+        print(f"  {m['date']}  {m['tour']:<3}   {m['surface']:<3}   "
+              f"{m['confidence']*100:>4.1f}%   {picked_str:<32}  →  {actual_str}")
+
+
 def summarize(rows: list[BacktestRow], *, composite_only: bool = False,
               sharpen: float | None = None,
-              bare_elo: float | None = None) -> dict:
+              bare_elo: float | None = None,
+              show_misses: int = 10) -> dict:
     """Print n / Brier / calibration table. composite_only filters to matches
     where both players had a non-None PiT composite — that's the model in
     its strongest configuration (composite-available weight branch)."""
@@ -799,7 +857,10 @@ def summarize(rows: list[BacktestRow], *, composite_only: bool = False,
         else:
             print(f"  {c['bin']:<12} {c['n']:>4}  {c['pred_avg']*100:>5.1f}%  "
                   f"{c['actual']*100:>5.1f}%  {c['delta_pp']:>+6.1f}")
-    return {"n": len(rows), "brier": brier, "calibration": cal}
+    if show_misses > 0:
+        print_top_misses(rows, n=show_misses)
+    return {"n": len(rows), "brier": brier, "calibration": cal,
+            "top_misses": top_misses(rows, n=show_misses) if show_misses else []}
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
@@ -842,6 +903,10 @@ def main() -> int:
                    help="Comma-separated SHARPEN values, e.g. '1.0,1.5,2.0,2.5'. "
                         "Collects features once, scores under each value, "
                         "prints comparison. Skips CSV writing.")
+    p.add_argument("--show-misses", type=int, default=10,
+                   help="Print the top N highest-confidence wrong calls "
+                        "(losing favorites) at the end of every run. "
+                        "Set to 0 to disable. Default 10.")
     args = p.parse_args()
 
     if args.output is None:
@@ -870,7 +935,8 @@ def main() -> int:
             rows = score_features(features, sharpen=s,
                                   bare_elo=args.bare_elo_weight)
             res = summarize(rows, composite_only=args.composite_only,
-                            sharpen=s, bare_elo=args.bare_elo_weight)
+                            sharpen=s, bare_elo=args.bare_elo_weight,
+                            show_misses=0)   # suppress in sweep — too noisy
             results.append((s, res))
         # Compact comparison table
         print("\n[sweep] Brier comparison:")
@@ -886,7 +952,8 @@ def main() -> int:
              soft=args.soft,
              sharpen=args.sharpen,
              bare_elo=args.bare_elo_weight,
-             composite_only=args.composite_only)
+             composite_only=args.composite_only,
+             show_misses=args.show_misses)
     return 0
 
 
