@@ -27,33 +27,33 @@ const TOURNAMENTS_DATA = [
   { id:"madrid26",   name:"Mutua Madrid Open",  short:"Madrid",   tour:"BOTH", type:"M1000", surf:"C", draw:96,  wk:16, month:4,  startDate:"2026-04-22", endDate:"2026-05-03", active:true,  complete:false, wtaId:"madrid-open", wtaSlug:"", apiId:{atp:21325, wta:16721} },
 
   // ── MAY ───────────────────────────────────────────────────────────────────
-  { id:"rome26",     name:"Internazionali BNL d'Italia", short:"Rome", tour:"BOTH", type:"M1000", surf:"C", draw:96, wk:18, month:5, startDate:"2026-05-06", endDate:"2026-05-17", active:false, complete:false },
+  { id:"rome26",     name:"Internazionali BNL d'Italia", short:"Rome", tour:"BOTH", type:"M1000", surf:"C", draw:96, wk:18, month:5, startDate:"2026-05-06", endDate:"2026-05-17", active:false, complete:false, apiId:{atp:21326, wta:16722} },
   { id:"rg26",       name:"Roland Garros",      short:"RG",       tour:"BOTH", type:"GS",    surf:"C", draw:128, wk:21, month:5,  startDate:"2026-05-24", endDate:"2026-06-07", active:false, complete:false },
 
   // ── JUNE ──────────────────────────────────────────────────────────────────
   { id:"eastbourne26", name:"Eastbourne",       short:"Eastbourne",tour:"WTA", type:"W250",  surf:"G", draw:28,  wk:24, month:6,  startDate:"2026-06-14", endDate:"2026-06-20", active:false, complete:false },
   { id:"queens26",   name:"cinch Championships",short:"Queen's",  tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false },
-  { id:"halle26",    name:"Terra Wortmann Open",short:"Halle",    tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false },
-  { id:"wimbledon26",name:"Wimbledon",          short:"Wimbledon",tour:"BOTH", type:"GS",    surf:"G", draw:128, wk:26, month:6,  startDate:"2026-06-29", endDate:"2026-07-12", active:false, complete:false },
+  { id:"halle26",    name:"Terra Wortmann Open",short:"Halle",    tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false, apiId:{atp:21333} },
+  { id:"wimbledon26",name:"Wimbledon",          short:"Wimbledon",tour:"BOTH", type:"GS",    surf:"G", draw:128, wk:26, month:6,  startDate:"2026-06-29", endDate:"2026-07-12", active:false, complete:false, apiId:{atp:21337, wta:16733} },
 
   // ── JULY ──────────────────────────────────────────────────────────────────
-  { id:"hamburg26",  name:"Hamburg Open",       short:"Hamburg",  tour:"ATP", type:"M500",  surf:"C", draw:32,  wk:28, month:7,  startDate:"2026-07-13", endDate:"2026-07-19", active:false, complete:false },
-  { id:"bastad26",   name:"Nordea Open",        short:"Båstad",   tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:28, month:7,  startDate:"2026-07-13", endDate:"2026-07-19", active:false, complete:false },
+  { id:"hamburg26",  name:"Hamburg Open",       short:"Hamburg",  tour:"ATP", type:"M500",  surf:"C", draw:32,  wk:28, month:7,  startDate:"2026-07-13", endDate:"2026-07-19", active:false, complete:false, apiId:{atp:21327} },
+  { id:"bastad26",   name:"Nordea Open",        short:"Båstad",   tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:28, month:7,  startDate:"2026-07-13", endDate:"2026-07-19", active:false, complete:false, apiId:{atp:21339} },
   { id:"palermo26",  name:"Palermo Open",       short:"Palermo",  tour:"WTA", type:"W250",  surf:"C", draw:32,  wk:28, month:7,  startDate:"2026-07-13", endDate:"2026-07-19", active:false, complete:false },
 
   // ── AUGUST ───────────────────────────────────────────────────────────────
-  { id:"montreal26", name:"National Bank Open", short:"Montreal", tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:32, month:8,  startDate:"2026-08-03", endDate:"2026-08-09", active:false, complete:false },
-  { id:"toronto26",  name:"National Bank Open", short:"Toronto",  tour:"ATP", type:"M1000", surf:"H", draw:96,  wk:32, month:8,  startDate:"2026-08-03", endDate:"2026-08-09", active:false, complete:false },
+  { id:"montreal26", name:"National Bank Open", short:"Montreal", tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:32, month:8,  startDate:"2026-08-03", endDate:"2026-08-09", active:false, complete:false, apiId:{wta:16739} },
+  { id:"toronto26",  name:"National Bank Open", short:"Toronto",  tour:"ATP", type:"M1000", surf:"H", draw:96,  wk:32, month:8,  startDate:"2026-08-03", endDate:"2026-08-09", active:false, complete:false, apiId:{atp:21346} },
   { id:"cincinnati26",name:"Western & Southern Open",short:"Cincinnati",tour:"BOTH",type:"M1000",surf:"H",draw:96,wk:33,month:8, startDate:"2026-08-10", endDate:"2026-08-16", active:false, complete:false },
   { id:"uso26",      name:"US Open",            short:"US Open",  tour:"BOTH", type:"GS",    surf:"H", draw:128, wk:35, month:8,  startDate:"2026-08-24", endDate:"2026-09-06", active:false, complete:false },
 
   // ── SEPTEMBER / OCTOBER ───────────────────────────────────────────────────
   { id:"shanghai26", name:"Rolex Shanghai Masters",short:"Shanghai",tour:"ATP",type:"M1000",surf:"H", draw:96,  wk:41, month:10, startDate:"2026-10-05", endDate:"2026-10-11", active:false, complete:false },
-  { id:"wuhan26",    name:"Wuhan Open",         short:"Wuhan",    tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:41, month:10, startDate:"2026-10-05", endDate:"2026-10-11", active:false, complete:false },
+  { id:"wuhan26",    name:"Wuhan Open",         short:"Wuhan",    tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:41, month:10, startDate:"2026-10-05", endDate:"2026-10-11", active:false, complete:false, apiId:{wta:16750} },
 
   // ── NOVEMBER ─────────────────────────────────────────────────────────────
-  { id:"wta_finals26", name:"WTA Finals",       short:"WTA Finals",tour:"WTA",type:"WTAFinals",surf:"H",draw:8, wk:45, month:11, startDate:"2026-11-01", endDate:"2026-11-08", active:false, complete:false },
-  { id:"atp_finals26", name:"Nitto ATP Finals", short:"ATP Finals",tour:"ATP",type:"ATPFinals",surf:"H",draw:8, wk:46, month:11, startDate:"2026-11-15", endDate:"2026-11-22", active:false, complete:false },
+  { id:"wta_finals26", name:"WTA Finals",       short:"WTA Finals",tour:"WTA",type:"WTAFinals",surf:"H",draw:8, wk:45, month:11, startDate:"2026-11-01", endDate:"2026-11-08", active:false, complete:false, apiId:{wta:16758} },
+  { id:"atp_finals26", name:"Nitto ATP Finals", short:"ATP Finals",tour:"ATP",type:"ATPFinals",surf:"H",draw:8, wk:46, month:11, startDate:"2026-11-15", endDate:"2026-11-22", active:false, complete:false, apiId:{atp:21364} },
 
   // ── BACKFILL: tour-level events (~99) added by scripts/_gen_catalog.py
   // Covers 2025 + 2026 ATP/WTA tour-level events not previously in this file.
