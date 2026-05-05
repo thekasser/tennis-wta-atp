@@ -94,6 +94,9 @@ table th{position:sticky;top:calc(var(--sticky-top) + 56px);z-index:5;background
 #trap-table th{top:calc(var(--sticky-top) + 160px)}
 /* Modal tables stick to top of their own scroll container, no nav offset. */
 .modal table th{top:0;background:#f4efe4}
+/* Predictor tab stacks 3 tables (upcoming / MvM / etc.) — sticky <th> on
+   each fights for the same scroll-offset and looks broken. Static here. */
+#tab-predict table th{position:static}
 .tab-btn{padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all .15s;font-family:inherit}
 .tab-btn:hover{color:var(--ink)}
 .tab-btn.active{background:var(--ink);color:#fffef9;box-shadow:var(--shadow-sm)}
@@ -2222,6 +2225,15 @@ function renderPredict() {
   renderUpcomingMatches();
 }
 
+// Sort state for the Model-vs-Market table. Default is verdict-magnitude desc
+// (biggest disagreements at top), matching the panel's diagnostic intent.
+let MVM_SORT = { col: 'verdict', dir: 'desc' };
+function setMvmSort(col) {
+  if (MVM_SORT.col === col) MVM_SORT.dir = MVM_SORT.dir === 'desc' ? 'asc' : 'desc';
+  else                      MVM_SORT = { col, dir: 'desc' };
+  renderModelVsMarket();
+}
+
 function renderModelVsMarket() {
   const el = document.getElementById('mvm-panel');
   if (!el) return;
@@ -2297,8 +2309,18 @@ function renderModelVsMarket() {
     return { ...m, pLo, pHi, surf, modelLo, mktLo, delta };
   }).filter(Boolean);
 
-  // Sort by absolute delta to surface biggest disagreements at the top
-  const byDelta = [...rows].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  // User-selectable sort. Default = verdict (abs delta desc) — biggest
+  // disagreements at top, matching the panel's diagnostic purpose.
+  const sortFns = {
+    date:    (a, b) => (a.date || '').localeCompare(b.date || ''),
+    model:   (a, b) => a.modelLo - b.modelLo,
+    market:  (a, b) => a.mktLo  - b.mktLo,
+    delta:   (a, b) => a.delta  - b.delta,                      // signed
+    verdict: (a, b) => Math.abs(a.delta) - Math.abs(b.delta),   // magnitude
+  };
+  const sortFn = sortFns[MVM_SORT.col] || sortFns.verdict;
+  const byDelta = [...rows].sort(sortFn);
+  if (MVM_SORT.dir === 'desc') byDelta.reverse();
 
   const fmtPct = v => `${Math.round(v * 100)}%`;
   const tbl = byDelta.map(r => {
@@ -2329,16 +2351,28 @@ function renderModelVsMarket() {
   const mktFavRight = rows.filter(r =>
     (r.mktLo > 0.5 && r.loWon) || (r.mktLo < 0.5 && !r.loWon)).length;
 
+  // Sort-arrow glyph for the active column
+  const arrow = col => MVM_SORT.col === col
+    ? `<span style="font-size:9px;margin-left:3px;color:var(--ink)">${MVM_SORT.dir === 'desc' ? '▼' : '▲'}</span>`
+    : '';
+  const thStyle = 'padding:6px 4px;cursor:pointer;user-select:none';
+  const thStyleR = 'padding:6px 4px;text-align:right;cursor:pointer;user-select:none';
+
   el.innerHTML = `
     <div style="font-weight:600;color:var(--ink);font-size:13px;margin-bottom:6px">
       Model vs Market — active tournament${activeIds.size > 1 ? 's' : ''}
     </div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      Our model's win-prob (using current player data) compared to the de-vigged market consensus on completed matches in the live event.
-      Sorted by absolute disagreement — biggest deltas at the top.
-      Note: model uses CURRENT bio data, not pre-match snapshots, so this isn't a true forecast backtest. It surfaces where our model would systematically disagree with the market today.
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55">
+      <strong style="color:var(--ink)">Model</strong> = our predictor's win-prob from current player data (Elo, surface, form, composite, H2H).
+      <strong style="color:var(--ink)">Market</strong> = bookmakers' implied prob from decimal odds, de-vigged (1/odds normalized so both sides sum to 100%, removing the bookie's edge).
+      <br>
+      Diagnostic, not a competition: the "favorite picked correctly" line below scores both side-by-side. The table surfaces where the two disagree.
+      <br>
+      <em>Caveat:</em> model uses current bio data — not a pre-match snapshot — so this isn't a forecast backtest. Treat it as "what would today's model have said about yesterday's match?"
+      <br>
+      <em>Why no market column on upcoming matches?</em> Bookmakers post lines a few hours before each match starts, and only some books are exposed by our API feed. Past-match odds are stored in the match record at the time of play; future-match odds populate as lines drop.
     </div>
-    <div style="display:flex;gap:18px;font-size:11px;color:var(--muted);margin-bottom:12px">
+    <div style="display:flex;gap:18px;font-size:11px;color:var(--muted);margin-bottom:12px;flex-wrap:wrap">
       <div><strong style="color:var(--ink)">${rows.length}</strong> completed matches</div>
       <div>Favorite picked correctly — model: <strong style="color:var(--ink)">${modelFavRight}/${rows.length}</strong> (${Math.round(modelFavRight/rows.length*100)}%)</div>
       <div>Market: <strong style="color:var(--ink)">${mktFavRight}/${rows.length}</strong> (${Math.round(mktFavRight/rows.length*100)}%)</div>
@@ -2346,13 +2380,13 @@ function renderModelVsMarket() {
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse">
       <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line)">
-        <th style="padding:6px 4px">Date</th>
+        <th style="${thStyle}"  onclick="setMvmSort('date')">Date${arrow('date')}</th>
         <th style="padding:6px 4px">Match</th>
         <th style="padding:6px 4px">Round</th>
-        <th style="padding:6px 4px;text-align:right">Model</th>
-        <th style="padding:6px 4px;text-align:right">Market</th>
-        <th style="padding:6px 4px;text-align:right">Δ% pts</th>
-        <th style="padding:6px 4px">Verdict</th>
+        <th style="${thStyleR}" onclick="setMvmSort('model')">Model${arrow('model')}</th>
+        <th style="${thStyleR}" onclick="setMvmSort('market')">Market${arrow('market')}</th>
+        <th style="${thStyleR}" onclick="setMvmSort('delta')">Δ% pts${arrow('delta')}</th>
+        <th style="${thStyle}"  onclick="setMvmSort('verdict')">Verdict${arrow('verdict')}</th>
       </tr></thead>
       <tbody>${tbl}</tbody>
     </table>
