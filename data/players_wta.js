@@ -132,4 +132,28 @@ const PLAYERS_WTA = [
   {id:128, name:"Anett Kontaveit",           ab:"Kontaveit",    nat:"EST",age:30,surf:{H:0.58,C:0.55,G:0.56},form:"WLWWLWLWWL",inj:false},
   {id:129, name:"Timea Babos",               ab:"Babos",        nat:"HUN",age:30,surf:{H:0.53,C:0.54,G:0.52},form:"WLWWLWLWWL",inj:false},
   {id:130, mid:51151, name:"Diane Parry",               ab:"Parry",        nat:"FRA",age:21,surf:{H:0.53,C:0.56,G:0.51},form:"WLWWLWLWWL",inj:false},
+  // ────── auto-expanded by expand_bios.py ──────
+  {id:131, mid:4110, name:"Tatjana Maria", ab:"Maria", nat:"GER", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 5 QF+ T12M runs (rounds: Final,1/2,1/4, last: 2026-04-18)
+  {id:132, mid:13621, name:"Taylor Townsend", ab:"Townsend", nat:"USA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 3 QF+ T12M runs (rounds: 1/4,Final, last: 2026-03-01)
+  {id:133, mid:18427, name:"Kimberly Birrell", ab:"Birrell", nat:"AUS", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 3 QF+ T12M runs (rounds: 1/4,1/2, last: 2026-02-28)
+  {id:134, mid:71092, name:"Nikola Bartunkova", ab:"Bartunkova", nat:"CZE", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 3 QF+ T12M runs (rounds: 1/4,1/2, last: 2026-02-05)
+  {id:135, mid:75313, name:"Veronika Podrez", ab:"Podrez", nat:"UKR", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 2 QF+ T12M runs (rounds: 1/4,Final, last: 2026-04-19)
+  {id:136, mid:70327, name:"Victoria Jimenez Kasintseva", ab:"Kasintseva", nat:"AND", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 2 QF+ T12M runs (rounds: 1/4, last: 2026-02-27)
+  {id:137, mid:52790, name:"Katie Volynets", ab:"Volynets", nat:"USA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 2 QF+ T12M runs (rounds: 1/4,1/2, last: 2026-02-06)
+  {id:138, mid:70326, name:"Taylah Preston", ab:"Preston", nat:"AUS", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 2 QF+ T12M runs (rounds: 1/4,1/2, last: 2026-01-16)
+  {id:139, mid:61291, name:"Anouk Koevermans", ab:"Koevermans", nat:"NED", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 2 QF+ T12M runs (rounds: 1/2,Final, last: 2025-07-27)
+  {id:140, mid:79778, name:"Lilli Tagger", ab:"Tagger", nat:"AUT", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2026-04-10)
+  {id:141, mid:59448, name:"Oksana Selekhmeteva", ab:"Selekhmeteva", nat:"RUS", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2026-02-27)
+  {id:142, mid:55173, name:"Daria Snigur", ab:"Snigur", nat:"UKR", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/2, last: 2026-02-06)
+  {id:143, mid:43323, name:"Maja Chwalinska", ab:"Chwalinska", nat:"POL", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2026-02-05)
+  {id:144, mid:70328, name:"Sofia Costoulas", ab:"Costoulas", nat:"BEL", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2026-01-09)
+  {id:145, mid:61881, name:"Solana Sierra", ab:"Sierra", nat:"ARG", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2026-01-07)
+  {id:146, mid:9503, name:"Ajla Tomljanovic", ab:"Tomljanovic", nat:"AUS", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-10-17)
+  {id:147, mid:39908, name:"Suzan Lamens", ab:"Lamens", nat:"NED", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-09-20)
+  {id:148, mid:72064, name:"Ella Seidel", ab:"Seidel", nat:"GER", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-09-20)
+  {id:149, mid:66176, name:"Marina Stakusic", ab:"Stakusic", nat:"CAN", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-09-12)
+  {id:150, mid:72881, name:"Tatiana Prozorova", ab:"Prozorova", nat:"RUS", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/2, last: 2025-07-26)
+  {id:151, mid:11449, name:"Ons Jabeur", ab:"Jabeur", nat:"TUN", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-06-20)
+  {id:152, mid:11575, name:"Danielle Rose Collins", ab:"Collins", nat:"USA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/2, last: 2025-05-23)
+
 ];
