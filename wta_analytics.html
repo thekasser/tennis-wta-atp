@@ -80,9 +80,19 @@ body.tab-trapezoid #btn-both{display:inline-flex}
 .sticky-nav .tour-toggle{margin-left:auto}
 :root{--sticky-top:68px}
 @media (max-width:760px){:root{--sticky-top:120px}.sticky-nav{flex-direction:column;align-items:stretch}.sticky-nav .tour-toggle{margin-left:0;align-self:flex-start}}
-/* Page-level table headers stay visible while rows scroll. Modal tables also
-   benefit (they stick to the modal's scroll container automatically). */
-table th{position:sticky;top:var(--sticky-top);z-index:5;background:#ecebe1}
+/* Filter rows above tables — sticky between the tab nav and column headers.
+   So as you scroll: nav stays, then filter row (which filters/toggles are
+   active), then column header — column meaning never gets lost. */
+.filter-row, .tbl-wrap > .tbl-title{position:sticky;top:var(--sticky-top);z-index:6;background:var(--bg-panel);padding:14px 18px}
+.filter-row{padding:12px 18px;border-bottom:1px solid var(--line)}
+/* Column headers stack just below the filter row. The 56px offset matches
+   the rendered height of .filter-row / .tbl-title at standard viewport. */
+table th{position:sticky;top:calc(var(--sticky-top) + 56px);z-index:5;background:#ecebe1}
+/* Trapezoid controls grid is taller — give its table headers a deeper offset
+   so the dropdowns fully cover the rows above as you scroll. */
+.trap-controls{position:sticky;top:var(--sticky-top);z-index:6;background:var(--bg);padding-top:8px;padding-bottom:8px}
+#trap-table th{top:calc(var(--sticky-top) + 160px)}
+/* Modal tables stick to top of their own scroll container, no nav offset. */
 .modal table th{top:0;background:#f4efe4}
 .tab-btn{padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all .15s;font-family:inherit}
 .tab-btn:hover{color:var(--ink)}
@@ -288,6 +298,13 @@ select:focus{outline:none;border-color:var(--tc)}
    viewport. On mobile we re-enable overflow-x:auto for horizontal scroll. */
 .trap-table-wrap{overflow:clip}
 @media (max-width:760px){.trap-table-wrap{overflow-x:auto}}
+/* Chevron rotation for predictor breakdown <details> */
+#pred-breakdown[open] summary span{transform:rotate(90deg)}
+.pred-breakdown-row{display:grid;grid-template-columns:1fr 110px 60px 110px 90px 60px;gap:8px;align-items:center;padding:6px 0;font-size:11px;border-bottom:1px solid var(--line)}
+.pred-breakdown-row:last-child{border-bottom:0}
+.pred-breakdown-row.head{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:9px;padding-bottom:8px}
+.pred-breakdown-bar{height:5px;border-radius:3px;background:var(--bg-soft);position:relative;overflow:hidden}
+.pred-breakdown-bar div{position:absolute;top:0;bottom:0}
 #trap-table table{width:100%;border-collapse:collapse;font-size:12.5px}
 #trap-table th{padding:11px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);background:#ecebe1;cursor:pointer;white-space:nowrap;user-select:none;border-bottom:1px solid var(--line);position:sticky;top:var(--sticky-top);z-index:5}
 #trap-table th:hover{color:var(--ink)}
@@ -490,6 +507,12 @@ select:focus{outline:none;border-color:var(--tc)}
         <div><div class="val" id="pred-prob-b" style="font-size:42px;font-family:'Fraunces',serif;font-weight:600;color:var(--accent-rose);letter-spacing:-.03em">—</div><div style="font-size:12px;color:var(--muted);margin-top:4px" id="pred-name-b">Player B</div></div>
       </div>
       <div id="pred-conf" style="font-size:12px;margin-top:12px;font-weight:600"></div>
+      <details id="pred-breakdown" style="margin-top:18px;text-align:left;border-top:1px solid var(--line);padding-top:14px">
+        <summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;list-style:none;display:flex;align-items:center;gap:6px">
+          <span style="display:inline-block;transition:transform .15s">▸</span> Why this prediction?
+        </summary>
+        <div id="pred-breakdown-content" style="margin-top:12px"></div>
+      </details>
     </div>
     <div class="two-col">
       <div class="chart-card"><h3>Win Probability</h3><div class="chart-wrap" style="height:200px"><canvas id="chart-pie"></canvas></div></div>
@@ -870,77 +893,121 @@ function ytdRankFor(bioId) {
   return idx >= 0 ? idx + 1 : null;
 }
 
-// Win-prob model. Five independent signals blended with weight tuned per
-// availability:
-//   1. Effective rank — blend of T12M rank and YTD rank, captures both
-//      historical body of work AND recent trajectory. Old model used T12M
-//      alone, which over-weighted faded former top-30s like JBM (T12M=51,
-//      YTD=84) and under-weighted comeback players like Pliskova (T12M=130,
-//      YTD=24). The blend halves that distortion.
-//   2. Surface win % — head-to-head per-surface rates from bios.
-//   3. Form — recent W/L% (filtered to tour-only main draw).
-//   4. Composite (NEW) — z-score from trapezoid metrics: serve %, return %,
-//      BP saved, tiebreak %, deciding-set %, match-win %. Captures everything
-//      the model's other signals miss. Sigmoid scales 1z→65%, 2z→80%.
-//   5. H2H — pairwise record when ≥2 prior meetings.
+// Pts-based Elo. T12M + YTD captures both rolling-12mo strength and recent
+// trajectory (YTD double-counts the calendar-year subset, naturally weighting
+// recent results). √ flattens the top so #1 vs #2 stays close while #2 vs #3
+// chasms remain — rank-position-based elo couldn't see those gaps. Scale 8
+// chosen so #1 vs #100 ≈ 90%, #1 vs #2 ≈ 55%.
+function effectiveElo(p) {
+  const pts = (p.pts || 0) + (p.ytd || 0);
+  return pts > 0 ? Math.sqrt(pts) * 8 : 0;
+}
+
+// Win-prob model with full breakdown. Returns { prob, breakdown } so the
+// "Why this prediction?" UI can show exactly how each signal contributed.
 //
-// Composite gets a deliberately heavy weight (~30%) when both players have
-// it — it's the most predictive single signal because it aggregates many
-// metric performances over a stable sample size.
-function matchProb(pA, pB, surf) {
+// Signals (blended with weights tuned per signal availability):
+//   1. Elo from T12M + YTD points (replaces rank blend — pts-based captures
+//      top-of-tour chasms that rank-position smooths over).
+//   2. Surface win % — head-to-head fraction of each player's surface rate.
+//   3. Form — recent tour-only W/L%, fractional split.
+//   4. Composite z-score from trapezoid (serve%, return%, BP saved, TB%, dec
+//      set%, match win%). Sigmoid: 1z lead ≈ 67%, 2z ≈ 80%.
+//   5. H2H — pairwise record when prior meetings exist.
+//
+// Composite gets ~30% weight when available — it aggregates many metrics
+// over a stable sample, the most predictive single signal we have.
+function matchProbBreakdown(pA, pB, surf) {
   const sk = surf==='Hard'?'H':surf==='Clay'?'C':'G';
   const lo=Math.min(pA.id,pB.id),hi=Math.max(pA.id,pB.id);
   const h2d=h2hDb()[`${lo}-${hi}`];
 
-  // 1. Rank blend (T12M + YTD, equal weight)
-  const ytdA = ytdRankFor(pA.id) || pA.rank;
-  const ytdB = ytdRankFor(pB.id) || pB.rank;
-  const effA = (pA.rank + ytdA) / 2;
-  const effB = (pB.rank + ytdB) / 2;
-  const eloA = 2300 - (effA-1)*18;
-  const eloB = 2300 - (effB-1)*18;
+  // 1. Elo from points
+  const eloA = effectiveElo(pA);
+  const eloB = effectiveElo(pB);
   const eloP = 1/(1+Math.pow(10,(eloB-eloA)/400));
 
   // 2. Surface
   const sA = pA.surf[sk], sB = pB.surf[sk];
-  const surfP = sA/(sA+sB);
+  const surfP = (sA+sB) > 0 ? sA/(sA+sB) : .5;
 
   // 3. Form
   const fA = formPct(pA.form)/100, fB = formPct(pB.form)/100;
   const formP = (fA + fB) > 0 ? fA/(fA+fB) : .5;
 
-  // 4. Composite z delta → win prob via sigmoid. 0.7 slope means a 1z lead
-  // ≈ 67% expected win prob, 2z ≈ 80%. Calibrated to be meaningful but not
-  // dominant — the predictor still respects rank when composite is borderline.
+  // 4. Composite z-delta → sigmoid
   const cA = lookupComposite(pA.id);
   const cB = lookupComposite(pB.id);
-  let compP = .5, compAvail = false;
+  let compP = .5, compAvail = false, compZA = null, compZB = null;
   if (cA && cB) {
-    compP = 1/(1 + Math.exp(-(cA.composite - cB.composite) * 0.7));
+    compZA = cA.composite; compZB = cB.composite;
+    compP = 1/(1 + Math.exp(-(compZA - compZB) * 0.7));
     compAvail = true;
   }
 
   // 5. H2H
-  let h2hP = .5;
+  let h2hP = .5, h2hAvail = false, aW = 0, bW = 0;
   if (h2d) {
-    const tot = h2d.aW + h2d.bW;
-    const aW = pA.id < pB.id ? h2d.aW : h2d.bW;
-    h2hP = tot > 0 ? aW/tot : .5;
+    aW = pA.id < pB.id ? h2d.aW : h2d.bW;
+    bW = pA.id < pB.id ? h2d.bW : h2d.aW;
+    const tot = aW + bW;
+    if (tot > 0) { h2hP = aW/tot; h2hAvail = true; }
   }
 
-  // 6. Weights — composite included when available shifts most weight away
-  // from rank/surface (which over-weighted T12M previously).
-  let p;
-  if (h2d && compAvail) {
-    p = eloP*.15 + surfP*.22 + formP*.18 + h2hP*.15 + compP*.30;
-  } else if (h2d) {
-    p = eloP*.20 + surfP*.30 + formP*.25 + h2hP*.25;
-  } else if (compAvail) {
-    p = eloP*.18 + surfP*.27 + formP*.22 + compP*.33;
-  } else {
-    p = eloP*.25 + surfP*.40 + formP*.35;
-  }
-  return Math.min(.95, Math.max(.05, p));
+  // 6. Weight blend depends on signal availability
+  let weights;
+  if (h2hAvail && compAvail)      weights = { elo:.15, surf:.22, form:.18, h2h:.15, comp:.30 };
+  else if (h2hAvail)              weights = { elo:.20, surf:.30, form:.25, h2h:.25, comp:0 };
+  else if (compAvail)             weights = { elo:.18, surf:.27, form:.22, h2h:0,   comp:.33 };
+  else                            weights = { elo:.25, surf:.40, form:.35, h2h:0,   comp:0 };
+
+  const rawProb =
+      weights.elo  * eloP
+    + weights.surf * surfP
+    + weights.form * formP
+    + weights.h2h  * h2hP
+    + weights.comp * compP;
+  const prob = Math.min(.95, Math.max(.05, rawProb));
+
+  // Breakdown rows ordered by contribution magnitude relative to 50% (the
+  // "neutral" reading). Each row shows raw values, signal_p, weight, and
+  // the player it's pushing toward.
+  const rows = [];
+  const pushRow = (key, label, rawA, rawB, sigP, w, note) => {
+    if (w <= 0) return;
+    // contribution to A's prob, relative to neutral 0.5: w * (sigP - 0.5)
+    const nudge = w * (sigP - 0.5) * 100;  // +ve = toward A, in % points
+    rows.push({ key, label, rawA, rawB, sigP, weight: w, nudge, note });
+  };
+  pushRow('elo',  'Elo (T12M + YTD pts)',
+          `${pA.pts.toLocaleString()} + ${pA.ytd.toLocaleString()}`,
+          `${pB.pts.toLocaleString()} + ${pB.ytd.toLocaleString()}`,
+          eloP, weights.elo,
+          `${pA.ab} elo ${Math.round(eloA)} vs ${pB.ab} elo ${Math.round(eloB)}`);
+  pushRow('surf', `${surf} win %`,
+          `${Math.round(sA*100)}%`, `${Math.round(sB*100)}%`,
+          surfP, weights.surf, null);
+  pushRow('form', 'Form (last 10)',
+          `${formPct(pA.form)}%`, `${formPct(pB.form)}%`,
+          formP, weights.form, null);
+  if (compAvail) pushRow('comp', `Composite (${cA.period})`,
+          `${compZA >= 0 ? '+' : ''}${compZA.toFixed(2)}z`,
+          `${compZB >= 0 ? '+' : ''}${compZB.toFixed(2)}z`,
+          compP, weights.comp,
+          'z-score across serve/return/BP-saved/TB/dec-set/match-win');
+  if (h2hAvail) pushRow('h2h', 'Head-to-head',
+          `${aW} W`, `${bW} W`, h2hP, weights.h2h,
+          h2d?.last ? `last: ${h2d.last}` : null);
+
+  // Sort by absolute nudge so biggest movers show first
+  rows.sort((a, b) => Math.abs(b.nudge) - Math.abs(a.nudge));
+
+  return { prob, breakdown: rows, weights, eloA, eloB };
+}
+
+// Back-compat wrapper — most callers just want the number.
+function matchProb(pA, pB, surf) {
+  return matchProbBreakdown(pA, pB, surf).prob;
 }
 
 // ═══════════════════════════════════════
@@ -1738,7 +1805,8 @@ function renderPredict() {
   // toggle — predictive accuracy matters here, W125 W's are noise.
   pA.form = derivedForm(pA.id, pA.form, 'tour');
   pB.form = derivedForm(pB.id, pB.form, 'tour');
-  const prob=matchProb(pA,pB,surf);
+  const breakdown = matchProbBreakdown(pA, pB, surf);
+  const prob = breakdown.prob;
   const fA=formPct(pA.form),fB=formPct(pB.form);
 
   function pStats(p,col) {
@@ -1797,6 +1865,49 @@ function renderPredict() {
   const confC=prob>=.75||prob<=.25?'#406b5f':'#a06d1c';
   document.getElementById('pred-conf').textContent=conf;
   document.getElementById('pred-conf').style.color=confC;
+
+  // ── Breakdown table: each signal's raw values, signal_p, weight, and the
+  // % point nudge it contributed to A's win prob (relative to a 50% baseline).
+  const bdEl = document.getElementById('pred-breakdown-content');
+  if (bdEl) {
+    const maxAbs = Math.max(...breakdown.breakdown.map(r => Math.abs(r.nudge)), 0.001);
+    const rowHtml = breakdown.breakdown.map(r => {
+      const toA = r.nudge > 0;
+      const barWidth = (Math.abs(r.nudge) / maxAbs) * 100;   // 0–100% of max bar width
+      const barColor = toA ? TC : TC_B;
+      const barX = toA ? `right:50%` : `left:50%`;
+      return `
+        <div class="pred-breakdown-row" title="${r.note ? r.note.replace(/"/g,'&quot;') : ''}">
+          <div style="font-weight:600">${r.label}</div>
+          <div style="text-align:right;color:${TC};font-weight:600">${r.rawA}</div>
+          <div style="text-align:center;color:var(--muted);font-size:10px">vs</div>
+          <div style="color:${TC_B};font-weight:600">${r.rawB}</div>
+          <div class="pred-breakdown-bar"><div style="${barX};width:${barWidth/2}%;background:${barColor}"></div></div>
+          <div style="text-align:right;font-weight:700;color:${toA ? TC : TC_B};font-variant-numeric:tabular-nums">${r.nudge >= 0 ? '+' : ''}${r.nudge.toFixed(1)}</div>
+        </div>`;
+    }).join('');
+    bdEl.innerHTML = `
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+        Each signal nudges the prediction toward <strong style="color:${TC}">${pA.ab}</strong> or
+        <strong style="color:${TC_B}">${pB.ab}</strong> in % points relative to the 50% baseline.
+        Bar length is relative to the largest contributor.
+      </div>
+      <div class="pred-breakdown-row head">
+        <div>Signal</div>
+        <div style="text-align:right">${pA.ab}</div>
+        <div></div>
+        <div>${pB.ab}</div>
+        <div style="text-align:center">Edge</div>
+        <div style="text-align:right">Δ% pts</div>
+      </div>
+      ${rowHtml}
+      <div style="font-size:10px;color:var(--muted);margin-top:10px;font-style:italic;line-height:1.5">
+        Signals: Elo derived from <code>√(T12M_pts + YTD_pts) × 8</code>; surface and form use head-to-head fractional splits;
+        composite is z-score across serve/return/BP-saved/TB/dec-set/match-win, sigmoid-mapped (1z lead ≈ 67%).
+        Weights: ${Object.entries(breakdown.weights).filter(([,w]) => w > 0).map(([k,w]) => `${k} ${Math.round(w*100)}%`).join(' · ')}.
+      </div>
+    `;
+  }
 
   destroyChart('chart-pie');
   const pieCtx=document.getElementById('chart-pie').getContext('2d');
