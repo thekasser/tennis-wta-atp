@@ -1,19 +1,19 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-04T20:35:21.670021+00:00
+# Generated: 2026-05-05T00:41:43.471909+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       204
   tournaments                   133
-  matches                    11,192
-  rankings_snapshots            408
-  api_fetch_log               3,446
+  matches                    11,219
+  rankings_snapshots            610
+  api_fetch_log               3,913
 
-## Latest rankings snapshot: 2026-05-04
+## Latest rankings snapshot: 2026-05-05
 
 ## Active tournaments
-  madrid26       Mutua Madrid Open                matches=208  latest=2026-05-03
+  madrid26       Mutua Madrid Open                matches=209  latest=2026-05-03
 
 ## 5 most recent matches anywhere in DB
   2026-05-04  Q1        p1=94493 p2=24721 winner=94493  (Internazionali BNL d'Italia - Rome)
