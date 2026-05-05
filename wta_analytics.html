@@ -329,6 +329,9 @@ select:focus{outline:none;border-color:var(--tc)}
         <button class="flt-btn active" id="rflt-all"   onclick="setRankFilter('all')">All 100</button>
         <button class="flt-btn"        id="rflt-top20" onclick="setRankFilter('top20')">Top 20</button>
         <button class="flt-btn"        id="rflt-movers"onclick="setRankFilter('movers')">Movers</button>
+        <span class="filter-label" style="margin-left:18px">Form:</span>
+        <button class="flt-btn" data-form-filter="tour" onclick="setFormFilter('tour')" title="Form bar uses only cataloged tour-level main-draw matches (excludes W125/ITF/Challenger and qualifiers). Best for predictive signal.">Tour only</button>
+        <button class="flt-btn" data-form-filter="all"  onclick="setFormFilter('all')"  title="Form bar uses every recent match — including W125/ITF wins and qualifiers. Reflects pure recent activity.">All matches</button>
         <button class="flt-btn" id="rflt-proj" onclick="toggleProjRankings()" title="Reorder rankings using projected T12M pts from active draw — players not in any draw keep their current pts" style="margin-left:auto">Projected Rankings</button>
       </div>
       <table id="tbl-rankings">
@@ -593,18 +596,70 @@ const ATP_H2H = {
   "3-4":{aW:10,bW:6,s:{H:"6–4",C:"3–1",G:"1–1"},rec:[4,3,4,3,3]},
 };
 
+// Cataloged tour-level apiIds, lazily built from TOURNAMENTS_DATA. Used to
+// distinguish tour-level matches from W125 / ITF / Challenger / Futures in
+// the form-bar tier filter. Tour main-draw qualifiers ("Q1", "Q2") are
+// excluded separately by round-prefix check.
+let _TOUR_API_IDS = null;
+function _tourApiIds() {
+  if (_TOUR_API_IDS) return _TOUR_API_IDS;
+  if (typeof TOURNAMENTS_DATA === 'undefined') return new Set();
+  _TOUR_API_IDS = new Set();
+  TOURNAMENTS_DATA.forEach(t => {
+    if (t.apiId?.atp) _TOUR_API_IDS.add(t.apiId.atp);
+    if (t.apiId?.wta) _TOUR_API_IDS.add(t.apiId.wta);
+  });
+  return _TOUR_API_IDS;
+}
+function _isTourMatch(m) {
+  if (!m || !m.tId) return false;
+  if (!_tourApiIds().has(m.tId)) return false;
+  // Drop qualifying rounds — the API uses "Q1", "Q2", "Qual" etc.
+  const rd = String(m.rd || '');
+  if (rd.startsWith('Q') || rd.startsWith('q')) return false;
+  return true;
+}
+
+// User-facing toggle: 'tour' (cataloged main-draw only, the predictive lens)
+// or 'all' (raw recent activity, the W125/ITF wins are visible). Persisted in
+// localStorage so it carries across reloads.
+let FORM_FILTER = (() => {
+  try { return localStorage.getItem('formFilter') || 'tour'; }
+  catch { return 'tour'; }
+})();
+function setFormFilter(f) {
+  FORM_FILTER = f;
+  try { localStorage.setItem('formFilter', f); } catch {}
+  document.querySelectorAll('[data-form-filter]').forEach(b =>
+    b.classList.toggle('active', b.dataset.formFilter === f));
+  if (CURRENT_TAB === 'rankings') renderRankings();
+  if (CURRENT_TAB === 'live') renderLive();
+}
+
 // Derive a form string ("WLWWLLWWLW", oldest→newest) from RECENT_MATCHES for
 // a given bio. Falls back to the hand-curated string in players_*.js when no
 // recent data is available (e.g. bios without a Matchstat ID).
-function derivedForm(bioId, fallback) {
+//
+// `mode`:
+//   'tour' (default) — cataloged tour-level main-draw matches only. Drops
+//     W125/ITF/Challenger and qualifying rounds. Best for predictive signal.
+//   'all'            — every match in the buffer, no filtering. Reflects
+//     pure recent activity regardless of tier.
+//
+// When the filtered set is small (<5), we keep walking back through the
+// 30-match buffer rather than padding with placeholders — explicit truth.
+function derivedForm(bioId, fallback, mode) {
   if (typeof RECENT_MATCHES === 'undefined' || !RECENT_MATCHES) return fallback;
   const tourKey = (typeof TOUR === 'string' ? TOUR : '').toLowerCase();
   const recs = (RECENT_MATCHES[tourKey] || {})[bioId];
   if (!Array.isArray(recs) || !recs.length) return fallback;
+  const m = mode || FORM_FILTER || 'tour';
+  const filtered = m === 'tour' ? recs.filter(_isTourMatch) : recs;
+  if (!filtered.length) return fallback;
   // RECENT_MATCHES is newest-first; reverse so the form string reads oldest→newest
   // (matches the `str.slice(-n)` convention used by formBarHTML).
-  return recs.slice().reverse()
-    .map(m => m.won === true ? 'W' : (m.won === false ? 'L' : '?'))
+  return filtered.slice().reverse()
+    .map(r => r.won === true ? 'W' : (r.won === false ? 'L' : '?'))
     .filter(c => c !== '?')
     .join('');
 }
@@ -709,19 +764,34 @@ function formSparkline(formStr, w=72, h=18) {
 // box gets a hover tooltip with date / tournament / round / opponent / score.
 // Form chars are oldest→newest; recent_matches.js emits newest-first, so we
 // reverse + right-align before pairing.
-function formBarHTML(str, bioId=null, n=10) {
+//
+// `mode` mirrors derivedForm: 'tour' filters recents to cataloged main-draw,
+// 'all' uses everything. Tooltips and the form string MUST share the same
+// filter or boxes will misalign with their tooltip data. When the filtered
+// sample is < 5, a "limited sample" badge follows the boxes — explicit truth
+// per the agreed UX.
+function formBarHTML(str, bioId=null, n=10, mode) {
+  const m = mode || FORM_FILTER || 'tour';
   const chars = (str || '').slice(-n).split('');
   const tourKey = (typeof TOUR === 'string' ? TOUR : '').toLowerCase();
-  const recentArr = (typeof RECENT_MATCHES !== 'undefined' && RECENT_MATCHES
-                     && RECENT_MATCHES[tourKey] && RECENT_MATCHES[tourKey][bioId]) || [];
-  const recOldestFirst = recentArr.slice(0, n).reverse();        // align with form chars
+  const rawArr = (typeof RECENT_MATCHES !== 'undefined' && RECENT_MATCHES
+                  && RECENT_MATCHES[tourKey] && RECENT_MATCHES[tourKey][bioId]) || [];
+  const filtered = m === 'tour' ? rawArr.filter(_isTourMatch) : rawArr;
+  const recOldestFirst = filtered.slice(0, n).reverse();        // align with form chars
   const offset = chars.length - recOldestFirst.length;
-  return chars.map((c, i) => {
+  const boxes = chars.map((c, i) => {
     const rec    = (i >= offset) ? recOldestFirst[i - offset] : null;
     const tip    = rec ? formTooltipText(rec) : '';
     const tipAtt = tip ? ` data-tooltip="${tip.replace(/"/g, '&quot;')}"` : '';
     return `<div class="form-box"${tipAtt} style="background:${c==='W'?'#406b5f':'#8f5a52'}">${c}</div>`;
   }).join('');
+  // Limited-sample badge: only flag in tour mode when filter dropped a lot.
+  const total = chars.length;
+  const limited = m === 'tour' && total > 0 && total < 5;
+  const badge = limited
+    ? `<span style="font-size:9px;color:var(--accent-amber);background:rgba(212,164,82,0.12);padding:2px 6px;border-radius:8px;margin-left:6px;letter-spacing:.05em" title="Only ${total} cataloged tour-level main-draw match${total===1?'':'es'} in this player's recent buffer. Most of their activity is at W125 / ITF / Challenger level — toggle to 'All matches' for the full picture.">limited tour sample</span>`
+    : '';
+  return boxes + badge;
 }
 function moveHTML(m) {
   if (m > 0) return `<span class="move-up">▲${m}</span>`;
@@ -1558,6 +1628,10 @@ function renderPredict() {
   if(!pA||!pB) return;
   const surf=document.getElementById('pred-surf')?.value||'Hard';
   const sk=surf==='Hard'?'H':surf==='Clay'?'C':'G';
+  // Predictor always uses the strict tour-only form regardless of the global
+  // toggle — predictive accuracy matters here, W125 W's are noise.
+  pA.form = derivedForm(pA.id, pA.form, 'tour');
+  pB.form = derivedForm(pB.id, pB.form, 'tour');
   const prob=matchProb(pA,pB,surf);
   const fA=formPct(pA.form),fB=formPct(pB.form);
 
@@ -1584,7 +1658,7 @@ function renderPredict() {
           <div style="color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">T12M Pts</div>
         </div>
       </div>
-      <div class="form-row" style="margin-top:8px;justify-content:center">${formBarHTML(p.form, p.id)}</div>
+      <div class="form-row" style="margin-top:8px;justify-content:center">${formBarHTML(p.form, p.id, 10, 'tour')}</div>
     `;
   }
   pStats(pA,'a'); pStats(pB,'b');
@@ -2167,6 +2241,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   document.body.className = 'tab-live';  // initial tab; keeps btn-both hidden
   setTour('WTA');
   buildSelects();
+  // Reflect persisted form-filter (Tour-only / All matches) on the toggle UI.
+  document.querySelectorAll('[data-form-filter]').forEach(b =>
+    b.classList.toggle('active', b.dataset.formFilter === FORM_FILTER));
 
   // Position the global proj-tooltip on hover. Uses fixed positioning so the
   // tooltip escapes the tbl-wrap overflow clipping that was the original bug.
@@ -2712,7 +2789,9 @@ function openPlayerModal(bioId, tour) {
 
   // Recent matches (up to 30 if pipeline has been refreshed)
   const recent = ((typeof RECENT_MATCHES !== 'undefined' && RECENT_MATCHES) ? (RECENT_MATCHES[tk] || {}) : {})[bioId] || [];
-  const fullForm = derivedForm(bioId, bio.form);
+  // Modal shows raw recent activity regardless of FORM_FILTER — this is a
+  // factual "what did this player just do" view; W125 results belong here.
+  const fullForm = derivedForm(bioId, bio.form, 'all');
 
   // H2H: pull all pairs involving this bio
   const h2hDb = ((typeof H2H !== 'undefined' && H2H) ? (H2H[tk] || {}) : {});
