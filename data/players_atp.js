@@ -174,5 +174,6 @@ const PLAYERS_ATP = [
   {id:171, mid:29180, name:"Billy Harris", ab:"Harris", nat:"GBR", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-06-26)
   {id:172, mid:68090, name:"Jacob Fearnley", ab:"Fearnley", nat:"GBR", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-06-20)
   {id:173, mid:91448, name:"Justin Engel", ab:"Engel", nat:"GER", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-06-13)
+  {id:174, mid:14432, name:"Pablo Carreno Busta", ab:"Carreno Busta", nat:"ESP", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // manually added 2026-05-04 — playing Rome qualis vs Wawrinka
 
 ];
