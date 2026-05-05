@@ -1096,11 +1096,24 @@ function matchProbBreakdown(pA, pB, surf) {
   // independence, the correct multiplier is between 1 (fully correlated) and
   // N=5 (fully independent). Tennis signals are correlated but not identical
   // (Elo and form share recency-of-results info but composite captures
-  // serve/return tendencies independently). Empirically calibrated against
-  // both tours' panels — k=2.5 closes the +20-30 pp mid-bin gap without
-  // significant overshoot in the 50-55 bin. Tune up if calibration still
-  // shows underconfidence; tune down if 50-55 bin starts overshooting.
-  const SHARPEN = 2.5;
+  // serve/return tendencies independently).
+  //
+  // History: previously k=2.5, tuned against the in-page calibration panel
+  // which showed +20-30pp underconfidence in mid bins. The 2026-05-05 PiT
+  // backtest (scripts/backtest.py) revealed that "underconfidence" was
+  // hindsight bias from using today's bios/composite/H2H on past matches —
+  // when scored on true pre-match data, the SAME k=2.5 was 17-25pp OVER-
+  // confident on the [0.70, 0.95) bins (predicted 75-93%, actually won
+  // 54-76%). Sweep across k ∈ {0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5} on
+  // 1844 PiT-scored 2026 matches showed monotonic Brier improvement as k
+  // dropped, bottoming at k=1.0 (Brier 0.232 vs 0.248 at k=2.5). At k=1.0
+  // composite-only calibration is within ±5pp on the populated bins.
+  //
+  // The dashboard's in-page calibration panel will look "overconfident"
+  // after this drop — that's a property of the panel (hindsight-biased
+  // inputs), NOT the model. Trust the offline PiT backtest, not the panel,
+  // for tuning decisions.
+  const SHARPEN = 1.0;
   const rawProb = 1 / (1 + Math.exp(-sumLogit * SHARPEN));
   const prob = Math.min(.95, Math.max(.05, rawProb));
 
