@@ -440,7 +440,9 @@ def _format_players_block(players: dict[int, dict]) -> str:
 # ─── 2. recent_matches.js ───────────────────────────────────────────────────
 
 def materialize_recent_matches(conn) -> bool:
-    """Per top-N bio: last 30 matches with the form-bar / drill-down fields."""
+    """Per top-N bio: last 30 matches with the form-bar / drill-down fields.
+    Also exposes opponent's bio_id (oppB) and pre-match odds (myOdd / oppOdd)
+    so the dashboard can compute model-vs-market deltas without a join."""
     out: dict[str, dict] = {"atp": {}, "wta": {}}
     bios = list(conn.execute("""
         SELECT mid, bio_id, tour, name FROM players
@@ -451,12 +453,19 @@ def materialize_recent_matches(conn) -> bool:
     mid_lookup = {row["mid"]: (row["name"], row["country"]) for row in conn.execute(
         "SELECT mid, name, country FROM players"
     )}
+    # Lookup: (tour, mid) → bio_id so we can attach opponent's bio_id to each
+    # match. None for non-bio'd opponents (qualifier outside top-200, etc.).
+    mid_to_bio: dict[tuple[str, int], int] = {
+        (row["tour"], row["mid"]): row["bio_id"]
+        for row in conn.execute("SELECT tour, mid, bio_id FROM players")
+    }
 
     for b in bios:
         mid = b["mid"]
+        tour = b["tour"]
         rows = list(conn.execute("""
             SELECT date, round, tournament_name, tournament_api_id,
-                   p1_id, p2_id, winner_id, score
+                   p1_id, p2_id, winner_id, score, raw
             FROM matches
             WHERE p1_id = ? OR p2_id = ?
             ORDER BY date DESC, round DESC
@@ -479,8 +488,28 @@ def materialize_recent_matches(conn) -> bool:
             }
             if r["tournament_api_id"]:
                 entry["tId"] = r["tournament_api_id"]
+            opp_bio = mid_to_bio.get((tour, opp_mid))
+            if opp_bio is not None:
+                entry["oppB"] = opp_bio
+            # Pre-match decimal odds. odd1/odd2 in raw map to p1/p2 by API
+            # convention; flip if WE are p2 so consumers can read myOdd/oppOdd
+            # without needing to know which side of the match we were on.
+            if r["raw"]:
+                try:
+                    raw = json.loads(r["raw"])
+                    o1 = raw.get("odd1")
+                    o2 = raw.get("odd2")
+                    if o1 is not None and o2 is not None:
+                        my_odd  = o1 if we_p1 else o2
+                        opp_odd = o2 if we_p1 else o1
+                        # Round to 2dp for compactness; keep as float (datalist
+                        # parses fine).
+                        entry["myOdd"]  = round(float(my_odd), 2)
+                        entry["oppOdd"] = round(float(opp_odd), 2)
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
             items.append(entry)
-        out[b["tour"]][str(b["bio_id"])] = items
+        out[tour][str(b["bio_id"])] = items
 
     hash_input = json.dumps(out, sort_keys=True, separators=(",", ":"))
     path = DATA_DIR / "recent_matches.js"

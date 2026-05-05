@@ -546,6 +546,7 @@ select:focus{outline:none;border-color:var(--tc)}
       <div class="chart-card"><h3>Player Comparison</h3><div class="chart-wrap" style="height:200px"><canvas id="chart-radar"></canvas></div></div>
     </div>
     <div class="card" id="h2h-panel"></div>
+    <div class="card" id="mvm-panel" style="margin-top:18px"></div>
   </div>
 </div>
 
@@ -2171,6 +2172,152 @@ function renderPredict() {
   } else {
     hp.innerHTML=`<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">ℹ️ No H2H data for this matchup. Prediction based on ranking, surface, and form only.</div>`;
   }
+
+  // ── Model-vs-Market panel (Phase 1) ────────────────────────────────────
+  // For each completed match in active tournaments where both players are
+  // bio'd, compute our current model's prediction and compare to the market's
+  // pre-match implied prob (de-vigged from decimal odds). The model uses
+  // CURRENT player data so this isn't a true backtest — it's "where does our
+  // model disagree with the market on matches that already happened?"
+  renderModelVsMarket();
+}
+
+function renderModelVsMarket() {
+  const el = document.getElementById('mvm-panel');
+  if (!el) return;
+  if (typeof RECENT_MATCHES === 'undefined' || !RECENT_MATCHES) { el.innerHTML = ''; return; }
+  const tk = TOUR.toLowerCase();
+  const recents = RECENT_MATCHES[tk] || {};
+
+  // Active tournament api_ids for this tour
+  const sd = seasonData();
+  const activeIds = new Set();
+  (sd.activeTournaments || []).forEach(at => {
+    const t = TOURNAMENTS_DATA.find(x => x.id === at.id);
+    if (t && t.apiId) {
+      if (TOUR === 'WTA' && t.apiId.wta) activeIds.add(t.apiId.wta);
+      if (TOUR === 'ATP' && t.apiId.atp) activeIds.add(t.apiId.atp);
+    }
+  });
+  if (!activeIds.size) {
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No active tournaments — model-vs-market view appears once an event is in progress.</div>`;
+    return;
+  }
+
+  // Walk all bios' recent matches, dedupe, filter to active tournaments.
+  // Each match appears in BOTH players' lists; canonical key = sorted bio_ids + date.
+  const seen = new Set();
+  const matches = [];
+  Object.entries(recents).forEach(([bidStr, list]) => {
+    const myBio = parseInt(bidStr);
+    (list || []).forEach(m => {
+      if (!m.tId || !activeIds.has(m.tId)) return;
+      if (m.oppB == null) return;          // opponent not bio'd → can't predict
+      if (m.myOdd == null || m.oppOdd == null) return;  // no odds → no market signal
+      const lo = Math.min(myBio, m.oppB);
+      const hi = Math.max(myBio, m.oppB);
+      const key = `${lo}-${hi}-${m.date}-${m.rd}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      // Always render from "lo" player's POV for stable display.
+      const fromLo = myBio === lo;
+      matches.push({
+        date: m.date, rd: m.rd, tn: m.tn, tId: m.tId,
+        loId: lo, hiId: hi,
+        loOdd: fromLo ? m.myOdd : m.oppOdd,
+        hiOdd: fromLo ? m.oppOdd : m.myOdd,
+        score: m.score,
+        loWon: fromLo ? (m.won === true) : (m.won === false),
+      });
+    });
+  });
+
+  if (!matches.length) {
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No completed matches in the active tournament(s) with both players in our roster + odds available yet.</div>`;
+    return;
+  }
+
+  // Sort newest first
+  matches.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  // For each match: compute model prob, market implied prob (de-vigged), delta
+  const psList = players();
+  const rows = matches.slice(0, 25).map(m => {
+    const pLo = psList.find(p => p.id === m.loId);
+    const pHi = psList.find(p => p.id === m.hiId);
+    if (!pLo || !pHi) return null;
+    const tourn = TOURNAMENTS_DATA.find(t =>
+      (t.apiId?.wta === m.tId) || (t.apiId?.atp === m.tId));
+    const surf = tourn?.surf === 'C' ? 'Clay' : tourn?.surf === 'G' ? 'Grass' : 'Hard';
+    const modelLo = matchProb(pLo, pHi, surf);
+    // De-vigged market implied prob: 1/odd / sum(1/odd)
+    const invLo = 1 / m.loOdd, invHi = 1 / m.hiOdd;
+    const mktLo = invLo / (invLo + invHi);
+    const delta = modelLo - mktLo;
+    return { ...m, pLo, pHi, surf, modelLo, mktLo, delta };
+  }).filter(Boolean);
+
+  // Sort by absolute delta to surface biggest disagreements at the top
+  const byDelta = [...rows].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
+  const fmtPct = v => `${Math.round(v * 100)}%`;
+  const tbl = byDelta.map(r => {
+    const winnerSide = r.loWon ? 'lo' : 'hi';
+    const loColor = winnerSide === 'lo' ? 'var(--accent-green)' : 'var(--ink)';
+    const hiColor = winnerSide === 'hi' ? 'var(--accent-green)' : 'var(--ink)';
+    const deltaPts = Math.round(r.delta * 100);
+    const deltaColor = deltaPts > 7 ? 'var(--accent-green)' :
+                       deltaPts < -7 ? 'var(--accent-rose)' : 'var(--muted)';
+    const deltaSign = deltaPts >= 0 ? '+' : '';
+    const verdict = Math.abs(deltaPts) >= 10
+      ? (deltaPts > 0 ? `Model bullish on ${r.pLo.ab}` : `Model bullish on ${r.pHi.ab}`)
+      : '';
+    return `<tr>
+      <td style="font-size:10px;color:var(--muted);white-space:nowrap">${r.date}</td>
+      <td style="font-size:11px;white-space:nowrap"><span style="color:${loColor};font-weight:600">${r.pLo.ab}</span> vs <span style="color:${hiColor};font-weight:600">${r.pHi.ab}</span></td>
+      <td style="font-size:10px;color:var(--muted)">${r.rd}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtPct(r.modelLo)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${fmtPct(r.mktLo)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:${deltaColor}">${deltaSign}${deltaPts}</td>
+      <td style="font-size:10px;color:var(--muted);max-width:180px">${verdict}</td>
+    </tr>`;
+  }).join('');
+
+  // Calibration: how often did the model's favorite actually win?
+  const modelFavRight = rows.filter(r =>
+    (r.modelLo > 0.5 && r.loWon) || (r.modelLo < 0.5 && !r.loWon)).length;
+  const mktFavRight = rows.filter(r =>
+    (r.mktLo > 0.5 && r.loWon) || (r.mktLo < 0.5 && !r.loWon)).length;
+
+  el.innerHTML = `
+    <div style="font-weight:600;color:var(--ink);font-size:13px;margin-bottom:6px">
+      Model vs Market — active tournament${activeIds.size > 1 ? 's' : ''}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+      Our model's win-prob (using current player data) compared to the de-vigged market consensus on completed matches in the live event.
+      Sorted by absolute disagreement — biggest deltas at the top.
+      Note: model uses CURRENT bio data, not pre-match snapshots, so this isn't a true forecast backtest. It surfaces where our model would systematically disagree with the market today.
+    </div>
+    <div style="display:flex;gap:18px;font-size:11px;color:var(--muted);margin-bottom:12px">
+      <div><strong style="color:var(--ink)">${rows.length}</strong> completed matches</div>
+      <div>Favorite picked correctly — model: <strong style="color:var(--ink)">${modelFavRight}/${rows.length}</strong> (${Math.round(modelFavRight/rows.length*100)}%)</div>
+      <div>Market: <strong style="color:var(--ink)">${mktFavRight}/${rows.length}</strong> (${Math.round(mktFavRight/rows.length*100)}%)</div>
+    </div>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line)">
+        <th style="padding:6px 4px">Date</th>
+        <th style="padding:6px 4px">Match</th>
+        <th style="padding:6px 4px">Round</th>
+        <th style="padding:6px 4px;text-align:right">Model</th>
+        <th style="padding:6px 4px;text-align:right">Market</th>
+        <th style="padding:6px 4px;text-align:right">Δ% pts</th>
+        <th style="padding:6px 4px">Verdict</th>
+      </tr></thead>
+      <tbody>${tbl}</tbody>
+    </table>
+    </div>
+  `;
 }
 
 // ═══════════════════════════════════════
