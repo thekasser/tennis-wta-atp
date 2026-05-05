@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-05T05:57:43.098763+00:00
+# Generated: 2026-05-05T20:49:26.648929+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       265
   tournaments                   133
-  matches                    11,614
-  rankings_snapshots            463
-  api_fetch_log                 822
+  matches                    11,624
+  rankings_snapshots            723
+  api_fetch_log               1,091
 
-## Latest rankings snapshot: 2026-05-04
+## Latest rankings snapshot: 2026-05-05
 
 ## Active tournaments
-  madrid26       Mutua Madrid Open                matches=228  latest=2026-05-03
+  rome26         Internazionali BNL d'Italia      matches= 21  latest=2026-05-05
 
 ## 5 most recent matches anywhere in DB
-  2026-05-04  Q1        p1=94493 p2=24721 winner=94493  (Internazionali BNL d'Italia - Rome)
-  2026-05-04  Q1        p1=18477 p2=82371 winner=18477  (Internazionali BNL d'Italia - Rome)
-  2026-05-04  Q1        p1=39152 p2=100196 winner=39152  (Internazionali BNL d'Italia - Rome)
-  2026-05-04  Q1        p1=58149 p2=111954 winner=58149  (Internazionali BNL d'Italia - Rome)
-  2026-05-04  Q1        p1=83223 p2=18094 winner=83223  (Internazionali BNL d'Italia - Rome)
+  2026-05-05  Q3        p1=29457 p2=94493 winner=29457  (Internazionali BNL d'Italia - Rome)
+  2026-05-05  Q3        p1=68090 p2=39152 winner=68090  (Internazionali BNL d'Italia - Rome)
+  2026-05-05  Q3        p1=14716 p2=58149 winner=14716  (Internazionali BNL d'Italia - Rome)
+  2026-05-05  Q3        p1=59166 p2=18477 winner=59166  (Internazionali BNL d'Italia - Rome)
+  2026-05-05  First     p1=64741 p2=101158 winner=64741  (Francavilla Challenger)
