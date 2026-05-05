@@ -298,6 +298,15 @@ select:focus{outline:none;border-color:var(--tc)}
    viewport. On mobile we re-enable overflow-x:auto for horizontal scroll. */
 .trap-table-wrap{overflow:clip}
 @media (max-width:760px){.trap-table-wrap{overflow-x:auto}}
+/* Custom autocomplete dropdown for matchup predictor — replaces native
+   <datalist> which Chrome hijacks with overlay autocomplete that overwrites
+   typed text. This dropdown is fully under our control. */
+.pred-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;max-height:280px;overflow-y:auto;background:var(--bg-elev);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);z-index:200;display:none;backdrop-filter:blur(6px)}
+.pred-search-item{padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--line)}
+.pred-search-item:last-child{border-bottom:0}
+.pred-search-item:hover,.pred-search-item.active{background:rgba(64,107,95,0.10)}
+.pred-search-item .meta{color:var(--muted);font-size:11px;margin-left:6px}
+.pred-search-empty{padding:10px 12px;color:var(--muted);font-style:italic;font-size:12px}
 /* Chevron rotation for predictor breakdown <details> */
 #pred-breakdown[open] summary span{transform:rotate(90deg)}
 .pred-breakdown-row{display:grid;grid-template-columns:1fr 110px 60px 110px 90px 60px;gap:8px;align-items:center;padding:6px 0;font-size:11px;border-bottom:1px solid var(--line)}
@@ -490,19 +499,29 @@ select:focus{outline:none;border-color:var(--tc)}
     <div class="two-col">
       <div class="card">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px">Player A</div>
-        <input id="pred-a-search" list="pred-a-list" placeholder="Search by name or rank…" autocomplete="off"
-               style="width:100%;margin-bottom:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:var(--bg-elev)"
-               oninput="onPredSearch('a')" onblur="onPredSearchBlur('a')">
-        <datalist id="pred-a-list"></datalist>
+        <div class="pred-search-wrap" style="position:relative;margin-bottom:8px">
+          <input id="pred-a-search" placeholder="Search by name or rank…" autocomplete="off"
+                 style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:var(--bg-elev)"
+                 oninput="filterPredResults('a')"
+                 onfocus="filterPredResults('a')"
+                 onblur="onPredSearchBlur('a')"
+                 onkeydown="onPredSearchKey(event,'a')">
+          <div id="pred-a-results" class="pred-search-results"></div>
+        </div>
         <select id="pred-a" onchange="renderPredict()" style="display:none"></select>
         <div id="pred-a-stats"></div>
       </div>
       <div class="card">
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px">Player B</div>
-        <input id="pred-b-search" list="pred-b-list" placeholder="Search by name or rank…" autocomplete="off"
-               style="width:100%;margin-bottom:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:var(--bg-elev)"
-               oninput="onPredSearch('b')" onblur="onPredSearchBlur('b')">
-        <datalist id="pred-b-list"></datalist>
+        <div class="pred-search-wrap" style="position:relative;margin-bottom:8px">
+          <input id="pred-b-search" placeholder="Search by name or rank…" autocomplete="off"
+                 style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:var(--bg-elev)"
+                 oninput="filterPredResults('b')"
+                 onfocus="filterPredResults('b')"
+                 onblur="onPredSearchBlur('b')"
+                 onkeydown="onPredSearchKey(event,'b')">
+          <div id="pred-b-results" class="pred-search-results"></div>
+        </div>
         <select id="pred-b" onchange="renderPredict()" style="display:none"></select>
         <div id="pred-b-stats"></div>
       </div>
@@ -1820,9 +1839,6 @@ function buildSelects() {
 
   predPs = [...predPs].sort((a,b)=>(a.rank||9999)-(b.rank||9999));
   const predOpts = predPs.map(p=>`<option value="${p.id}">#${p.rank} ${p.name}</option>`).join('');
-  // datalist options use a label-as-value pattern so what the user types
-  // matches what the browser shows. We resolve back to id in onPredSearch.
-  const dlOpts = predPs.map(p=>`<option value="#${p.rank} ${p.name}"></option>`).join('');
   ['pred-a','pred-b'].forEach((id,i)=>{
     const el=document.getElementById(id);
     if(!el) return;
@@ -1830,8 +1846,6 @@ function buildSelects() {
     el.innerHTML=predOpts;
     if(prev&&predPs.find(p=>p.id===prev)) el.value=prev;
     else el.value=predPs[i]?predPs[i].id:'';
-    const dl = document.getElementById(id+'-list');
-    if (dl) dl.innerHTML = dlOpts;
     // Sync the search input to whatever player is currently selected.
     const search = document.getElementById(id+'-search');
     if (search) {
@@ -1841,50 +1855,116 @@ function buildSelects() {
   });
 }
 
-// Datalist input → resolve typed text back to a bio_id and update the hidden
-// <select>, then re-render. ONLY acts on exact match (the user finalized
-// their pick — either by clicking a suggestion or finishing the typed name).
-// Partial typing leaves the input alone so the user can keep editing.
-//
-// Bug history: an earlier version did substring matching on every keystroke
-// and overwrote the input's value with the first partial hit, which made
-// typing impossible (the input would jump to "#1 Aryna Sabalenka" the moment
-// you typed "r").
-function onPredSearch(side) {
-  const search = document.getElementById(`pred-${side}-search`);
-  const select = document.getElementById(`pred-${side}`);
-  if (!search || !select) return;
-  const txt = (search.value || '').trim().toLowerCase();
-  if (!txt) return;
-  const exact = [...select.options].find(o => o.textContent.toLowerCase() === txt);
-  if (!exact) return;                       // still typing — let them
-  if (select.value === exact.value) return; // already on this player, no-op
-  select.value = exact.value;
-  renderPredict();
+// ── Custom autocomplete dropdown (replaces native <datalist>) ───────────────
+// State per side — tracks which result is keyboard-highlighted.
+const _PRED_HIGHLIGHT = { a: -1, b: -1 };
+
+// Show/refresh the results panel based on what's typed in the input.
+// Substring match across the option's textContent (e.g. "#5 Jessica Pegula").
+function filterPredResults(side) {
+  const search  = document.getElementById(`pred-${side}-search`);
+  const select  = document.getElementById(`pred-${side}`);
+  const results = document.getElementById(`pred-${side}-results`);
+  if (!search || !select || !results) return;
+  const txt = (search.value || '').toLowerCase().trim();
+  const opts = [...select.options];
+  let matches = txt
+    ? opts.filter(o => o.textContent.toLowerCase().includes(txt))
+    : opts.slice();
+  // Cap displayed list — too many makes scrolling annoying. 50 is plenty.
+  matches = matches.slice(0, 50);
+  _PRED_HIGHLIGHT[side] = matches.length ? 0 : -1;
+  if (!matches.length) {
+    results.innerHTML = `<div class="pred-search-empty">No players match "${(txt || '').replace(/</g,'&lt;')}"</div>`;
+  } else {
+    results.innerHTML = matches.map((o, i) => {
+      // textContent is "#13 Jessica Pegula" — split into rank + name for nicer display
+      const m = o.textContent.match(/^(#\d+)\s+(.+)$/);
+      const rank = m ? m[1] : '';
+      const name = m ? m[2] : o.textContent;
+      return `<div class="pred-search-item${i === 0 ? ' active' : ''}"
+                   data-val="${o.value}" data-idx="${i}"
+                   onmousedown="onPredPick('${side}', '${o.value}', event)"
+                   onmouseenter="_predHighlight('${side}', ${i})">${name}<span class="meta">${rank}</span></div>`;
+    }).join('');
+  }
+  results.style.display = 'block';
 }
-// Blur handler: if the user typed a partial that looks like a player but
-// didn't pick from the suggestions, snap to the best fuzzy match. Runs
-// only when the input loses focus so it can't disrupt typing.
-function onPredSearchBlur(side) {
-  const search = document.getElementById(`pred-${side}-search`);
-  const select = document.getElementById(`pred-${side}`);
-  if (!search || !select) return;
-  const txt = (search.value || '').trim().toLowerCase();
-  if (!txt) {
-    // Empty input → restore display from the currently-selected player
-    const cur = [...select.options].find(o => o.value === select.value);
-    if (cur) search.value = cur.textContent;
+
+function _predHighlight(side, idx) {
+  _PRED_HIGHLIGHT[side] = idx;
+  const results = document.getElementById(`pred-${side}-results`);
+  if (!results) return;
+  results.querySelectorAll('.pred-search-item').forEach((el, i) =>
+    el.classList.toggle('active', i === idx));
+}
+
+// Click handler — uses onmousedown so it fires BEFORE the input's blur,
+// otherwise blur would hide the dropdown before click can land.
+function onPredPick(side, val, event) {
+  if (event) event.preventDefault();   // don't steal focus from input
+  const search  = document.getElementById(`pred-${side}-search`);
+  const select  = document.getElementById(`pred-${side}`);
+  const results = document.getElementById(`pred-${side}-results`);
+  if (!select) return;
+  if (select.value !== val) {
+    select.value = val;
+    const opt = [...select.options].find(o => o.value === val);
+    if (opt && search) search.value = opt.textContent;
+    renderPredict();
+  } else if (search) {
+    const opt = [...select.options].find(o => o.value === val);
+    if (opt) search.value = opt.textContent;
+  }
+  if (results) results.style.display = 'none';
+  if (search) search.blur();
+}
+
+// Keyboard navigation: arrow keys move highlight, Enter picks, Esc closes.
+function onPredSearchKey(e, side) {
+  const results = document.getElementById(`pred-${side}-results`);
+  if (!results) return;
+  const items = results.querySelectorAll('.pred-search-item');
+  if (e.key === 'Escape') {
+    results.style.display = 'none';
+    document.getElementById(`pred-${side}-search`).blur();
     return;
   }
-  const opts = [...select.options];
-  let pick = opts.find(o => o.textContent.toLowerCase() === txt);
-  if (!pick) pick = opts.find(o => o.textContent.toLowerCase().includes(txt));
-  if (!pick) return;                        // no plausible match
-  search.value = pick.textContent;          // normalize display now (blur)
-  if (select.value !== pick.value) {
-    select.value = pick.value;
-    renderPredict();
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const next = Math.min((_PRED_HIGHLIGHT[side] ?? -1) + 1, items.length - 1);
+    _predHighlight(side, next);
+    items[next]?.scrollIntoView({block: 'nearest'});
+    return;
   }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const next = Math.max((_PRED_HIGHLIGHT[side] ?? 0) - 1, 0);
+    _predHighlight(side, next);
+    items[next]?.scrollIntoView({block: 'nearest'});
+    return;
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const idx = _PRED_HIGHLIGHT[side] ?? 0;
+    const pick = items[idx];
+    if (pick) onPredPick(side, pick.dataset.val);
+  }
+}
+
+// Blur — hide results panel and restore display value from current selection
+// (so the input doesn't show a half-typed string after the user clicks away).
+// Small delay so onmousedown on a result item has time to fire first.
+function onPredSearchBlur(side) {
+  setTimeout(() => {
+    const search  = document.getElementById(`pred-${side}-search`);
+    const select  = document.getElementById(`pred-${side}`);
+    const results = document.getElementById(`pred-${side}-results`);
+    if (!search || !select) return;
+    if (results) results.style.display = 'none';
+    const cur = [...select.options].find(o => o.value === select.value);
+    if (cur) search.value = cur.textContent;
+  }, 150);
 }
 
 function renderPredict() {
