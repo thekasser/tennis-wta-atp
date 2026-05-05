@@ -492,7 +492,7 @@ select:focus{outline:none;border-color:var(--tc)}
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px">Player A</div>
         <input id="pred-a-search" list="pred-a-list" placeholder="Search by name or rank…" autocomplete="off"
                style="width:100%;margin-bottom:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:var(--bg-elev)"
-               oninput="onPredSearch('a')">
+               oninput="onPredSearch('a')" onblur="onPredSearchBlur('a')">
         <datalist id="pred-a-list"></datalist>
         <select id="pred-a" onchange="renderPredict()" style="display:none"></select>
         <div id="pred-a-stats"></div>
@@ -501,7 +501,7 @@ select:focus{outline:none;border-color:var(--tc)}
         <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;margin-bottom:10px">Player B</div>
         <input id="pred-b-search" list="pred-b-list" placeholder="Search by name or rank…" autocomplete="off"
                style="width:100%;margin-bottom:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:13px;background:var(--bg-elev)"
-               oninput="onPredSearch('b')">
+               oninput="onPredSearch('b')" onblur="onPredSearchBlur('b')">
         <datalist id="pred-b-list"></datalist>
         <select id="pred-b" onchange="renderPredict()" style="display:none"></select>
         <div id="pred-b-stats"></div>
@@ -1842,23 +1842,49 @@ function buildSelects() {
 }
 
 // Datalist input → resolve typed text back to a bio_id and update the hidden
-// <select>, then re-render. We accept any prefix-or-substring match so the
-// user can type "rybak" and pick "#2 Elena Rybakina" from the suggestion.
+// <select>, then re-render. ONLY acts on exact match (the user finalized
+// their pick — either by clicking a suggestion or finishing the typed name).
+// Partial typing leaves the input alone so the user can keep editing.
+//
+// Bug history: an earlier version did substring matching on every keystroke
+// and overwrote the input's value with the first partial hit, which made
+// typing impossible (the input would jump to "#1 Aryna Sabalenka" the moment
+// you typed "r").
 function onPredSearch(side) {
   const search = document.getElementById(`pred-${side}-search`);
   const select = document.getElementById(`pred-${side}`);
   if (!search || !select) return;
   const txt = (search.value || '').trim().toLowerCase();
   if (!txt) return;
-  // Exact match against the datalist value first (when user clicked a suggestion)
+  const exact = [...select.options].find(o => o.textContent.toLowerCase() === txt);
+  if (!exact) return;                       // still typing — let them
+  if (select.value === exact.value) return; // already on this player, no-op
+  select.value = exact.value;
+  renderPredict();
+}
+// Blur handler: if the user typed a partial that looks like a player but
+// didn't pick from the suggestions, snap to the best fuzzy match. Runs
+// only when the input loses focus so it can't disrupt typing.
+function onPredSearchBlur(side) {
+  const search = document.getElementById(`pred-${side}-search`);
+  const select = document.getElementById(`pred-${side}`);
+  if (!search || !select) return;
+  const txt = (search.value || '').trim().toLowerCase();
+  if (!txt) {
+    // Empty input → restore display from the currently-selected player
+    const cur = [...select.options].find(o => o.value === select.value);
+    if (cur) search.value = cur.textContent;
+    return;
+  }
   const opts = [...select.options];
   let pick = opts.find(o => o.textContent.toLowerCase() === txt);
-  // Fallback: any option whose text contains the typed string
   if (!pick) pick = opts.find(o => o.textContent.toLowerCase().includes(txt));
-  if (!pick) return;        // no match yet — keep typing
-  select.value = pick.value;
-  search.value = pick.textContent;     // normalize display
-  renderPredict();
+  if (!pick) return;                        // no plausible match
+  search.value = pick.textContent;          // normalize display now (blur)
+  if (select.value !== pick.value) {
+    select.value = pick.value;
+    renderPredict();
+  }
 }
 
 function renderPredict() {
