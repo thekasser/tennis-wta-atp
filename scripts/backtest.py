@@ -62,17 +62,26 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 from db import connect
-# Reuse the round-semantics tables already maintained in materialize.py.
-# Don't re-define them here — single source of truth.
-from materialize import SEMANTICS, ROUND_DEPTH, RD_NAME_DEPTH, semantics_for
+# Reuse single-source-of-truth tables and aggregation logic from materialize.
+# Don't re-define them here — divergence between backtest and materialize is
+# exactly the kind of bug that makes calibration analysis untrustworthy.
+from materialize import (
+    SEMANTICS, ROUND_DEPTH, RD_NAME_DEPTH, semantics_for,
+    _aggregate_year,                                # composite metric extractor
+)
 
 
 # ─── Model port: Python mirror of matchProbBreakdown ─────────────────────────
-# Source: wta_analytics.html lines 969-1106. Constants must stay in sync with
-# the JS — any tweak there should be reflected here, and vice versa.
-SHARPEN          = 2.5
-PYTHAGOREAN_K    = 1.5
-PROB_FLOOR, PROB_CAP = 0.05, 0.95
+# Source: wta_analytics.html lines 969-1106. Defaults below MUST match the JS;
+# the function accepts overrides so the backtest can sweep tuning values.
+DEFAULT_SHARPEN          = 2.5
+DEFAULT_BARE_ELO_WEIGHT  = 0.35   # bare-case (no comp, no h2h) Elo share
+PYTHAGOREAN_K            = 1.5
+PROB_FLOOR, PROB_CAP     = 0.05, 0.95
+# Bare-case surf:form ratio preserved across bare_elo overrides. Original is
+# surf=.30, form=.35 within the (1 - elo) = .65 remaining slice.
+_BARE_SURF_SHARE = 0.30 / (0.30 + 0.35)   # ≈ 0.4615
+_BARE_FORM_SHARE = 0.35 / (0.30 + 0.35)   # ≈ 0.5385
 
 
 def effective_elo(pts: int, ytd: int) -> tuple[float, str]:
@@ -110,11 +119,16 @@ def form_pct(form_str: str, n: int = 10) -> float:
     return wins / len(last_n)
 
 
-def match_prob(pA: dict, pB: dict, surf_code: str) -> dict:
+def match_prob(pA: dict, pB: dict, surf_code: str,
+               *, sharpen: float = DEFAULT_SHARPEN,
+               bare_elo: float = DEFAULT_BARE_ELO_WEIGHT) -> dict:
     """Port of matchProbBreakdown. Returns {prob, weights, signals, raw}.
 
     surf_code: 'H' | 'C' | 'G'
     pA / pB shape: {id, pts, ytd, surf: {H,C,G}, form: str, composite: float|None}
+
+    sharpen / bare_elo are exposed as kwargs so the backtest can sweep them
+    without touching the dashboard's JS source.
     """
     eA_elo, eA_src = effective_elo(pA.get("pts", 0), pA.get("ytd", 0))
     eB_elo, eB_src = effective_elo(pB.get("pts", 0), pB.get("ytd", 0))
@@ -145,7 +159,14 @@ def match_prob(pA: dict, pB: dict, surf_code: str) -> dict:
     elif comp_avail:
         weights = {"elo": .14, "surf": .24, "form": .22, "h2h": 0,   "comp": .40}
     else:
-        weights = {"elo": .35, "surf": .30, "form": .35, "h2h": 0,   "comp": 0}
+        # Bare case — only Elo, surf, form. Original: 0.35 / 0.30 / 0.35.
+        # We expose `bare_elo` so the backtest can damp it; surf:form ratio
+        # is preserved across the freed weight.
+        rest = 1.0 - bare_elo
+        weights = {"elo": bare_elo,
+                   "surf": rest * _BARE_SURF_SHARE,
+                   "form": rest * _BARE_FORM_SHARE,
+                   "h2h": 0, "comp": 0}
 
     surf_delta  = abs(sA - sB)
     surf_factor = min(1.0, 0.25 + surf_delta * 3.75)
@@ -161,7 +182,7 @@ def match_prob(pA: dict, pB: dict, surf_code: str) -> dict:
         + weights["h2h"]  * _logit(h2h_p)
         + weights["comp"] * _logit(comp_p)
     )
-    raw_prob = 1 / (1 + math.exp(-sum_logit * SHARPEN))
+    raw_prob = 1 / (1 + math.exp(-sum_logit * sharpen))
     prob = min(PROB_CAP, max(PROB_FLOOR, raw_prob))
 
     return {
@@ -380,7 +401,150 @@ def mid_to_bio_index(conn) -> dict[int, dict]:
     return out
 
 
+# ─── PiT composite (v1) ──────────────────────────────────────────────────────
+# Mirrors decorateTrapezoidComposite in wta_analytics.html — same metric set,
+# same shrinkage prior, same z-score cohort definition. The PiT difference is
+# the AGGREGATION WINDOW: instead of TRAPEZOID_*'s static T6M-from-now, we
+# aggregate metrics over a 180-day window ending at asof_date, then z-score
+# against a cohort computed at the same date.
+
+COMPOSITE_METRICS = [
+    "totalPtsWonPct", "bpSavedPct", "bpWonPct",
+    "tbWinPct", "decSetWinPct", "matchWinPct",
+]
+SHRINK_PRIOR          = 15      # matches `decorateTrapezoidComposite`
+COMPOSITE_WINDOW_DAYS = 180     # ≈ T6M (lookupComposite default in dashboard)
+COMPOSITE_MIN_ZS      = 3       # min metrics with valid z-score; below → None
+
+
+def _player_matches_in_window(conn, mid: int, asof_date: str,
+                              days: int) -> list[dict]:
+    """Pull matches for this player in [asof_date - days, asof_date) shaped
+    like _aggregate_year expects (dict access, t_type joined, JSON stat
+    blobs intact)."""
+    start = (date.fromisoformat(asof_date) - timedelta(days=days)).isoformat()
+    rows = conn.execute("""
+        SELECT m.id, m.p1_id, m.p2_id, m.winner_id, m.score, m.best_of,
+               m.round, m.stat_p1, m.stat_p2, m.date,
+               t.type AS t_type
+        FROM matches m
+        LEFT JOIN tournaments t ON m.tournament_id = t.id
+        WHERE m.date >= ? AND m.date < ?
+          AND (m.p1_id = ? OR m.p2_id = ?)
+    """, (start, asof_date, mid, mid)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _isoweek_start(asof_date: str) -> str:
+    """Monday of the ISO week containing asof_date — used as a cache bucket
+    so we recompute the cohort at most once per week."""
+    d = date.fromisoformat(asof_date)
+    iso_year, iso_week, _ = d.isocalendar()
+    return date.fromisocalendar(iso_year, iso_week, 1).isoformat()
+
+
+def _build_composite_cohort(conn, tour: str, asof_date: str,
+                            mid_idx: dict[int, dict],
+                            window_days: int = COMPOSITE_WINDOW_DAYS) -> dict:
+    """Aggregate the 6 composite metrics for every bio'd player on `tour`
+    over the window ending at `asof_date`. Compute (mean, std) per metric
+    across the cohort. O(N_bios × N_matches_per_bio) — call rarely (cached
+    weekly by pit_composite).
+
+    Returns:
+      {
+        'metrics':  {mid: {metric: value}},      # raw aggregations
+        'stats':    {metric: (mean, std)},       # cohort distribution
+        'matches':  {mid: n_matches},            # for shrinkage
+      }
+    """
+    metrics: dict[int, dict] = {}
+    matches_count: dict[int, int] = {}
+    for mid, meta in mid_idx.items():
+        if meta["tour"] != tour:
+            continue
+        ms = _player_matches_in_window(conn, mid, asof_date, window_days)
+        agg = _aggregate_year(ms, mid)
+        if agg is None:
+            continue
+        metrics[mid] = agg
+        matches_count[mid] = agg.get("matches", 0)
+
+    stats: dict[str, tuple[float, float]] = {}
+    for m_name in COMPOSITE_METRICS:
+        vals = [agg[m_name] for agg in metrics.values()
+                if agg.get(m_name) is not None]
+        if len(vals) < 3:
+            continue
+        mean = sum(vals) / len(vals)
+        var  = sum((v - mean) ** 2 for v in vals) / len(vals)
+        std  = math.sqrt(var)
+        if std > 0:
+            stats[m_name] = (mean, std)
+    return {"metrics": metrics, "stats": stats, "matches": matches_count}
+
+
+def pit_composite(conn, mid: int, tour: str, asof_date: str,
+                  cache: dict[tuple[str, str], dict],
+                  mid_idx: dict[int, dict]) -> float | None:
+    """Composite z-score for `mid` as of `asof_date`. Z-scored against the
+    cohort of all bio'd players on `tour` aggregated at the same week.
+    Cohort is computed once per (tour, ISO-week) tuple and reused.
+
+    Returns None if the player has fewer than COMPOSITE_MIN_ZS valid metrics
+    (insufficient stat coverage in the window).
+    """
+    week = _isoweek_start(asof_date)
+    key  = (tour, week)
+    if key not in cache:
+        cache[key] = _build_composite_cohort(conn, tour, week, mid_idx)
+    cohort = cache[key]
+
+    raw = cohort["metrics"].get(mid)
+    if not raw:
+        return None
+    zs = []
+    for m_name in COMPOSITE_METRICS:
+        v = raw.get(m_name)
+        s = cohort["stats"].get(m_name)
+        if v is None or not s:
+            continue
+        zs.append((v - s[0]) / s[1])
+    if len(zs) < COMPOSITE_MIN_ZS:
+        return None
+    raw_z = sum(zs) / len(zs)
+    n = cohort["matches"].get(mid, 0)
+    shrinkage = n / (n + SHRINK_PRIOR)
+    return round(raw_z * shrinkage, 2)
+
+
 # ─── Backtest driver ─────────────────────────────────────────────────────────
+
+@dataclass
+class MatchFeatures:
+    """All PiT data for one match — output of collect_features(), input to
+    score_features(). Decoupling lets us pull data once and re-score under
+    multiple SHARPEN / bare_elo configs without re-querying the DB."""
+    match_id: str
+    date: str
+    tour: str
+    surface: str
+    mid_a: int
+    mid_b: int
+    bio_a: dict
+    bio_b: dict
+    pts_a: int
+    ytd_a: int
+    pts_b: int
+    ytd_b: int
+    form_a: str
+    form_b: str
+    h2h_a: int
+    h2h_b: int
+    comp_a: float | None
+    comp_b: float | None
+    won_a: int          # 1 if A won; 0 if B won (deterministic-by-mid slot)
+
 
 @dataclass
 class BacktestRow:
@@ -400,6 +564,8 @@ class BacktestRow:
     form_p2: str
     h2h_p1: int
     h2h_p2: int
+    comp_p1: float | None
+    comp_p2: float | None
     p_pred: float
     won: int          # 1 if p1 won (matches p_pred for p1); 0 if p2 won
     weights_json: str
@@ -428,19 +594,28 @@ def load_completed_matches(conn, tour: str | None, year: int,
     return conn.execute(sql, params).fetchall()
 
 
-def backtest(conn, tour: str, year: int, limit: int | None,
-             output_csv: Path, window_months: int = 6) -> dict:
-    """Score every completed match for (tour, year). Writes CSV; returns
-    summary stats (n, brier, calibration table)."""
+def collect_features(conn, tour: str, year: int, limit: int | None,
+                     window_months: int = 6, use_composite: bool = True,
+                     soft: bool = False) -> tuple[list[MatchFeatures], dict]:
+    """Pass 1: pull every PiT input for every scoreable match. Returns
+    (features, skipped_counts). Heavy — does all SQL + composite cohort
+    cohort builds. Run this once per (year, soft, window_months) config.
+    """
     bios_atp = parse_bios(ROOT / "data" / "players_atp.js")
     bios_wta = parse_bios(ROOT / "data" / "players_wta.js")
     mid_idx  = mid_to_bio_index(conn)
 
     matches = load_completed_matches(conn, tour, year, limit)
-    print(f"[backtest] {len(matches)} candidate match(es) "
-          f"for tour={tour} year={year}{f' (limit={limit})' if limit else ''}")
+    mode = "SOFT (today's bios)" if soft else "PiT"
+    comp_str = "with composite" if use_composite else "no composite"
+    print(f"[collect] {len(matches)} candidate match(es) "
+          f"for tour={tour} year={year}{f' (limit={limit})' if limit else ''} "
+          f"— {mode}, {comp_str}, window={window_months}m")
 
-    rows: list[BacktestRow] = []
+    today_iso = date.today().isoformat()
+    composite_cache: dict[tuple[str, str], dict] = {}
+
+    features: list[MatchFeatures] = []
     skipped = {"no_bio": 0, "no_ranking": 0}
     for m in matches:
         # Slot assignment: deterministic by mid (lower mid → A). Decoupling
@@ -465,44 +640,75 @@ def backtest(conn, tour: str, year: int, limit: int | None,
             skipped["no_bio"] += 1
             continue
 
-        # PiT inputs — compute strength from accumulated tournament points
-        # over the configured window (default 6 months). Replaces the old
-        # rankings_snapshots-based path which had no history before 2026-05-02.
-        a_pts, a_ytd = synthetic_ranking(conn, mid_a, m["date"], window_months)
-        b_pts, b_ytd = synthetic_ranking(conn, mid_b, m["date"], window_months)
+        # asof_date governs every data lookup. soft=True pretends "now" is
+        # today regardless of when the match happened — that's exactly how
+        # the dashboard's soft calibration panel works. PiT (the default)
+        # uses the match date itself.
+        asof = today_iso if soft else m["date"]
+
+        a_pts, a_ytd = synthetic_ranking(conn, mid_a, asof, window_months)
+        b_pts, b_ytd = synthetic_ranking(conn, mid_b, asof, window_months)
         if (a_pts + a_ytd == 0) or (b_pts + b_ytd == 0):
             skipped["no_ranking"] += 1
             continue
-        fA = pit_form(conn, mid_a, m["date"])
-        fB = pit_form(conn, mid_b, m["date"])
-        h_a, h_b = pit_h2h(conn, mid_a, mid_b, m["date"])
+        fA = pit_form(conn, mid_a, asof)
+        fB = pit_form(conn, mid_b, asof)
+        h_a, h_b = pit_h2h(conn, mid_a, mid_b, asof)
 
-        pA = {"id": bA["id"], "pts": a_pts, "ytd": a_ytd,
-              "surf": bA["surf"], "form": fA,
-              "composite": None, "h2h_wins": h_a}
-        pB = {"id": bB["id"], "pts": b_pts, "ytd": b_ytd,
-              "surf": bB["surf"], "form": fB,
-              "composite": None, "h2h_wins": h_b}
+        if use_composite:
+            cA = pit_composite(conn, mid_a, match_tour, asof, composite_cache, mid_idx)
+            cB = pit_composite(conn, mid_b, match_tour, asof, composite_cache, mid_idx)
+        else:
+            cA = cB = None
 
-        result = match_prob(pA, pB, m["surface"])
-        won = 1 if m["winner_id"] == mid_a else 0
-
-        rows.append(BacktestRow(
+        features.append(MatchFeatures(
             match_id=m["id"], date=m["date"], tour=match_tour,
             surface=m["surface"],
-            p1_mid=mid_a, p2_mid=mid_b,
-            p1_name=bA["name"], p2_name=bB["name"],
-            p1_pts=a_pts, p1_ytd=a_ytd, p2_pts=b_pts, p2_ytd=b_ytd,
-            form_p1=fA, form_p2=fB, h2h_p1=h_a, h2h_p2=h_b,
-            p_pred=result["prob"],
-            won=won,
+            mid_a=mid_a, mid_b=mid_b,
+            bio_a=bA, bio_b=bB,
+            pts_a=a_pts, ytd_a=a_ytd, pts_b=b_pts, ytd_b=b_ytd,
+            form_a=fA, form_b=fB, h2h_a=h_a, h2h_b=h_b,
+            comp_a=cA, comp_b=cB,
+            won_a=1 if m["winner_id"] == mid_a else 0,
+        ))
+
+    print(f"[collect] kept {len(features)} matches; skipped: {skipped}")
+    return features, skipped
+
+
+def score_features(features: list[MatchFeatures], *,
+                   sharpen: float = DEFAULT_SHARPEN,
+                   bare_elo: float = DEFAULT_BARE_ELO_WEIGHT) -> list[BacktestRow]:
+    """Pass 2: run match_prob on each MatchFeatures and produce CSV-shaped
+    rows. Cheap — no DB access. Re-callable with different sharpen/bare_elo
+    to sweep tuning without re-collecting features.
+    """
+    rows: list[BacktestRow] = []
+    for f in features:
+        pA = {"id": f.bio_a["id"], "pts": f.pts_a, "ytd": f.ytd_a,
+              "surf": f.bio_a["surf"], "form": f.form_a,
+              "composite": f.comp_a, "h2h_wins": f.h2h_a}
+        pB = {"id": f.bio_b["id"], "pts": f.pts_b, "ytd": f.ytd_b,
+              "surf": f.bio_b["surf"], "form": f.form_b,
+              "composite": f.comp_b, "h2h_wins": f.h2h_b}
+        result = match_prob(pA, pB, f.surface,
+                            sharpen=sharpen, bare_elo=bare_elo)
+        rows.append(BacktestRow(
+            match_id=f.match_id, date=f.date, tour=f.tour, surface=f.surface,
+            p1_mid=f.mid_a, p2_mid=f.mid_b,
+            p1_name=f.bio_a["name"], p2_name=f.bio_b["name"],
+            p1_pts=f.pts_a, p1_ytd=f.ytd_a, p2_pts=f.pts_b, p2_ytd=f.ytd_b,
+            form_p1=f.form_a, form_p2=f.form_b,
+            h2h_p1=f.h2h_a, h2h_p2=f.h2h_b,
+            comp_p1=f.comp_a, comp_p2=f.comp_b,
+            p_pred=result["prob"], won=f.won_a,
             weights_json=json.dumps(result["weights"], separators=(",", ":")),
             signals_json=json.dumps(result["signals"], separators=(",", ":")),
         ))
+    return rows
 
-    print(f"[backtest] scored {len(rows)} matches; skipped: {skipped}")
 
-    # Write CSV
+def write_csv(rows: list[BacktestRow], output_csv: Path) -> None:
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     with output_csv.open("w", newline="", encoding="utf-8") as f:
         if rows:
@@ -510,9 +716,23 @@ def backtest(conn, tour: str, year: int, limit: int | None,
             writer.writeheader()
             for r in rows:
                 writer.writerow(r.__dict__)
-    print(f"[backtest] wrote {output_csv}")
+    print(f"[csv] wrote {output_csv}")
 
-    return summarize(rows)
+
+def backtest(conn, tour: str, year: int, limit: int | None,
+             output_csv: Path, window_months: int = 6,
+             use_composite: bool = True, soft: bool = False,
+             sharpen: float = DEFAULT_SHARPEN,
+             bare_elo: float = DEFAULT_BARE_ELO_WEIGHT,
+             composite_only: bool = False) -> dict:
+    """Convenience wrapper for single-config runs."""
+    features, _ = collect_features(conn, tour, year, limit,
+                                   window_months=window_months,
+                                   use_composite=use_composite, soft=soft)
+    rows = score_features(features, sharpen=sharpen, bare_elo=bare_elo)
+    write_csv(rows, output_csv)
+    return summarize(rows, composite_only=composite_only,
+                     sharpen=sharpen, bare_elo=bare_elo)
 
 
 # ─── Brier + calibration ─────────────────────────────────────────────────────
@@ -551,10 +771,25 @@ def calibration_table(rows: list[BacktestRow], n_bins: int = 10
     return out
 
 
-def summarize(rows: list[BacktestRow]) -> dict:
+def summarize(rows: list[BacktestRow], *, composite_only: bool = False,
+              sharpen: float | None = None,
+              bare_elo: float | None = None) -> dict:
+    """Print n / Brier / calibration table. composite_only filters to matches
+    where both players had a non-None PiT composite — that's the model in
+    its strongest configuration (composite-available weight branch)."""
+    n_total = len(rows)
+    if composite_only:
+        rows = [r for r in rows
+                if r.comp_p1 is not None and r.comp_p2 is not None]
     brier = brier_score(rows)
     cal   = calibration_table(rows)
-    print(f"\n[summary] n={len(rows)}  Brier={brier:.4f}  "
+    tag_bits = []
+    if sharpen is not None:  tag_bits.append(f"sharpen={sharpen}")
+    if bare_elo is not None: tag_bits.append(f"bare_elo={bare_elo}")
+    if composite_only:       tag_bits.append(f"composite-only")
+    tag = f" [{', '.join(tag_bits)}]" if tag_bits else ""
+    n_str = f"n={len(rows)}" + (f"/{n_total}" if composite_only else "")
+    print(f"\n[summary{tag}] {n_str}  Brier={brier:.4f}  "
           f"(0.25 = uninformed; 0.0 = perfect)")
     print(f"\n  bin            n   pred   actual   Δ(pp)")
     print(f"  --------------------------------------------")
@@ -575,19 +810,83 @@ def main() -> int:
     p.add_argument("--year", type=int, default=date.today().year)
     p.add_argument("--limit", type=int, default=None,
                    help="Score only first N matches (smoke test)")
-    p.add_argument("--output", type=Path,
-                   default=ROOT / "data" / "backtest_v0.csv",
-                   help="CSV path; default data/backtest_v0.csv")
+    p.add_argument("--output", type=Path, default=None,
+                   help="CSV path. Defaults to data/backtest_<mode>.csv where "
+                        "mode reflects --soft and --no-composite flags.")
     p.add_argument("--window-months", type=int, default=6,
                    help="Strength window for synthetic ranking. 12 ≈ official "
-                        "T12M; 6 (default) is more responsive to current form. "
-                        "Tune to match where the dashboard's strength signal "
-                        "is heading.")
+                        "T12M; 6 (default) is more responsive to current form.")
+    p.add_argument("--no-composite", action="store_true",
+                   help="Skip composite signal — model uses bare-case weight "
+                        "branch. Use this to compare against v0 results.")
+    p.add_argument("--soft", action="store_true",
+                   help="Soft baseline: replace per-match asof_date with "
+                        "today for ALL lookups. Mirrors the dashboard's "
+                        "calibration panel (today's bios on past matches). "
+                        "Use to measure hindsight bias as PiT-vs-soft delta.")
+    # Tuning knobs — exposed so the backtest can sweep without editing the JS.
+    p.add_argument("--sharpen", type=float, default=DEFAULT_SHARPEN,
+                   help=f"Logit-blend sharpening multiplier. "
+                        f"Default {DEFAULT_SHARPEN} mirrors the dashboard. "
+                        f"Lower = less extreme predictions.")
+    p.add_argument("--bare-elo-weight", type=float,
+                   default=DEFAULT_BARE_ELO_WEIGHT,
+                   help=f"Elo's share in the bare-case branch (no comp, no "
+                        f"H2H). Default {DEFAULT_BARE_ELO_WEIGHT} mirrors "
+                        f"the dashboard. Lower → surf+form get more weight.")
+    p.add_argument("--composite-only", action="store_true",
+                   help="Restrict calibration analysis to matches where both "
+                        "players have non-None PiT composite — the model's "
+                        "strongest configuration.")
+    p.add_argument("--sweep-sharpen", type=str, default=None,
+                   help="Comma-separated SHARPEN values, e.g. '1.0,1.5,2.0,2.5'. "
+                        "Collects features once, scores under each value, "
+                        "prints comparison. Skips CSV writing.")
     args = p.parse_args()
 
+    if args.output is None:
+        suffix = "_soft" if args.soft else "_pit"
+        suffix += "_v0" if args.no_composite else "_v1"
+        if args.sharpen != DEFAULT_SHARPEN:
+            suffix += f"_s{args.sharpen}"
+        if args.bare_elo_weight != DEFAULT_BARE_ELO_WEIGHT:
+            suffix += f"_be{args.bare_elo_weight}"
+        args.output = ROOT / "data" / f"backtest{suffix}.csv"
+
     conn = connect(read_only=True)
+
+    if args.sweep_sharpen:
+        sharpen_vals = [float(s.strip()) for s in args.sweep_sharpen.split(",")]
+        features, _ = collect_features(
+            conn, args.tour, args.year, args.limit,
+            window_months=args.window_months,
+            use_composite=not args.no_composite,
+            soft=args.soft,
+        )
+        print(f"\n[sweep] scoring {len(features)} matches across "
+              f"{len(sharpen_vals)} SHARPEN value(s)…")
+        results = []
+        for s in sharpen_vals:
+            rows = score_features(features, sharpen=s,
+                                  bare_elo=args.bare_elo_weight)
+            res = summarize(rows, composite_only=args.composite_only,
+                            sharpen=s, bare_elo=args.bare_elo_weight)
+            results.append((s, res))
+        # Compact comparison table
+        print("\n[sweep] Brier comparison:")
+        print("  sharpen   n     Brier")
+        print("  ------------------------")
+        for s, r in results:
+            print(f"  {s:>5.2f}  {r['n']:>5}   {r['brier']:.4f}")
+        return 0
+
     backtest(conn, args.tour, args.year, args.limit, args.output,
-             window_months=args.window_months)
+             window_months=args.window_months,
+             use_composite=not args.no_composite,
+             soft=args.soft,
+             sharpen=args.sharpen,
+             bare_elo=args.bare_elo_weight,
+             composite_only=args.composite_only)
     return 0
 
 
