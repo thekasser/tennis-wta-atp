@@ -1012,11 +1012,28 @@ function matchProbBreakdown(pA, pB, surf) {
   // (it aggregates 6 metrics over a sample-aware T6M window), so when it's
   // available it gets the heaviest weight. Elo is now a tiebreaker (~12-14%)
   // rather than a primary signal — recent form should drive predictions.
+  //
+  // Bare case (no composite, no H2H) bumps Elo to 35% because it's our
+  // strongest remaining strength signal. The previous 25% under-weighted
+  // matchups like #154 vs #36 where Elo screams the answer.
   let weights;
   if (h2hAvail && compAvail)      weights = { elo:.12, surf:.20, form:.18, h2h:.12, comp:.38 };
-  else if (h2hAvail)              weights = { elo:.20, surf:.30, form:.25, h2h:.25, comp:0 };
+  else if (h2hAvail)              weights = { elo:.22, surf:.28, form:.25, h2h:.25, comp:0 };
   else if (compAvail)             weights = { elo:.14, surf:.24, form:.22, h2h:0,   comp:.40 };
-  else                            weights = { elo:.25, surf:.40, form:.35, h2h:0,   comp:0 };
+  else                            weights = { elo:.35, surf:.30, form:.35, h2h:0,   comp:0 };
+
+  // Surface weight scales with edge magnitude. Tied surface (delta ~0) wastes
+  // 40% of the model's weight; meaningful gap deserves full weight. Sliding
+  // factor: 0 delta → 25%, 10% delta → 60%, 20%+ delta → 100%.
+  const surfDelta = Math.abs(sA - sB);
+  const surfFactor = Math.min(1.0, 0.25 + surfDelta * 3.75);
+  weights.surf *= surfFactor;
+  // Renormalize so weights sum to 1 — freed surface weight redistributes
+  // proportionally to all other available signals.
+  const sumW = Object.values(weights).reduce((a, b) => a + b, 0);
+  if (sumW > 0) {
+    Object.keys(weights).forEach(k => weights[k] = weights[k] / sumW);
+  }
 
   const rawProb =
       weights.elo  * eloP
