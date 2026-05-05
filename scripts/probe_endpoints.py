@@ -36,31 +36,23 @@ if not API_KEY:
 
 client = MatchstatClient(api_key=API_KEY)
 
-# Use Sinner (mid 36558) as a test player — almost certain to have upcoming
-# matches (or recent ones) at the active event.
-SINNER_MID = 36558  # ATP
+# Confirmed in RapidAPI docs (2026-05-04 user-discovered):
+#   getTournamentSeasons  — list editions of a tournament series across years
+#   getTournamentFixtures — match fixtures for a specific tournament edition
+#   getAllFixtures        — broad, only takes tour, probably too noisy
+# Path shape inferred from the docs UI: tournament/{id}/seasons + fixtures.
+ROME_2025_ATP = 20337  # canonical historical Rome ATP id
 
-# Probe pattern is `player/{resource}/{mid}` since that's the known shape:
-# `player/profile/{mid}` and `player/past-matches/{mid}` both work. The
-# upcoming-match endpoint should be a sibling.
 PROBES = [
-    # Most likely — mirror of past-matches
-    ("atp", f"player/upcoming-matches/{SINNER_MID}",   None, "mirror of past-matches"),
-    ("atp", f"player/next-matches/{SINNER_MID}",       None, "next-matches variant"),
-    ("atp", f"player/scheduled-matches/{SINNER_MID}",  None, "scheduled variant"),
-    ("atp", f"player/upcoming/{SINNER_MID}",           None, "short upcoming"),
-    ("atp", f"player/scheduled/{SINNER_MID}",          None, "short scheduled"),
-    ("atp", f"player/next/{SINNER_MID}",               None, "short next"),
-    # past-matches with a status param — maybe one endpoint for both
-    ("atp", f"player/past-matches/{SINNER_MID}",  {"status": "upcoming"}, "past-matches w/ upcoming flag"),
-    ("atp", f"player/past-matches/{SINNER_MID}",  {"upcoming": "true"}, "past-matches w/ upcoming bool"),
-    ("atp", f"player/matches/{SINNER_MID}",            None, "generic matches endpoint"),
-    ("atp", f"player/matches/{SINNER_MID}",       {"type": "upcoming"}, "matches w/ type filter"),
-    # H2H is also likely a player-scoped endpoint we could discover
-    ("atp", f"player/h2h/{SINNER_MID}",                None, "h2h root"),
-    # Docs/index endpoints sometimes exist
-    ("atp", "endpoints",                               None, "self-describing index"),
-    ("atp", "",                                        None, "tour root"),
+    # 1) Verify getTournamentSeasons — should return all Rome editions
+    ("atp", f"tournament/{ROME_2025_ATP}/seasons",          None, "getTournamentSeasons (path-style)"),
+    ("atp", "tournament/seasons",  {"tournament": ROME_2025_ATP}, "getTournamentSeasons (query-style)"),
+    # 2) Verify getTournamentFixtures with the same id
+    ("atp", f"tournament/{ROME_2025_ATP}/fixtures",         None, "getTournamentFixtures (path-style)"),
+    ("atp", "tournament/fixtures", {"tournament": ROME_2025_ATP, "filter": "PlayerGroup:both;"}, "getTournamentFixtures (query-style)"),
+    # 3) getAllFixtures
+    ("atp", "fixtures",                                     None, "getAllFixtures (path-style)"),
+    ("atp", "all-fixtures",                                 None, "getAllFixtures (alt)"),
 ]
 
 print(f"Probing {len(PROBES)} endpoints… (each ✓ = found, ✗ = 4xx/5xx)")

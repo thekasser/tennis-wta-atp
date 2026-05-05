@@ -137,6 +137,9 @@ tr:hover td{background:rgba(36,43,42,.03)}
 .player-link:hover{border-bottom-color:var(--tc);color:var(--tc)}
 .pts-clickable{transition:background .15s}
 .pts-clickable:hover{background:rgba(64,107,95,0.08)}
+.upcoming-row{transition:background .15s}
+.upcoming-row[onclick]:hover{background:rgba(64,107,95,0.08)}
+.upcoming-row td{padding:6px 4px;border-bottom:1px solid var(--line)}
 /* Player drill-down modal */
 .modal-backdrop{position:fixed;inset:0;background:rgba(36,43,42,0.55);z-index:5000;display:none;align-items:flex-start;justify-content:center;padding:5vh 2vw;overflow-y:auto}
 .modal-backdrop.active{display:flex}
@@ -545,6 +548,7 @@ select:focus{outline:none;border-color:var(--tc)}
       <div class="chart-card"><h3>Win Probability</h3><div class="chart-wrap" style="height:200px"><canvas id="chart-pie"></canvas></div></div>
       <div class="chart-card"><h3>Player Comparison</h3><div class="chart-wrap" style="height:200px"><canvas id="chart-radar"></canvas></div></div>
     </div>
+    <div class="card" id="upcoming-panel" style="margin-bottom:18px"></div>
     <div class="card" id="h2h-panel"></div>
     <div class="card" id="mvm-panel" style="margin-top:18px"></div>
   </div>
@@ -572,7 +576,7 @@ select:focus{outline:none;border-color:var(--tc)}
 let TOURNAMENTS_DATA, PLAYERS_WTA, PLAYERS_ATP, SEASON_WTA, SEASON_ATP;
 let TRAPEZOID_ATP, TRAPEZOID_WTA, TRAPEZOID_YEARS, TRAPEZOID_METRICS,
     TRAPEZOID_LABELS, TRAPEZOID_MIN_DEFAULTS;
-let RECENT_MATCHES, TOURNAMENT_HISTORY, H2H;
+let RECENT_MATCHES, TOURNAMENT_HISTORY, H2H, UPCOMING_MATCHES;
 
 // PTS table + getTournamentPts() helper used to live in data/tournaments.js
 // alongside the calendar data. They're stable lookup logic, not data, so
@@ -608,7 +612,7 @@ async function loadDashboardData() {
   });
   const [
     tournaments, playersWTA, playersATP, seasonWTA, seasonATP,
-    trapezoid, recentMatches, tournamentHistory, h2h,
+    trapezoid, recentMatches, tournamentHistory, h2h, upcoming,
   ] = await Promise.all([
     get('/api/tournaments'),
     get('/api/players/wta'),
@@ -619,6 +623,7 @@ async function loadDashboardData() {
     get('/api/recent-matches'),
     get('/api/tournament-history'),
     get('/api/h2h'),
+    get('/api/upcoming').catch(() => ({atp: [], wta: []})),  // graceful: not all envs have it yet
   ]);
   TOURNAMENTS_DATA   = tournaments;
   PLAYERS_WTA        = playersWTA;
@@ -634,6 +639,7 @@ async function loadDashboardData() {
   RECENT_MATCHES     = recentMatches;
   TOURNAMENT_HISTORY = tournamentHistory;
   H2H                = h2h;
+  UPCOMING_MATCHES   = upcoming;
 }
 
 
@@ -2193,6 +2199,12 @@ function renderPredict() {
   // CURRENT player data so this isn't a true backtest — it's "where does our
   // model disagree with the market on matches that already happened?"
   renderModelVsMarket();
+
+  // ── Upcoming matches panel (Phase 2) — scheduled fixtures from
+  // getTournamentFixtures, with our model's prediction. Click a row to
+  // load that matchup into the predictor above. Odds-vs-model deltas
+  // light up as bookmakers post lines (Phase 3).
+  renderUpcomingMatches();
 }
 
 function renderModelVsMarket() {
@@ -2331,6 +2343,149 @@ function renderModelVsMarket() {
     </table>
     </div>
   `;
+}
+
+// ── Upcoming matches panel (Phase 2) ──────────────────────────────────────
+// Lists scheduled-future fixtures at active tournaments with our model's
+// prediction. Click any row to load that matchup into the predictor above.
+// Odds (and model-vs-market deltas) appear here once bookmakers post lines.
+function renderUpcomingMatches() {
+  const el = document.getElementById('upcoming-panel');
+  if (!el) return;
+  if (typeof UPCOMING_MATCHES === 'undefined' || !UPCOMING_MATCHES) {
+    el.innerHTML = '';
+    return;
+  }
+  const tk = TOUR.toLowerCase();
+  const fixtures = (UPCOMING_MATCHES[tk] || []).slice();
+  if (!fixtures.length) {
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">
+      No scheduled fixtures right now — upcoming matches appear when an active tournament has its draw published.
+    </div>`;
+    return;
+  }
+
+  // Sort soonest first, group by date for readability
+  fixtures.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const psList = players();
+
+  // Round-id → human label. Numeric mapping is API-specific; this is a
+  // best-effort guess based on observed values (4 = early R128/quals start at
+  // M1000_96, lower = deeper). Refine as we observe more.
+  const ROUND_LABEL = (rd, drawSize) => {
+    if (rd == null) return '?';
+    if (drawSize >= 96) {
+      return ({1:'F', 2:'SF', 3:'QF', 4:'R16', 5:'R32', 6:'R64', 7:'R128'}[rd]) || `R${rd}`;
+    }
+    return ({1:'F', 2:'SF', 3:'QF', 4:'R16', 5:'R32', 6:'R64'}[rd]) || `R${rd}`;
+  };
+  const SURF_DOT = { H: '🔵', C: '🟤', G: '🟢' };
+
+  // Group by date for display
+  const byDate = new Map();
+  fixtures.forEach(f => {
+    const d = (f.date || '').slice(0, 10);
+    if (!byDate.has(d)) byDate.set(d, []);
+    byDate.get(d).push(f);
+  });
+
+  // Today/tomorrow labels
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const dateLabel = d => d === todayStr ? `Today (${d})` :
+                        d === tomorrow ? `Tomorrow (${d})` : d;
+
+  const sections = [...byDate.entries()].map(([d, fs]) => {
+    const rows = fs.map(f => {
+      const p1 = f.p1, p2 = f.p2;
+      const pA = p1.bio ? psList.find(p => p.id === p1.bio) : null;
+      const pB = p2.bio ? psList.find(p => p.id === p2.bio) : null;
+      const surfLabel = f.surf === 'C' ? 'Clay' : f.surf === 'G' ? 'Grass' : 'Hard';
+      let modelStr = '—';
+      let clickHandler = '';
+      if (pA && pB) {
+        const prob = matchProb(pA, pB, surfLabel);
+        const favA = prob >= 0.5;
+        const favName = favA ? (pA.ab || p1.name) : (pB.ab || p2.name);
+        const favPct = Math.round((favA ? prob : 1 - prob) * 100);
+        modelStr = `<strong style="color:${favA ? TC : TC_B}">${favName} ${favPct}%</strong>`;
+        clickHandler = `onclick="loadFixtureIntoPredictor(${pA.id}, ${pB.id})" style="cursor:pointer"`;
+      } else if (pA && !pB) {
+        modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">${p2.name} not bio'd</span>`;
+      } else if (!pA && pB) {
+        modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">${p1.name} not bio'd</span>`;
+      } else {
+        modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">neither bio'd</span>`;
+      }
+      // Odds preview (Phase 3 hook — empty until bookmakers post lines)
+      let mktStr = '';
+      if (f.o1 && f.o2 && pA && pB) {
+        const inv1 = 1 / f.o1, inv2 = 1 / f.o2;
+        const mktA = inv1 / (inv1 + inv2);
+        const mktFavPct = Math.round(Math.max(mktA, 1 - mktA) * 100);
+        const mktFavA = mktA >= 0.5;
+        const mktFavName = mktFavA ? (pA.ab || p1.name) : (pB.ab || p2.name);
+        mktStr = `<span style="color:var(--muted)">mkt: ${mktFavName} ${mktFavPct}%</span>`;
+      }
+      const time = (f.date || '').slice(11, 16);
+      return `<tr ${clickHandler} class="upcoming-row">
+        <td style="font-size:10px;color:var(--muted);white-space:nowrap">${time}</td>
+        <td style="font-size:11px;white-space:nowrap">${SURF_DOT[f.surf]||'·'} ${f.short || f.tn}</td>
+        <td style="font-size:10px;color:var(--muted)">${ROUND_LABEL(f.rdId, f.drawSize)}</td>
+        <td style="font-size:11px">
+          <span style="${pA?'font-weight:600':''}">${pA ? (pA.ab || p1.name) : p1.name}</span>
+          <span style="color:var(--muted);margin:0 4px">vs</span>
+          <span style="${pB?'font-weight:600':''}">${pB ? (pB.ab || p2.name) : p2.name}</span>
+        </td>
+        <td style="font-size:11px">${modelStr}</td>
+        <td style="font-size:11px">${mktStr}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:14px 0 6px">${dateLabel(d)} — ${fs.length} match${fs.length===1?'':'es'}</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="font-size:10px;color:var(--muted);text-align:left;border-bottom:1px solid var(--line)">
+          <th style="padding:4px">Time</th>
+          <th style="padding:4px">Event</th>
+          <th style="padding:4px">Round</th>
+          <th style="padding:4px">Match</th>
+          <th style="padding:4px">Model pick</th>
+          <th style="padding:4px">Market</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="font-weight:600;color:var(--ink);font-size:13px;margin-bottom:6px">
+      Upcoming matches — ${fixtures.length} scheduled
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
+      Scheduled fixtures from active tournament(s). Click any row where both players are tracked to load the matchup into the predictor above.
+      Odds appear once bookmakers post lines (typically a few hours before match time).
+    </div>
+    ${sections}
+  `;
+}
+
+// Click handler for upcoming-match rows — set the predictor selects + render.
+function loadFixtureIntoPredictor(idA, idB) {
+  const sa = document.getElementById('pred-a');
+  const sb = document.getElementById('pred-b');
+  const searchA = document.getElementById('pred-a-search');
+  const searchB = document.getElementById('pred-b-search');
+  if (!sa || !sb) return;
+  sa.value = String(idA);
+  sb.value = String(idB);
+  // Sync the search inputs to display the picked names
+  const optA = [...sa.options].find(o => o.value === String(idA));
+  const optB = [...sb.options].find(o => o.value === String(idB));
+  if (searchA && optA) searchA.value = optA.textContent;
+  if (searchB && optB) searchB.value = optB.textContent;
+  // Smooth-scroll to the predictor so the user sees the result
+  document.getElementById('tab-predict')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+  renderPredict();
 }
 
 // ═══════════════════════════════════════
