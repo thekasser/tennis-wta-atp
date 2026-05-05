@@ -73,6 +73,15 @@ body.tab-trapezoid #btn-both{display:inline-flex}
 .ctx-bar.atp{background:var(--accent-steel-soft);border-color:rgba(95,115,128,.22)}
 .ctx-bar .tour-label{font-size:13px;font-weight:800;color:var(--tc)}
 .tab-nav{display:flex;gap:6px;margin-bottom:22px;overflow-x:auto;padding:4px;background:rgba(36,43,42,.05);border-radius:999px;width:fit-content}
+/* Sticky tab bar — wrapped in a full-bleed solid bg row so content scrolling
+   behind it is fully masked. Tables below use --sticky-top as their offset. */
+.sticky-nav{position:sticky;top:0;z-index:50;background:var(--bg);padding:10px 0 6px;margin:-10px 0 0;backdrop-filter:saturate(1.05)}
+:root{--sticky-top:64px}
+@media (max-width:760px){:root{--sticky-top:56px}}
+/* Page-level table headers stay visible while rows scroll. Modal tables also
+   benefit (they stick to the modal's scroll container automatically). */
+table th{position:sticky;top:var(--sticky-top);z-index:5;background:#ecebe1}
+.modal table th{top:0;background:#f4efe4}
 .tab-btn{padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all .15s;font-family:inherit}
 .tab-btn:hover{color:var(--ink)}
 .tab-btn.active{background:var(--ink);color:#fffef9;box-shadow:var(--shadow-sm)}
@@ -269,7 +278,7 @@ select:focus{outline:none;border-color:var(--tc)}
 .tour-badge.atp{background:var(--accent-steel-soft);color:var(--accent-steel)}
 .tour-badge.wta{background:var(--accent-green-soft);color:var(--accent-green)}
 #trap-table table{width:100%;border-collapse:collapse;font-size:12.5px}
-#trap-table th{padding:11px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);background:rgba(36,43,42,.04);cursor:pointer;white-space:nowrap;user-select:none;border-bottom:1px solid var(--line)}
+#trap-table th{padding:11px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);background:#ecebe1;cursor:pointer;white-space:nowrap;user-select:none;border-bottom:1px solid var(--line);position:sticky;top:var(--sticky-top);z-index:5}
 #trap-table th:hover{color:var(--ink)}
 #trap-table td{padding:10px 14px;border-top:1px solid var(--line);color:var(--ink);white-space:nowrap}
 #trap-table tbody tr:first-child td{border-top:0}
@@ -301,12 +310,14 @@ select:focus{outline:none;border-color:var(--tc)}
     <span id="ctx-info"></span>
   </div>
 
-  <!-- TABS -->
-  <div class="tab-nav">
-    <button class="tab-btn active" onclick="setTab('live')">Live Events <span class="sub" id="tab-live-sub"></span></button>
-    <button class="tab-btn" onclick="setTab('rankings')">Rankings<span class="sub">T12M</span></button>
-    <button class="tab-btn" onclick="setTab('trapezoid')">Trapezoid<span class="sub">Metrics</span></button>
-    <button class="tab-btn" onclick="setTab('predict')">Matchup Predictor</button>
+  <!-- TABS — wrapper sticks to page top so navigation is always reachable -->
+  <div class="sticky-nav">
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="setTab('live')">Live Events <span class="sub" id="tab-live-sub"></span></button>
+      <button class="tab-btn" onclick="setTab('rankings')">Rankings<span class="sub">T12M</span></button>
+      <button class="tab-btn" onclick="setTab('trapezoid')">Trapezoid<span class="sub">Metrics</span></button>
+      <button class="tab-btn" onclick="setTab('predict')">Matchup Predictor</button>
+    </div>
   </div>
 
   <!-- ── TAB 1: LIVE EVENTS ── -->
