@@ -409,7 +409,13 @@ def mid_to_bio_index(conn) -> dict[int, dict]:
 # against a cohort computed at the same date.
 
 COMPOSITE_METRICS = [
-    "totalPtsWonPct", "bpSavedPct", "bpWonPct",
+    "totalPtsWonPct",
+    "serviceGamesWonPct",   # replaced bpSavedPct 2026-05-05 — captures hold
+                            # rate (avoidance + saving), strictly more
+                            # informative than per-chance BP saved.
+    "returnGamesWonPct",    # replaced bpWonPct  2026-05-05 — captures break
+                            # rate (pressure + conversion), strictly more
+                            # informative than per-chance BP conversion.
     "tbWinPct", "decSetWinPct", "matchWinPct",
 ]
 SHRINK_PRIOR          = 15      # matches `decorateTrapezoidComposite`

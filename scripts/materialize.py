@@ -812,19 +812,34 @@ def _aggregate_year(matches: list[dict], mid: int,
             dec_played += 1
             if won_match: dec_won += 1
 
-    sv_gms = round(svpt / 6.5) if svpt else 0
+    sv_gms     = round(svpt / 6.5) if svpt else 0
+    opp_sv_gms = round(opp_svpt / 6.5) if opp_svpt else 0
+    # Service games we lost = BPs we faced that opp converted = bp_faced − bp_saved.
+    # A single service game can have multiple BPs but only one conversion ends it,
+    # so opp's converted-BP count == games we got broken.
+    sv_games_lost = max(0, bp_faced - bp_saved)
     return {
-        "matches":         n,
-        "matchWinPct":     round(100 * wins / n, 1) if n else None,
-        "servePtsWonPct":  _safe_pct(first_won + second_won, svpt),
-        "returnPtsWonPct": _safe_pct(opp_svpt - opp_first_won - opp_second_won, opp_svpt),
-        "totalPtsWonPct":  _safe_pct((first_won + second_won) + (opp_svpt - opp_first_won - opp_second_won),
-                                     svpt + opp_svpt),
-        "acesPerSvGm":     round(aces / sv_gms, 2) if sv_gms else None,
-        "bpSavedPct":      _safe_pct(bp_saved, bp_faced),
-        "bpWonPct":        _safe_pct(bp_won, bp_chances),
-        "tbWinPct":        _safe_pct(tb_won, tb_played) if tb_played >= min_tb else None,
-        "decSetWinPct":    _safe_pct(dec_won, dec_played) if dec_played >= min_dec else None,
+        "matches":              n,
+        "matchWinPct":          round(100 * wins / n, 1) if n else None,
+        "servePtsWonPct":       _safe_pct(first_won + second_won, svpt),
+        "returnPtsWonPct":      _safe_pct(opp_svpt - opp_first_won - opp_second_won, opp_svpt),
+        "totalPtsWonPct":       _safe_pct((first_won + second_won) + (opp_svpt - opp_first_won - opp_second_won),
+                                          svpt + opp_svpt),
+        "acesPerSvGm":          round(aces / sv_gms, 2) if sv_gms else None,
+        "bpSavedPct":           _safe_pct(bp_saved, bp_faced),
+        "bpWonPct":             _safe_pct(bp_won, bp_chances),
+        # Service Games Won % — captures avoidance + saving in one number.
+        # More game-relevant than BP Saved % alone (a server who never faces a
+        # BP also has 100% SG Won but no BP Saved %). 2026-05-05 swap: this
+        # replaces bpSavedPct in the composite metric set.
+        "serviceGamesWonPct":   _safe_pct(sv_gms - sv_games_lost, sv_gms),
+        # Return Games Won % — captures pressure + conversion in one number.
+        # ≈ bp_per_game × bp_won_pct. More game-relevant than BP Won % alone
+        # (a player creating few BPs and converting them all has high BP Won %
+        # but low impact). 2026-05-05 swap: replaces bpWonPct in the composite.
+        "returnGamesWonPct":    _safe_pct(bp_won, opp_sv_gms),
+        "tbWinPct":             _safe_pct(tb_won, tb_played) if tb_played >= min_tb else None,
+        "decSetWinPct":         _safe_pct(dec_won, dec_played) if dec_played >= min_dec else None,
     }
 
 
@@ -983,19 +998,24 @@ def materialize_trapezoid(conn) -> bool:
 
     metrics = [
         "matches", "servePtsWonPct", "returnPtsWonPct", "totalPtsWonPct",
-        "tbWinPct", "decSetWinPct", "acesPerSvGm", "bpSavedPct", "bpWonPct", "matchWinPct",
+        "tbWinPct", "decSetWinPct", "acesPerSvGm",
+        "bpSavedPct", "bpWonPct",
+        "serviceGamesWonPct", "returnGamesWonPct",
+        "matchWinPct",
     ]
     labels = {
-        "matches":         "Matches Played",
-        "servePtsWonPct":  "Serve Points Won %",
-        "returnPtsWonPct": "Return Points Won %",
-        "totalPtsWonPct":  "Total Points Won %",
-        "tbWinPct":        "Tiebreak Win %",
-        "decSetWinPct":    "Deciding Set Win %",
-        "acesPerSvGm":     "Aces / Service Game",
-        "bpSavedPct":      "Break Points Saved %",
-        "bpWonPct":        "Break Points Won %",
-        "matchWinPct":     "Match Win %",
+        "matches":              "Matches Played",
+        "servePtsWonPct":       "Serve Points Won %",
+        "returnPtsWonPct":      "Return Points Won %",
+        "totalPtsWonPct":       "Total Points Won %",
+        "tbWinPct":             "Tiebreak Win %",
+        "decSetWinPct":         "Deciding Set Win %",
+        "acesPerSvGm":          "Aces / Service Game",
+        "bpSavedPct":           "Break Points Saved %",
+        "bpWonPct":             "Break Points Won %",
+        "serviceGamesWonPct":   "Service Games Won %",
+        "returnGamesWonPct":    "Return Games Won %",
+        "matchWinPct":          "Match Win %",
     }
 
     # Per-window min-matches default = 25th percentile of match counts
