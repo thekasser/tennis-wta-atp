@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # ── Restore the SQLite DB from the committed snapshot ──────────────
       - name: Restore DB snapshot

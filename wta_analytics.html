@@ -1287,6 +1287,7 @@ function renderLive() {
         <h3>No ${TOUR} events currently in progress</h3>
         ${next ? `<p style="margin-top:6px">Next up: <strong style="color:var(--tc)">${next.name}</strong> — ${next.startDate}</p>` : ''}
       </div>
+      ${renderUpcomingDefenders(next)}
       ${renderUpcoming(upcoming)}
     `;
     return;
@@ -1449,6 +1450,81 @@ function renderLive() {
       ${renderUpcoming(TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR)&&!t.complete&&!t.active).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||'')))}
     </div>
   `;
+}
+
+// When there are no active events, surface the most useful piece of pre-event
+// info: who has the most ranking points to defend at the next tournament.
+// Sorted by defending pts desc — the higher up, the more they have to lose
+// if they exit early. Worst-case T12M = current − defending (assumes 0
+// earned at this year's edition, the most pessimistic scenario).
+function renderUpcomingDefenders(tourn) {
+  if (!tourn) return '';
+  const allBios = TOUR === 'WTA' ? PLAYERS_WTA : PLAYERS_ATP;
+  const sd = seasonData();
+  const seasonPlayers = sd.players || {};
+
+  const rows = [];
+  allBios.forEach(bio => {
+    const def = computeDefending(bio.id, tourn);
+    if (def <= 0) return;
+    const seas = seasonPlayers[bio.id] || {};
+    const currPts = seas.pts || 0;
+    rows.push({
+      bio_id:   bio.id,
+      name:     bio.name,
+      ab:       bio.ab,
+      nat:      bio.nat,
+      rank:     seas.rank || bio.id,
+      currPts,
+      defending: def,
+      worstCase: Math.max(0, currPts - def),
+    });
+  });
+
+  if (!rows.length) return '';
+  rows.sort((a, b) => b.defending - a.defending);
+
+  const totalAtStake = rows.reduce((s, r) => s + r.defending, 0);
+  const top = rows.slice(0, 30);
+
+  return `
+    <div class="stat-row" style="grid-template-columns:repeat(3,1fr);margin-top:24px">
+      <div class="stat-card">
+        <div class="val" style="color:var(--tc)">${tourn.short || tourn.name}</div>
+        <div class="lbl">Next event · starts ${tourn.startDate}</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="color:var(--accent-rose)">${rows.length}</div>
+        <div class="lbl">Players defending pts</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="color:var(--accent-rose)">${totalAtStake.toLocaleString()}</div>
+        <div class="lbl">Total pts at stake</div>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="margin-top:16px">
+      <div class="tbl-title">${tourn.name} — defending pts (top ${top.length} of ${rows.length})</div>
+      <table class="tbl">
+        <thead><tr>
+          <th title="Current T12M rank">Rank</th>
+          <th>Player</th>
+          <th title="Current T12M points">Current Pts</th>
+          <th title="Pts earned at this tournament last year — what falls off the rolling T12M total when this year's edition ends">Defending</th>
+          <th title="Worst-case T12M after this tournament: current − defending (assumes 0 earned at this year's edition)">If they don't defend</th>
+        </tr></thead>
+        <tbody>
+          ${top.map(r => `
+            <tr>
+              <td>${r.rank}</td>
+              <td><strong>${r.name}</strong> <span style="color:var(--muted);font-size:11px">${r.nat}</span></td>
+              <td>${r.currPts.toLocaleString()}</td>
+              <td style="color:var(--accent-rose);font-weight:600">−${r.defending.toLocaleString()}</td>
+              <td>${r.worstCase.toLocaleString()}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function renderUpcoming(list) {
