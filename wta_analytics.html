@@ -3616,11 +3616,15 @@ class TrapezoidApp {
     });
   }
   preset(name) {
+    // All presets default color to composite — z-score gradient is the most
+    // information-dense single channel (captures overall strength relative to
+    // the cohort). Tour color (ATP vs WTA) is rarely useful since users
+    // typically have a tour selected anyway.
     const map = {
-      f1: { x:'servePtsWonPct', y:'returnPtsWonPct', size:'matchWinPct', color:'tour', btn:0 },
-      f2: { x:'decSetWinPct',   y:'composite',       size:'matchWinPct', color:'tour', btn:1 },
-      f3: { x:'totalPtsWonPct', y:'tbWinPct',        size:'matchWinPct', color:'tour', btn:2 },
-      f4: { x:'acesPerSvGm',    y:'bpSavedPct',      size:'matchWinPct', color:'tour', btn:3 },
+      f1: { x:'servePtsWonPct', y:'returnPtsWonPct', size:'matchWinPct', color:'composite', btn:0 },
+      f2: { x:'decSetWinPct',   y:'composite',       size:'matchWinPct', color:'composite', btn:1 },
+      f3: { x:'totalPtsWonPct', y:'tbWinPct',        size:'matchWinPct', color:'composite', btn:2 },
+      f4: { x:'acesPerSvGm',    y:'bpSavedPct',      size:'matchWinPct', color:'composite', btn:3 },
     };
     const p = map[name];
     document.getElementById('trap-x').value = p.x;
