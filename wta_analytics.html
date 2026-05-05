@@ -1091,7 +1091,17 @@ function matchProbBreakdown(pA, pB, surf) {
     + weights.form * _logit(formP)
     + weights.h2h  * _logit(h2hP)
     + weights.comp * _logit(compP);
-  const rawProb = 1 / (1 + Math.exp(-sumLogit));
+  // Platt-style sharpening factor. Weights sum to 1 (averaging logits) treats
+  // the 5 signals as if they were a SINGLE pooled estimate. Under partial
+  // independence, the correct multiplier is between 1 (fully correlated) and
+  // N=5 (fully independent). Tennis signals are correlated but not identical
+  // (Elo and form share recency-of-results info but composite captures
+  // serve/return tendencies independently). Empirically calibrated against
+  // both tours' panels — k=2.5 closes the +20-30 pp mid-bin gap without
+  // significant overshoot in the 50-55 bin. Tune up if calibration still
+  // shows underconfidence; tune down if 50-55 bin starts overshooting.
+  const SHARPEN = 2.5;
+  const rawProb = 1 / (1 + Math.exp(-sumLogit * SHARPEN));
   const prob = Math.min(.95, Math.max(.05, rawProb));
 
   // Breakdown rows ordered by contribution magnitude relative to 50% (the
@@ -2946,7 +2956,15 @@ function blufPredict() {
   let detail = '';
   if (drivers.length) detail = `Key drivers: ${drivers.join(', ')}.`;
 
-  const conf = favProb >= 75 ? 'High-confidence pick' : favProb >= 60 ? 'Moderate edge — could go either way in a tight match' : 'Coin-flip matchup — form and conditions will decide this';
+  // Confidence label thresholds are calibrated against the calibration-panel
+  // findings, not raw model %. Even after k=2.5 sharpening the model remains
+  // mildly underconfident, so a 65% display corresponds to ~85% real outcomes
+  // (heavy favorite, not "could go either way"). The "moderate edge" zone
+  // (55-65) maps to actual 70-85% — favorite is clearly stronger but upset
+  // possible. Coin-flip is reserved for < 55% display (actual 50-65%).
+  const conf = favProb >= 65 ? 'Heavy favorite — model has a clear, decisive lean' :
+               favProb >= 55 ? 'Moderate edge — favorite is the clear pick, but the underdog has a real shot' :
+                               'Pick\'em — coin-flip range, form and conditions will decide';
   detail += ` ${conf}.`;
 
   return blufWrap(`
