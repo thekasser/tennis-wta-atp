@@ -58,7 +58,7 @@ def main() -> int:
     if not api_key:
         print("MATCHSTAT_API_KEY not set", file=sys.stderr)
         return 1
-    client = MatchstatClient(api_key=api_key)
+    client = MatchstatClient(api_key=api_key, auto_log=True)
 
     print(f"Probing {len(PROBES)} candidate paths…\n")
     hits = []

@@ -38,7 +38,37 @@ from pathlib import Path
 
 REPO_ROOT       = Path(__file__).parent.parent
 ENV_FILE        = REPO_ROOT / ".env"
+DEFAULT_DB_PATH = REPO_ROOT / "data" / "tennis.db"
 DEFAULT_TIMEOUT = 20  # seconds
+
+
+def log_fetch(meta: dict, rows_inserted: int | None = None,
+              db_path: Path | None = None) -> None:
+    """Append one row to api_fetch_log. Lazy-imports sqlite3 so MatchstatClient
+    stays usable in environments without the DB (tests, doc rendering).
+
+    Silently no-ops if the DB file doesn't exist or the table isn't there yet —
+    we never want a logging failure to mask a real API call result.
+    """
+    import sqlite3
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
+    if not Path(db_path).exists():
+        return
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "INSERT INTO api_fetch_log "
+            "(fetched_at, endpoint, params, http_status, rows_returned, "
+            " rows_inserted, ms_elapsed, error) VALUES (?,?,?,?,?,?,?,?)",
+            (meta.get("fetched_at"), meta.get("endpoint"), meta.get("params"),
+             meta.get("http_status"), meta.get("rows_returned"), rows_inserted,
+             meta.get("ms_elapsed"), meta.get("error")),
+        )
+        conn.commit()
+        conn.close()
+    except sqlite3.Error:
+        pass
 
 
 def load_env(path: Path = ENV_FILE) -> dict:
@@ -59,7 +89,13 @@ class MatchstatClient:
     BASE_PATH = "/tennis/v2"
 
     def __init__(self, api_key: str | None = None, host: str | None = None,
-                 *, verbose: bool = True):
+                 *, verbose: bool = True, auto_log: bool = False,
+                 log_db_path: Path | None = None):
+        """auto_log=True writes every call to api_fetch_log. Use it from
+        callers that don't track rows_inserted themselves (probe scripts,
+        sync_catalog, sync_fixtures). sync_matches/sync_rankings track
+        rows_inserted manually and should leave auto_log=False to avoid
+        double-logging."""
         env = load_env()
         self.api_key = (
             api_key
@@ -76,6 +112,8 @@ class MatchstatClient:
                 "MATCHSTAT_API_KEY not set. Add it to .env or export it before calling."
             )
         self.verbose = verbose
+        self._auto_log    = auto_log
+        self._log_db_path = log_db_path
         # Rate-limit throttle (Pro plan ≈ 5 req/s; 250 ms gives margin).
         self._last_request_at = 0.0
         self._min_interval    = 0.25
@@ -178,6 +216,9 @@ class MatchstatClient:
             inner = data.get("data")
             if isinstance(inner, list):
                 meta["rows_returned"] = len(inner)
+
+        if self._auto_log:
+            log_fetch(meta, rows_inserted=None, db_path=self._log_db_path)
 
         return data, meta
 

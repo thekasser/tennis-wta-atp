@@ -47,12 +47,17 @@ def write_summary(db_path: Path, gz_path: Path, summary_path: Path,
     for table in ("players", "tournaments", "matches", "rankings_snapshots", "api_fetch_log"):
         counts[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
-    # latest match per active tournament
+    # latest match per active tournament — uses the date-window definition
+    # of "active" (today ∈ [start-7d, end+1d]), matching materialize.py.
+    # The tournaments.active flag is informational only since 2026-05-04 and
+    # gets left set after tournaments end.
     actives = list(conn.execute("""
         SELECT t.id, t.name, MAX(m.date) AS latest, COUNT(m.id) AS n
         FROM tournaments t
         LEFT JOIN matches m ON m.tournament_id = t.id
-        WHERE t.active = 1
+        WHERE t.start_date IS NOT NULL AND t.end_date IS NOT NULL
+          AND date(t.start_date, '-7 days') <= date('now')
+          AND date(t.end_date,   '+1 day')  >= date('now')
         GROUP BY t.id
     """))
     # top 5 latest matches across whole DB

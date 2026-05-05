@@ -34,7 +34,7 @@ if not API_KEY:
     print("MATCHSTAT_API_KEY not set", file=sys.stderr)
     sys.exit(1)
 
-client = MatchstatClient(api_key=API_KEY)
+client = MatchstatClient(api_key=API_KEY, auto_log=True)
 
 # Confirmed in RapidAPI docs (2026-05-04 user-discovered):
 #   getTournamentSeasons  — list editions of a tournament series across years

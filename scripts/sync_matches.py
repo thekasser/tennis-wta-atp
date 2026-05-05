@@ -8,24 +8,32 @@ is the source of truth; this script just keeps it current. Aggregations
 
 USAGE
 -----
-    python3 scripts/sync_matches.py                        # both tours, current+last year
+    python3 scripts/sync_matches.py                        # both tours, current year
     python3 scripts/sync_matches.py --tour wta --years 2026
     python3 scripts/sync_matches.py --limit 30             # debug: only first N players
-    python3 scripts/sync_matches.py --force                # ignore needs_refetch heuristic
+    python3 scripts/sync_matches.py --force                # ignore decide_fetch heuristic
 
-REFETCH HEURISTIC
------------------
-For each top-N player, decide whether to call the API:
+REFETCH HEURISTIC (rewritten 2026-05-05 after API-cap incident)
+---------------------------------------------------------------
+For each top-N player, decide whether to call the API and which years:
 
-  1. Cold start (no matches in DB for this mid)             → fetch
-  2. Player has a match in the last 14d at an active        → fetch
-     tournament (active=1 in tournaments table)
-  3. Latest match in DB is older than yesterday             → fetch
-  4. Otherwise                                              → skip
+  1. Cold start (no matches in DB)               → fetch all DEFAULT_YEARS
+  2. Player has a match at a tournament whose
+     date window (start-7d to end+1d) contains
+     today                                        → fetch [current_year]
+  3. Otherwise                                    → skip
 
-This keeps active-tournament players fresh on every 4h cron, while quiet
-players cost ~0 API calls between events. Steady-state: ~30-50 calls per
-run during active tournaments, ~5-15 calls between.
+This mirrors materialize._compute_active_tournaments — the date-window
+definition of "active" — instead of the stale `tournaments.active=1` flag,
+which gets left set after tournaments end. Crucially, dropping the
+`latest < yesterday` trigger fixes the bug where ~85% of top-200 players
+got refetched on every cron (they don't play every day, so the test
+always passed).
+
+Expected steady-state cost:
+    Active week (1 tour-tour event): ~80–120 calls/run
+    Active week (combined slam):     ~200 calls/run
+    Quiet week:                      ~0 calls/run (cold-starts only)
 """
 from __future__ import annotations
 import argparse
@@ -41,7 +49,11 @@ from matchstat import MatchstatClient
 
 PAGE_SIZE     = 50
 DEFAULT_TOP_N = 200
-DEFAULT_YEARS = (date.today().year - 1, date.today().year)
+# Default to current year only — 2025 history is largely frozen, no need to
+# refetch every cron run. Cold-starts override this and pull (year-1, year)
+# so new bios still get full T12M backfill.
+DEFAULT_YEARS         = (date.today().year,)
+COLD_START_YEARS      = (date.today().year - 1, date.today().year)
 
 # Matchstat court IDs → surface code. Defaults to 'H' for unknowns.
 SURFACE_MAP = {1: "H", 2: "H", 3: "C", 4: "C", 5: "G", 6: "C", 7: "C"}
@@ -49,35 +61,94 @@ SURFACE_MAP = {1: "H", 2: "H", 3: "C", 4: "C", 5: "G", 6: "C", 7: "C"}
 
 # ─── Refetch decision ───────────────────────────────────────────────────────
 
-def needs_refetch(conn, mid: int) -> tuple[bool, str]:
-    """Decide whether to (re)fetch this player's matches. Returns (bool, reason)."""
+# Onboarding window: brief broad-sweep to discover which top-200 are in the
+# draw. After this window, the precision filter takes over (only players who
+# already have a match at an active tournament). The window is intentionally
+# tight to keep the API budget under 10k/mo:
+#   start - 2d = covers late wildcards / draw edits (quals players aren't in
+#                our top-200 bio set, so no need to extend further back)
+#   start + 2d = covers R1 (1-2 days). By R2 every drawn top-200 has a match.
+# The ACTIVE WINDOW (used by `active_ids` and materialize.py) is wider —
+# [start - 7d, end + 1d] — and reflects "show as active in the dashboard,"
+# which is a separate concern from "broadly sweep the API."
+ONBOARDING_PRE_DAYS  = 2
+ONBOARDING_POST_DAYS = 2
+ACTIVE_PRE_DAYS      = 7   # wider for "active" detection; mirrors materialize.py
+ACTIVE_GRACE_DAYS    = 1   # post-final grace; mirrors materialize.py
+
+
+def active_window_state(conn, tour: str) -> tuple[set[str], bool]:
+    """Return (active_tournament_ids, any_in_onboarding) FOR THIS TOUR.
+
+    Scoped by tour so that a WTA-only event in onboarding doesn't trigger an
+    ATP broad sweep (and vice versa). `tour='both'` tournaments count for
+    both calls.
+
+    `active_tournament_ids` mirrors materialize._compute_active_tournaments —
+    a tournament is active if today ∈ [start_date - 7d, end_date + 1d].
+
+    `any_in_onboarding` is True if any active tournament for this tour is
+    still in its [start - 7d, start + 3d] onboarding window. While true, we
+    sweep the full candidate list so new draw entrants get picked up
+    (otherwise the precision filter creates a chicken-and-egg: a player with
+    no DB match at the tournament never gets fetched, so never gets a DB
+    match).
+    """
+    today = date.today()
+    actives: set[str] = set()
+    onboarding = False
+    for r in conn.execute("""
+        SELECT id, start_date, end_date FROM tournaments
+        WHERE start_date IS NOT NULL AND end_date IS NOT NULL
+          AND (tour = ? OR tour = 'both')
+    """, (tour,)):
+        try:
+            sd = date.fromisoformat(r["start_date"])
+            ed = date.fromisoformat(r["end_date"])
+        except (ValueError, TypeError):
+            continue
+        if (sd - timedelta(days=ACTIVE_PRE_DAYS)) <= today <= (ed + timedelta(days=ACTIVE_GRACE_DAYS)):
+            actives.add(r["id"])
+            if (sd - timedelta(days=ONBOARDING_PRE_DAYS)) <= today <= (sd + timedelta(days=ONBOARDING_POST_DAYS)):
+                onboarding = True
+    return actives, onboarding
+
+
+def decide_fetch(conn, mid: int, active_ids: set[str], any_onboarding: bool
+                 ) -> tuple[list[int], str]:
+    """Decide WHICH YEARS to fetch for this player. Returns (years, reason).
+
+    Empty list = skip. Logic:
+      1. No matches in DB                          → COLD_START_YEARS (backfill)
+      2. Any active tournament still onboarding    → DEFAULT_YEARS (broad sweep)
+      3. Has match at an active tournament         → DEFAULT_YEARS (precision)
+      4. Otherwise                                  → [] (skip)
+    """
     row = conn.execute(
         "SELECT MAX(date) AS latest FROM matches WHERE p1_id=? OR p2_id=?",
         (mid, mid),
     ).fetchone()
     latest = row["latest"]
     if not latest:
-        return True, "cold start"
+        return list(COLD_START_YEARS), "cold start"
 
-    today      = date.today().isoformat()
-    yesterday  = (date.today() - timedelta(days=1)).isoformat()
-    fortnight  = (date.today() - timedelta(days=14)).isoformat()
+    if not active_ids:
+        return [], f"latest match {latest}, no tournament in active window"
 
-    is_active = conn.execute("""
-        SELECT 1 FROM matches m
-        JOIN tournaments t ON m.tournament_id = t.id
-        WHERE (m.p1_id = ? OR m.p2_id = ?)
-          AND m.date >= ?
-          AND t.active = 1
+    if any_onboarding:
+        return list(DEFAULT_YEARS), "active-window tournament onboarding"
+
+    placeholders = ",".join("?" * len(active_ids))
+    in_active = conn.execute(f"""
+        SELECT 1 FROM matches
+        WHERE (p1_id = ? OR p2_id = ?)
+          AND tournament_id IN ({placeholders})
         LIMIT 1
-    """, (mid, mid, fortnight)).fetchone()
-    if is_active:
-        return True, "in active tournament"
+    """, (mid, mid, *active_ids)).fetchone()
+    if in_active:
+        return list(DEFAULT_YEARS), "in active-window tournament"
 
-    if latest < yesterday:
-        return True, f"latest match {latest} > 1d old"
-
-    return False, f"latest match {latest}, no active event"
+    return [], f"latest match {latest}, not in any active-window tournament"
 
 
 # ─── Match row construction ─────────────────────────────────────────────────
@@ -229,9 +300,14 @@ def _log_fetch(conn, meta: dict, rows_inserted: int | None = None) -> None:
 
 # ─── Main ──────────────────────────────────────────────────────────────────
 
-def sync_tour(client: MatchstatClient, conn, tour: str, years: list[int],
+def sync_tour(client: MatchstatClient, conn, tour: str, override_years: list[int] | None,
               top_n: int, limit: int | None, force: bool) -> dict:
-    print(f"\n=== {tour.upper()} sync — years {years}, top_n={top_n} ===")
+    """Sync one tour. If override_years is set, fetch those years for every
+    candidate (used by --years and --force). Otherwise decide_fetch picks
+    per-player years based on active-tournament status.
+    """
+    label = f"override years {override_years}" if override_years else "decide_fetch heuristic"
+    print(f"\n=== {tour.upper()} sync — {label}, top_n={top_n} ===")
     cur = conn.execute("""
         SELECT mid, bio_id, name FROM players
         WHERE tour = ? AND bio_id <= ?
@@ -241,6 +317,13 @@ def sync_tour(client: MatchstatClient, conn, tour: str, years: list[int],
     if limit:
         players = players[:limit]
     print(f"  candidates: {len(players)}")
+
+    active_ids, any_onboarding = active_window_state(conn, tour)
+    if active_ids:
+        mode = "ONBOARDING (broad sweep)" if any_onboarding else "mid-tournament (precision)"
+        print(f"  active-window tournaments: {sorted(active_ids)} — {mode}")
+    else:
+        print(f"  no tournaments currently in active window — only cold-starts will fetch")
 
     # Build tournament api_id → tournament_id maps once (one per tour).
     api_id_col = f"api_id_{tour}"
@@ -254,14 +337,17 @@ def sync_tour(client: MatchstatClient, conn, tour: str, years: list[int],
         mid    = p["mid"]
         name   = p["name"]
         bio_id = p["bio_id"]
-        if not force:
-            do_fetch, reason = needs_refetch(conn, mid)
-            if not do_fetch:
-                print(f"  [{i:3d}/{len(players)}] bio#{bio_id:3d} mid={mid:<7} {name:<32} skip ({reason})")
-                skipped += 1
-                continue
+        if force or override_years:
+            years_to_fetch = list(override_years) if override_years else list(COLD_START_YEARS)
+            reason = "force" if force else "override years"
+        else:
+            years_to_fetch, reason = decide_fetch(conn, mid, active_ids, any_onboarding)
+        if not years_to_fetch:
+            print(f"  [{i:3d}/{len(players)}] bio#{bio_id:3d} mid={mid:<7} {name:<32} skip ({reason})")
+            skipped += 1
+            continue
 
-        for y in years:
+        for y in years_to_fetch:
             raw_ms, metas = _fetch_year(client, conn, tour, mid, y)
             rows = []
             for m in raw_ms:
@@ -276,7 +362,7 @@ def sync_tour(client: MatchstatClient, conn, tour: str, years: list[int],
                 _log_fetch(conn, m, rows_inserted=inserted if j == 0 else 0)
             if raw_ms:
                 print(f"  [{i:3d}/{len(players)}] bio#{bio_id:3d} mid={mid:<7} {name:<32} {y}: "
-                      f"{len(raw_ms):>3} fetched ({len(rows)} usable), {inserted:>3} new")
+                      f"{len(raw_ms):>3} fetched ({len(rows)} usable), {inserted:>3} new ({reason})")
         fetched += 1
         conn.commit()
 
@@ -289,12 +375,15 @@ def sync_tour(client: MatchstatClient, conn, tour: str, years: list[int],
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--tour", choices=["atp", "wta", "both"], default="both")
-    p.add_argument("--years", nargs="+", type=int, default=list(DEFAULT_YEARS))
+    p.add_argument("--years", nargs="+", type=int, default=None,
+                   help="override decide_fetch — fetch these years for every candidate. "
+                        "When unset (the cron default), decide_fetch picks per player: "
+                        "current year for active-window players, both years for cold-starts.")
     p.add_argument("--top-n", type=int, default=DEFAULT_TOP_N)
     p.add_argument("--limit", type=int, default=None,
                    help="hard cap on candidate players per tour (debug)")
     p.add_argument("--force", action="store_true",
-                   help="ignore needs_refetch heuristic; fetch every candidate")
+                   help="ignore decide_fetch heuristic; fetch every candidate")
     args = p.parse_args()
 
     init_db()

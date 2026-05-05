@@ -129,11 +129,14 @@ def main() -> int:
     warn("matches.tour coverage", pct >= 95.0,
          f"{n_with_tour:>5}/{n_total} = {pct:.1f}% (warn <95%)")
 
-    # 6. Active tournaments have matches
+    # 6. Active tournaments have matches — date-window definition matching
+    # materialize.py. tournaments.active flag is informational only.
     actives = list(conn.execute("""
         SELECT t.id, t.name, COUNT(m.id) AS n
         FROM tournaments t LEFT JOIN matches m ON m.tournament_id = t.id
-        WHERE t.active = 1
+        WHERE t.start_date IS NOT NULL AND t.end_date IS NOT NULL
+          AND date(t.start_date, '-7 days') <= date('now')
+          AND date(t.end_date,   '+1 day')  >= date('now')
         GROUP BY t.id
     """))
     for t in actives:

@@ -2,10 +2,11 @@ name: Tennis Dashboard Refresh
 
 on:
   schedule:
-    # 6× per day at 4-hour intervals — keeps active-tournament status fresh
-    # within ~30 min of cron + match completion. ~50–100 API calls/day total
-    # (incremental sync only refetches recently-active players).
-    - cron: '0 */4 * * *'
+    # 2× per day (00:00 + 12:00 UTC). The 6×/day schedule we ran 2026-05-01
+    # → 05-05 burned through the 10k/month Matchstat cap — see the API-cap
+    # post-mortem in scripts/sync_matches.py docstring. Manual
+    # workflow_dispatch is available for ad-hoc freshness during finals.
+    - cron: '0 0,12 * * *'
   workflow_dispatch:       # allow manual trigger from Actions tab
 
 jobs:
@@ -36,15 +37,17 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 scripts/sync_rankings.py --tour both
 
-      # ── Sync matches (~30–50 API calls during active tournaments) ──────
-      # Smart heuristic in sync_matches skips players who haven't moved
-      # since last fetch. Active-tournament players get refetched every run.
+      # ── Sync matches (decide_fetch heuristic) ──────────────────────────
+      # No --years flag → decide_fetch picks per-player: cold-starts get
+      # full backfill (year-1, year), active-window players get current
+      # year only, everyone else is skipped. Expected: ~80–200 calls/run
+      # during active week, ~0 calls/run quiet weeks.
       - name: Sync matches
         env:
           MATCHSTAT_API_KEY: ${{ secrets.MATCHSTAT_API_KEY }}
         run: |
           cd "$GITHUB_WORKSPACE"
-          python3 scripts/sync_matches.py --tour both --years 2025 2026
+          python3 scripts/sync_matches.py --tour both
 
       # ── Materialize all data/*.js files from the DB ────────────────────
       # Hash-based change detection means files only rewrite if data changed.

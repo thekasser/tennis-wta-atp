@@ -149,7 +149,7 @@ def main() -> int:
     if not api_key:
         print("MATCHSTAT_API_KEY not set", file=sys.stderr)
         return 1
-    client = MatchstatClient(api_key=api_key)
+    client = MatchstatClient(api_key=api_key, auto_log=True)
 
     total_inserted = 0
     tours = ("atp", "wta") if args.tour == "both" else (args.tour,)

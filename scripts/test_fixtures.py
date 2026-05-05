@@ -40,7 +40,7 @@ def main() -> int:
         print("MATCHSTAT_API_KEY not set in env or .env", file=sys.stderr)
         return 1
 
-    client = MatchstatClient(api_key=api_key)
+    client = MatchstatClient(api_key=api_key, auto_log=True)
     path = f"fixtures/tournament/{args.id}"
     print(f"GET {args.tour}/{path}\n")
 
