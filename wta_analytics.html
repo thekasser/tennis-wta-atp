@@ -73,11 +73,13 @@ body.tab-trapezoid #btn-both{display:inline-flex}
 .ctx-bar.atp{background:var(--accent-steel-soft);border-color:rgba(95,115,128,.22)}
 .ctx-bar .tour-label{font-size:13px;font-weight:800;color:var(--tc)}
 .tab-nav{display:flex;gap:6px;margin-bottom:22px;overflow-x:auto;padding:4px;background:rgba(36,43,42,.05);border-radius:999px;width:fit-content}
-/* Sticky tab bar — wrapped in a full-bleed solid bg row so content scrolling
-   behind it is fully masked. Tables below use --sticky-top as their offset. */
-.sticky-nav{position:sticky;top:0;z-index:50;background:var(--bg);padding:10px 0 6px;margin:-10px 0 0;backdrop-filter:saturate(1.05)}
-:root{--sticky-top:64px}
-@media (max-width:760px){:root{--sticky-top:56px}}
+/* Sticky nav — tabs + tour toggle in one bar, full-bleed bg masks content
+   scrolling behind. Tables below use --sticky-top as their offset. */
+.sticky-nav{position:sticky;top:0;z-index:50;background:var(--bg);padding:10px 0 8px;margin:-10px 0 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sticky-nav .tab-nav{margin-bottom:0}
+.sticky-nav .tour-toggle{margin-left:auto}
+:root{--sticky-top:68px}
+@media (max-width:760px){:root{--sticky-top:120px}.sticky-nav{flex-direction:column;align-items:stretch}.sticky-nav .tour-toggle{margin-left:0;align-self:flex-start}}
 /* Page-level table headers stay visible while rows scroll. Modal tables also
    benefit (they stick to the modal's scroll container automatically). */
 table th{position:sticky;top:var(--sticky-top);z-index:5;background:#ecebe1}
@@ -105,7 +107,12 @@ th.sorted{color:var(--tc)}
 td{padding:11px 14px;border-top:1px solid var(--line);color:var(--ink)}
 tbody tr:first-child td{border-top:0}
 tr:hover td{background:rgba(36,43,42,.03)}
-.tbl-wrap{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:18px;box-shadow:var(--shadow-sm)}
+/* `overflow:clip` lets border-radius round the corners visually without
+   creating a scroll containing block — sticky table headers can therefore
+   reach the viewport. `hidden` would block that. Mobile gets `overflow-x:auto`
+   below so wide tables remain horizontally scrollable (sticky breaks there
+   but mobile doesn't typically vertical-scroll long tables). */
+.tbl-wrap{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);overflow:clip;margin-bottom:18px;box-shadow:var(--shadow-sm)}
 .tbl-title{padding:14px 18px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line)}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:var(--tbg);color:var(--tc);margin-left:5px}
 .badge.atp{background:var(--accent-steel-soft);color:var(--accent-steel)}
@@ -277,6 +284,10 @@ select:focus{outline:none;border-color:var(--tc)}
 .tour-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700}
 .tour-badge.atp{background:var(--accent-steel-soft);color:var(--accent-steel)}
 .tour-badge.wta{background:var(--accent-green-soft);color:var(--accent-green)}
+/* trap-table-wrap uses overflow:clip so sticky table headers reach the
+   viewport. On mobile we re-enable overflow-x:auto for horizontal scroll. */
+.trap-table-wrap{overflow:clip}
+@media (max-width:760px){.trap-table-wrap{overflow-x:auto}}
 #trap-table table{width:100%;border-collapse:collapse;font-size:12.5px}
 #trap-table th{padding:11px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);background:#ecebe1;cursor:pointer;white-space:nowrap;user-select:none;border-bottom:1px solid var(--line);position:sticky;top:var(--sticky-top);z-index:5}
 #trap-table th:hover{color:var(--ink)}
@@ -287,18 +298,13 @@ select:focus{outline:none;border-color:var(--tc)}
 </head>
 <body>
 <div class="app">
-  <!-- HEADER -->
+  <!-- HEADER (title only — tour toggle moved to sticky-nav so it persists on scroll) -->
   <div class="hdr">
     <div>
       <h1>ATP / WTA Analytics <span id="data-ts" style="font-size:13px;font-weight:400;color:var(--muted);font-family:'Manrope',sans-serif;letter-spacing:0"></span></h1>
       <div class="hdr-sub" id="hdr-sub">2026 Season · Rankings &amp; Race Tracker</div>
     </div>
     <div class="hdr-right">
-      <div class="tour-toggle">
-        <button class="tour-btn active wta" id="btn-wta" onclick="setTour('WTA')">WTA</button>
-        <button class="tour-btn" id="btn-atp" onclick="setTour('ATP')">ATP</button>
-        <button class="tour-btn" id="btn-both" onclick="setTour('BOTH')">Both</button>
-      </div>
       <div class="live-badge" id="live-badge"><div class="pulse"></div><span id="live-label">Live</span></div>
     </div>
   </div>
@@ -310,13 +316,18 @@ select:focus{outline:none;border-color:var(--tc)}
     <span id="ctx-info"></span>
   </div>
 
-  <!-- TABS — wrapper sticks to page top so navigation is always reachable -->
+  <!-- STICKY NAV — tour selector + tabs persist on scroll so navigation stays reachable -->
   <div class="sticky-nav">
     <div class="tab-nav">
       <button class="tab-btn active" onclick="setTab('live')">Live Events <span class="sub" id="tab-live-sub"></span></button>
       <button class="tab-btn" onclick="setTab('rankings')">Rankings<span class="sub">T12M</span></button>
       <button class="tab-btn" onclick="setTab('trapezoid')">Trapezoid<span class="sub">Metrics</span></button>
       <button class="tab-btn" onclick="setTab('predict')">Matchup Predictor</button>
+    </div>
+    <div class="tour-toggle">
+      <button class="tour-btn active wta" id="btn-wta" onclick="setTour('WTA')">WTA</button>
+      <button class="tour-btn" id="btn-atp" onclick="setTour('ATP')">ATP</button>
+      <button class="tour-btn" id="btn-both" onclick="setTour('BOTH')">Both</button>
     </div>
   </div>
 
@@ -442,7 +453,7 @@ select:focus{outline:none;border-color:var(--tc)}
 
     <div class="tbl-wrap">
       <div class="tbl-title">Player Detail <span id="trap-table-count" style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;font-size:11px;margin-left:6px"></span></div>
-      <div id="trap-table" style="overflow-x:auto"></div>
+      <div id="trap-table" class="trap-table-wrap"></div>
     </div>
   </div>
 
@@ -832,20 +843,104 @@ function getH2H(idA,idB) {
   if(!d) return null;
   return {myW:idA<idB?d.aW:d.bW,theirW:idA<idB?d.bW:d.aW,surf:d.s,rec:d.rec};
 }
+// Look up a player's composite z-score from TRAPEZOID_*. Tries T6M All first
+// (most recent meaningful sample), then T12M All as fallback. Surface-specific
+// composite isn't used here — predictor already weights surface separately.
+function lookupComposite(bioId, year='T6M') {
+  const trap = TOUR === 'WTA'
+    ? (typeof TRAPEZOID_WTA !== 'undefined' ? TRAPEZOID_WTA : null)
+    : (typeof TRAPEZOID_ATP !== 'undefined' ? TRAPEZOID_ATP : null);
+  if (!trap) return null;
+  const tries = [[year, 'All'], ['T12M', 'All'], ['T3M', 'All']];
+  for (const [y, s] of tries) {
+    const row = trap.find(r => r.bioId === bioId && r.year === y && (r.surf || 'All') === s);
+    if (row && row.composite != null && !isNaN(row.composite))
+      return { composite: row.composite, period: y, matches: row.matches };
+  }
+  return null;
+}
+
+// YTD rank within the current tour roster — recomputed each call (cheap, ~150
+// rows). Captures recent trajectory: a player whose T12M is 130 but YTD is 24
+// is dramatically stronger than their T12M alone suggests.
+function ytdRankFor(bioId) {
+  const all = players();
+  const sorted = [...all].filter(p => p.ytd > 0).sort((a, b) => b.ytd - a.ytd);
+  const idx = sorted.findIndex(p => p.id === bioId);
+  return idx >= 0 ? idx + 1 : null;
+}
+
+// Win-prob model. Five independent signals blended with weight tuned per
+// availability:
+//   1. Effective rank — blend of T12M rank and YTD rank, captures both
+//      historical body of work AND recent trajectory. Old model used T12M
+//      alone, which over-weighted faded former top-30s like JBM (T12M=51,
+//      YTD=84) and under-weighted comeback players like Pliskova (T12M=130,
+//      YTD=24). The blend halves that distortion.
+//   2. Surface win % — head-to-head per-surface rates from bios.
+//   3. Form — recent W/L% (filtered to tour-only main draw).
+//   4. Composite (NEW) — z-score from trapezoid metrics: serve %, return %,
+//      BP saved, tiebreak %, deciding-set %, match-win %. Captures everything
+//      the model's other signals miss. Sigmoid scales 1z→65%, 2z→80%.
+//   5. H2H — pairwise record when ≥2 prior meetings.
+//
+// Composite gets a deliberately heavy weight (~30%) when both players have
+// it — it's the most predictive single signal because it aggregates many
+// metric performances over a stable sample size.
 function matchProb(pA, pB, surf) {
   const sk = surf==='Hard'?'H':surf==='Clay'?'C':'G';
   const lo=Math.min(pA.id,pB.id),hi=Math.max(pA.id,pB.id);
   const h2d=h2hDb()[`${lo}-${hi}`];
-  const eloA=2300-(pA.rank-1)*18,eloB=2300-(pB.rank-1)*18;
-  const eloP=1/(1+Math.pow(10,(eloB-eloA)/400));
-  const sA=pA.surf[sk],sB=pB.surf[sk];
-  const surfP=sA/(sA+sB);
-  const fA=formPct(pA.form)/100,fB=formPct(pB.form)/100;
-  const formP=fA/(fA+fB);
-  let h2hP=.5;
-  if(h2d){const tot=h2d.aW+h2d.bW;const aW=pA.id<pB.id?h2d.aW:h2d.bW;h2hP=tot>0?aW/tot:.5;}
-  const p=h2d? eloP*.20+surfP*.35+formP*.25+h2hP*.20 : eloP*.25+surfP*.40+formP*.35;
-  return Math.min(.95,Math.max(.05,p));
+
+  // 1. Rank blend (T12M + YTD, equal weight)
+  const ytdA = ytdRankFor(pA.id) || pA.rank;
+  const ytdB = ytdRankFor(pB.id) || pB.rank;
+  const effA = (pA.rank + ytdA) / 2;
+  const effB = (pB.rank + ytdB) / 2;
+  const eloA = 2300 - (effA-1)*18;
+  const eloB = 2300 - (effB-1)*18;
+  const eloP = 1/(1+Math.pow(10,(eloB-eloA)/400));
+
+  // 2. Surface
+  const sA = pA.surf[sk], sB = pB.surf[sk];
+  const surfP = sA/(sA+sB);
+
+  // 3. Form
+  const fA = formPct(pA.form)/100, fB = formPct(pB.form)/100;
+  const formP = (fA + fB) > 0 ? fA/(fA+fB) : .5;
+
+  // 4. Composite z delta → win prob via sigmoid. 0.7 slope means a 1z lead
+  // ≈ 67% expected win prob, 2z ≈ 80%. Calibrated to be meaningful but not
+  // dominant — the predictor still respects rank when composite is borderline.
+  const cA = lookupComposite(pA.id);
+  const cB = lookupComposite(pB.id);
+  let compP = .5, compAvail = false;
+  if (cA && cB) {
+    compP = 1/(1 + Math.exp(-(cA.composite - cB.composite) * 0.7));
+    compAvail = true;
+  }
+
+  // 5. H2H
+  let h2hP = .5;
+  if (h2d) {
+    const tot = h2d.aW + h2d.bW;
+    const aW = pA.id < pB.id ? h2d.aW : h2d.bW;
+    h2hP = tot > 0 ? aW/tot : .5;
+  }
+
+  // 6. Weights — composite included when available shifts most weight away
+  // from rank/surface (which over-weighted T12M previously).
+  let p;
+  if (h2d && compAvail) {
+    p = eloP*.15 + surfP*.22 + formP*.18 + h2hP*.15 + compP*.30;
+  } else if (h2d) {
+    p = eloP*.20 + surfP*.30 + formP*.25 + h2hP*.25;
+  } else if (compAvail) {
+    p = eloP*.18 + surfP*.27 + formP*.22 + compP*.33;
+  } else {
+    p = eloP*.25 + surfP*.40 + formP*.35;
+  }
+  return Math.min(.95, Math.max(.05, p));
 }
 
 // ═══════════════════════════════════════
@@ -1650,15 +1745,35 @@ function renderPredict() {
     const el=document.getElementById(`pred-${col}-stats`);
     if(!el) return;
     const sideColor = col==='a' ? TC : TC_B;
+    const ytdRank = ytdRankFor(p.id);
+    const comp = lookupComposite(p.id);
+    // Δ(YTD vs T12M): positive = YTD better than T12M (rising trajectory)
+    const ytdDelta = (ytdRank && p.rank) ? (p.rank - ytdRank) : null;
+    const ytdArrow = ytdDelta == null ? ''
+                  : ytdDelta > 5  ? `<span style="color:var(--accent-green);font-size:10px;margin-left:3px" title="YTD rank ${ytdDelta} places better than T12M — rising trajectory">▲${ytdDelta}</span>`
+                  : ytdDelta < -5 ? `<span style="color:var(--accent-rose);font-size:10px;margin-left:3px" title="YTD rank ${Math.abs(ytdDelta)} places worse than T12M — declining trajectory">▼${Math.abs(ytdDelta)}</span>`
+                  : '';
+    const compStr = comp ? `${comp.composite >= 0 ? '+' : ''}${comp.composite.toFixed(2)}z` : '—';
+    const compTip = comp
+      ? `Composite z-score across serve %, return %, BP saved, tiebreak %, deciding-set %, match-win % (period: ${comp.period}, ${comp.matches} matches)`
+      : 'No composite — under-threshold for tour-level matches';
     el.innerHTML=`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px">
         <div style="background:var(--bg-soft);border-radius:12px;padding:10px;text-align:center">
           <div style="font-weight:800;color:${sideColor}">#${p.rank}</div>
-          <div style="color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">Ranking</div>
+          <div style="color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">T12M Rank</div>
+        </div>
+        <div style="background:var(--bg-soft);border-radius:12px;padding:10px;text-align:center" title="YTD rank captures recent trajectory — divergence from T12M signals rising or falling form">
+          <div style="font-weight:800;color:${sideColor}">${ytdRank ? '#'+ytdRank : '—'}${ytdArrow}</div>
+          <div style="color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">YTD Rank</div>
         </div>
         <div style="background:var(--bg-soft);border-radius:12px;padding:10px;text-align:center">
           <div style="font-weight:800;color:${sideColor}">${Math.round(p.surf[sk]*100)}%</div>
           <div style="color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">${surf} win%</div>
+        </div>
+        <div style="background:var(--bg-soft);border-radius:12px;padding:10px;text-align:center" title="${compTip}">
+          <div style="font-weight:800;color:${sideColor}">${compStr}</div>
+          <div style="color:var(--muted);font-size:10px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">Composite (${comp ? comp.period : 'n/a'})</div>
         </div>
         <div style="background:var(--bg-soft);border-radius:12px;padding:10px;text-align:center">
           <div style="font-weight:800;color:${sideColor}">${formPct(p.form)}%</div>
@@ -1867,16 +1982,41 @@ function blufPredict() {
 
   let headline = `On <strong>${surf.toLowerCase()}</strong>, <strong>${fav.name}</strong> is the favorite at <strong>${favProb}%</strong> over ${dog.ab}.`;
 
-  // Explain why
+  // Explain why. Order matters: composite delta and YTD-rank divergence are
+  // the most predictive signals when they disagree with raw T12M, so they
+  // come first when significant.
   let drivers = [];
+
+  // Composite z-score delta — the headline trapezoid signal. ≥0.7z is large.
+  const cFav = lookupComposite(fav.id);
+  const cDog = lookupComposite(dog.id);
+  if (cFav && cDog) {
+    const cd = cFav.composite - cDog.composite;
+    if (Math.abs(cd) >= 0.7) {
+      drivers.push(`a ${Math.abs(cd).toFixed(1)}z composite edge (${cFav.composite >= 0 ? '+' : ''}${cFav.composite.toFixed(2)} vs ${cDog.composite >= 0 ? '+' : ''}${cDog.composite.toFixed(2)})`);
+    }
+  }
+
+  // YTD-vs-T12M divergence — flag when one player's recent form contradicts
+  // their T12M ranking (e.g., comeback player or fading veteran).
+  const ytdF = ytdRankFor(fav.id), ytdD = ytdRankFor(dog.id);
+  if (ytdF && ytdD) {
+    const favTrendUp = (fav.rank - ytdF) >= 25;   // YTD ≥25 places better than T12M
+    const dogTrendDn = (dog.rank - ytdD) <= -25;  // YTD ≥25 places worse than T12M
+    if (favTrendUp && dogTrendDn) {
+      drivers.push(`recent form heavily favors the favorite (${fav.ab}: T12M #${fav.rank} but YTD #${ytdF}; ${dog.ab}: T12M #${dog.rank} but YTD #${ytdD})`);
+    } else if (favTrendUp) {
+      drivers.push(`${fav.ab}'s YTD rank (#${ytdF}) is ${fav.rank - ytdF} places better than T12M — rising`);
+    } else if (dogTrendDn) {
+      drivers.push(`${dog.ab}'s YTD rank (#${ytdD}) is ${ytdD - dog.rank} places worse than T12M — fading`);
+    }
+  }
+
   const rankDiff = Math.abs(pA.rank - pB.rank);
-  if (rankDiff > 15) drivers.push(`a ${rankDiff}-place ranking gap`);
+  if (rankDiff > 15 && !drivers.length) drivers.push(`a ${rankDiff}-place T12M ranking gap`);
   const surfDiff = Math.abs(pA.surf[sk] - pB.surf[sk]);
   if (surfDiff >= .08) drivers.push(`a meaningful ${surf.toLowerCase()} win-rate edge (${Math.round(fav.surf[sk]*100)}% vs ${Math.round(dog.surf[sk]*100)}%)`);
   if (h2d) {
-    const favH2H = fav.id===pA.id ? (pA.id<pB.id?h2d.myW:h2d.theirW) : (pB.id<pA.id?h2d.myW:h2d.theirW);
-    const dogH2H = fav.id===pA.id ? (pA.id<pB.id?h2d.theirW:h2d.myW) : (pB.id<pA.id?h2d.theirW:h2d.myW);
-    // Recalculate properly
     const h2hRaw = getH2H(fav.id, dog.id);
     if (h2hRaw) drivers.push(`H2H record of ${h2hRaw.myW}–${h2hRaw.theirW}`);
   }
