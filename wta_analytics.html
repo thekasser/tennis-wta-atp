@@ -921,6 +921,19 @@ function ytdRankFor(bioId) {
   return idx >= 0 ? idx + 1 : null;
 }
 
+// TODO (backlog — surface during backtest work):
+//   When YTD pts are NULL/missing in season data, the trajectory term collapses
+//   to 0 and T12M floor wins by default. This over-weights stale T12M for any
+//   player whose YTD pts didn't sync (Boisson rank 43 / T12M 1268 / YTD NULL is
+//   the canonical example — model treats her like she earned all 1268 pts pre-
+//   2026 even though much of it is from her 2024 RG run that's expiring).
+//   Fix candidates:
+//     (a) Detect missing-YTD and fall back to a rank-derived strength estimate
+//     (b) Penalize strength when YTD is NULL (confidence multiplier)
+//     (c) Investigate why sync_rankings.py is missing YTD for some bios
+//   The right answer is probably (c) first — it's a data-layer issue, not a
+//   formula issue.
+//
 // Pts-based Elo with trajectory awareness.
 //
 // The naive `T12M + YTD` formula was blind to trajectory: a comeback player

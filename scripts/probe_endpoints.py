@@ -36,28 +36,31 @@ if not API_KEY:
 
 client = MatchstatClient(api_key=API_KEY)
 
-# Madrid 2026 ATP api_id (confirmed in our DB)
-MADRID_ATP = 21325
-MADRID_WTA = 16721
-ROME_2025_ATP = 20337  # in case 2026 IDs missing
+# Use Sinner (mid 36558) as a test player — almost certain to have upcoming
+# matches (or recent ones) at the active event.
+SINNER_MID = 36558  # ATP
 
-# Probe matrix: (tour, endpoint, params, hypothesis)
+# Probe pattern is `player/{resource}/{mid}` since that's the known shape:
+# `player/profile/{mid}` and `player/past-matches/{mid}` both work. The
+# upcoming-match endpoint should be a sibling.
 PROBES = [
-    ("atp", f"tournament/{MADRID_ATP}/matches",        None, "all matches at tournament"),
-    ("atp", f"tournament/{MADRID_ATP}/draw",           None, "tournament draw"),
-    ("atp", f"tournament/{MADRID_ATP}/upcoming",       None, "upcoming-only at tournament"),
-    ("atp", f"tournament/{MADRID_ATP}/schedule",       None, "schedule"),
-    ("atp", f"tournament/{MADRID_ATP}",                None, "tournament info"),
-    ("atp", f"event/{MADRID_ATP}",                     None, "event alias"),
-    ("atp", f"event/{MADRID_ATP}/matches",             None, "event matches"),
-    ("atp", "match/upcoming",        {"tournamentId": MADRID_ATP}, "upcoming + tour filter"),
-    ("atp", "match/list",  {"tournamentId": MADRID_ATP, "date": "2026-05-04"}, "by date"),
-    ("atp", "match/today",                             None, "today's matches"),
-    ("atp", "matches/upcoming",                        None, "matches/upcoming"),
-    ("atp", "tournaments/active",                      None, "active list"),
-    ("atp", "tournaments/upcoming",                    None, "upcoming list"),
-    ("atp", "live",                                    None, "live root"),
-    ("atp", "live/matches",                            None, "live matches"),
+    # Most likely — mirror of past-matches
+    ("atp", f"player/upcoming-matches/{SINNER_MID}",   None, "mirror of past-matches"),
+    ("atp", f"player/next-matches/{SINNER_MID}",       None, "next-matches variant"),
+    ("atp", f"player/scheduled-matches/{SINNER_MID}",  None, "scheduled variant"),
+    ("atp", f"player/upcoming/{SINNER_MID}",           None, "short upcoming"),
+    ("atp", f"player/scheduled/{SINNER_MID}",          None, "short scheduled"),
+    ("atp", f"player/next/{SINNER_MID}",               None, "short next"),
+    # past-matches with a status param — maybe one endpoint for both
+    ("atp", f"player/past-matches/{SINNER_MID}",  {"status": "upcoming"}, "past-matches w/ upcoming flag"),
+    ("atp", f"player/past-matches/{SINNER_MID}",  {"upcoming": "true"}, "past-matches w/ upcoming bool"),
+    ("atp", f"player/matches/{SINNER_MID}",            None, "generic matches endpoint"),
+    ("atp", f"player/matches/{SINNER_MID}",       {"type": "upcoming"}, "matches w/ type filter"),
+    # H2H is also likely a player-scoped endpoint we could discover
+    ("atp", f"player/h2h/{SINNER_MID}",                None, "h2h root"),
+    # Docs/index endpoints sometimes exist
+    ("atp", "endpoints",                               None, "self-describing index"),
+    ("atp", "",                                        None, "tour root"),
 ]
 
 print(f"Probing {len(PROBES)} endpoints… (each ✓ = found, ✗ = 4xx/5xx)")
