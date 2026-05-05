@@ -537,17 +537,14 @@ select:focus{outline:none;border-color:var(--tc)}
         <div><div class="val" id="pred-prob-b" style="font-size:42px;font-family:'Fraunces',serif;font-weight:600;color:var(--accent-rose);letter-spacing:-.03em">—</div><div style="font-size:12px;color:var(--muted);margin-top:4px" id="pred-name-b">Player B</div></div>
       </div>
       <div id="pred-conf" style="font-size:12px;margin-top:12px;font-weight:600"></div>
-      <details id="pred-breakdown" style="margin-top:18px;text-align:left;border-top:1px solid var(--line);padding-top:14px">
+      <details id="pred-breakdown" open style="margin-top:18px;text-align:left;border-top:1px solid var(--line);padding-top:14px">
         <summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.14em;list-style:none;display:flex;align-items:center;gap:6px">
           <span style="display:inline-block;transition:transform .15s">▸</span> Why this prediction?
         </summary>
         <div id="pred-breakdown-content" style="margin-top:12px"></div>
       </details>
     </div>
-    <div class="two-col">
-      <div class="chart-card"><h3>Win Probability</h3><div class="chart-wrap" style="height:200px"><canvas id="chart-pie"></canvas></div></div>
-      <div class="chart-card"><h3>Player Comparison</h3><div class="chart-wrap" style="height:200px"><canvas id="chart-radar"></canvas></div></div>
-    </div>
+    <div class="chart-card" style="margin-bottom:18px"><h3>Player Comparison — all signals</h3><div class="chart-wrap" style="height:280px"><canvas id="chart-radar"></canvas></div></div>
     <div class="card" id="upcoming-panel" style="margin-bottom:18px"></div>
     <div class="card" id="h2h-panel"></div>
     <div class="card" id="mvm-panel" style="margin-top:18px"></div>
@@ -2126,32 +2123,50 @@ function renderPredict() {
     `;
   }
 
-  destroyChart('chart-pie');
-  const pieCtx=document.getElementById('chart-pie').getContext('2d');
-  CHARTS['chart-pie']=new Chart(pieCtx,{
-    type:'doughnut',
-    data:{labels:[pA.ab,pB.ab],datasets:[{data:[Math.round(prob*100),Math.round((1-prob)*100)],backgroundColor:[TC,TC_B],borderWidth:0,hoverOffset:4}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',
-      plugins:{legend:{labels:{color:'#5f6a68',font:{size:12}}},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${ctx.raw}%`}}}}
-  });
-
-  const h2d=getH2H(pA.id,pB.id);
-  const radarData=[Math.max(5,100-(pA.rank-1)*2.5),fA,Math.round(pA.surf[sk]*100),h2d?Math.round(h2d.myW/(h2d.myW+h2d.theirW+.001)*100):50];
-  const radarDataB=[Math.max(5,100-(pB.rank-1)*2.5),fB,Math.round(pB.surf[sk]*100),h2d?Math.round(h2d.theirW/(h2d.myW+h2d.theirW+.001)*100):50];
+  // Player Comparison radar — every signal in the predictor model, normalized
+  // to 0-100 so they're comparable on one axis. Each signal_p (0-1 fraction)
+  // is multiplied by 100; values for non-applicable signals (e.g. h2h with
+  // no prior meeting) collapse to 50 = neutral.
+  const h2d = getH2H(pA.id, pB.id);
+  const bd  = breakdown.breakdown;        // matchProb returns this; reuse here
+  const sigPctA = (key) => {
+    const r = bd.find(x => x.key === key);
+    return r ? Math.round(r.sigP * 100) : 50;
+  };
+  const sigPctB = (key) => {
+    const r = bd.find(x => x.key === key);
+    return r ? Math.round((1 - r.sigP) * 100) : 50;
+  };
+  const labels = ['Elo (pts)', 'Surface', 'Form', 'Composite', 'H2H'];
+  const keys   = ['elo',       'surf',     'form', 'comp',     'h2h'];
+  const radarA = keys.map(sigPctA);
+  const radarB = keys.map(sigPctB);
   destroyChart('chart-radar');
-  const rCtx=document.getElementById('chart-radar').getContext('2d');
-  CHARTS['chart-radar']=new Chart(rCtx,{
-    type:'radar',
-    data:{
-      labels:['Ranking','Form','Surface','H2H'],
-      datasets:[
-        {label:pA.ab,data:radarData,borderColor:TC,backgroundColor:TC+'33',pointBackgroundColor:TC,borderWidth:2},
-        {label:pB.ab,data:radarDataB,borderColor:TC_B,backgroundColor:TC_B+'33',pointBackgroundColor:TC_B,borderWidth:2},
+  const rCtx = document.getElementById('chart-radar').getContext('2d');
+  CHARTS['chart-radar'] = new Chart(rCtx, {
+    type: 'radar',
+    data: {
+      labels,
+      datasets: [
+        { label: pA.ab, data: radarA, borderColor: TC,   backgroundColor: TC+'33',   pointBackgroundColor: TC,   borderWidth: 2 },
+        { label: pB.ab, data: radarB, borderColor: TC_B, backgroundColor: TC_B+'33', pointBackgroundColor: TC_B, borderWidth: 2 },
       ]
     },
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:'#5f6a68',font:{size:12}}}},
-      scales:{r:{min:0,max:100,grid:{color:'rgba(57,67,64,0.1)'},angleLines:{color:'rgba(57,67,64,0.1)'},ticks:{display:false},pointLabels:{color:'#5f6a68',font:{size:11}}}}}
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#5f6a68', font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${ctx.raw}% on ${ctx.label}`,
+          }
+        }
+      },
+      scales: { r: { min: 0, max: 100, grid: { color: 'rgba(57,67,64,0.1)' },
+                     angleLines: { color: 'rgba(57,67,64,0.1)' },
+                     ticks: { display: false, stepSize: 25 },
+                     pointLabels: { color: '#5f6a68', font: { size: 11, weight: 600 } } } }
+    }
   });
 
   const hp=document.getElementById('h2h-panel');
@@ -2369,15 +2384,29 @@ function renderUpcomingMatches() {
   fixtures.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const psList = players();
 
-  // Round-id → human label. Numeric mapping is API-specific; this is a
-  // best-effort guess based on observed values (4 = early R128/quals start at
-  // M1000_96, lower = deeper). Refine as we observe more.
+  // Round-id → human label. Derived from cross-tab of past-matches data
+  // (round string × roundId × draw_size). Mapping:
+  //   1=Q1  2=Q2  3=Q3   (qualifying, all draws)
+  //   4=First-round, 5=Second, 6=Third, 7=Fourth  (relative to draw size)
+  //   9=QF  10=SF  12=F
   const ROUND_LABEL = (rd, drawSize) => {
     if (rd == null) return '?';
-    if (drawSize >= 96) {
-      return ({1:'F', 2:'SF', 3:'QF', 4:'R16', 5:'R32', 6:'R64', 7:'R128'}[rd]) || `R${rd}`;
-    }
-    return ({1:'F', 2:'SF', 3:'QF', 4:'R16', 5:'R32', 6:'R64'}[rd]) || `R${rd}`;
+    if (rd <= 3) return ['?', 'Q1', 'Q2', 'Q3'][rd];
+    if (rd === 9)  return 'QF';
+    if (rd === 10) return 'SF';
+    if (rd === 12) return 'F';
+    // Main-draw rounds 4-7 — bracket position depends on draw size
+    const drawLabels = {
+      128: ['R128', 'R64', 'R32', 'R16'],
+      96:  ['R128', 'R64', 'R32', 'R16'],   // 96-draw has byes; convention is R128
+      64:  ['R64',  'R32', 'R16'],
+      56:  ['R64',  'R32', 'R16', 'R16'],
+      48:  ['R64',  'R32', 'R16'],
+      32:  ['R32',  'R16'],
+      28:  ['R32',  'R16'],
+    };
+    const labels = drawLabels[drawSize] || drawLabels[96];
+    return labels[rd - 4] || `R${rd}`;
   };
   const SURF_DOT = { H: '🔵', C: '🟤', G: '🟢' };
 
@@ -2409,7 +2438,7 @@ function renderUpcomingMatches() {
         const favName = favA ? (pA.ab || p1.name) : (pB.ab || p2.name);
         const favPct = Math.round((favA ? prob : 1 - prob) * 100);
         modelStr = `<strong style="color:${favA ? TC : TC_B}">${favName} ${favPct}%</strong>`;
-        clickHandler = `onclick="loadFixtureIntoPredictor(${pA.id}, ${pB.id})" style="cursor:pointer"`;
+        clickHandler = `onclick="loadFixtureIntoPredictor(${pA.id}, ${pB.id}, '${f.surf || 'H'}')" style="cursor:pointer"`;
       } else if (pA && !pB) {
         modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">${p2.name} not bio'd</span>`;
       } else if (!pA && pB) {
@@ -2469,21 +2498,26 @@ function renderUpcomingMatches() {
   `;
 }
 
-// Click handler for upcoming-match rows — set the predictor selects + render.
-function loadFixtureIntoPredictor(idA, idB) {
+// Click handler for upcoming-match rows — set the predictor selects + surface
+// dropdown to match the fixture's actual tournament surface (otherwise the
+// predictor's default 'Hard' would silently disagree with the upcoming panel
+// which uses the fixture's real surface, causing 50% vs 51% confusion).
+function loadFixtureIntoPredictor(idA, idB, surfCode) {
   const sa = document.getElementById('pred-a');
   const sb = document.getElementById('pred-b');
   const searchA = document.getElementById('pred-a-search');
   const searchB = document.getElementById('pred-b-search');
+  const surfEl = document.getElementById('pred-surf');
   if (!sa || !sb) return;
   sa.value = String(idA);
   sb.value = String(idB);
-  // Sync the search inputs to display the picked names
+  if (surfEl && surfCode) {
+    surfEl.value = surfCode === 'C' ? 'Clay' : surfCode === 'G' ? 'Grass' : 'Hard';
+  }
   const optA = [...sa.options].find(o => o.value === String(idA));
   const optB = [...sb.options].find(o => o.value === String(idB));
   if (searchA && optA) searchA.value = optA.textContent;
   if (searchB && optB) searchB.value = optB.textContent;
-  // Smooth-scroll to the predictor so the user sees the result
   document.getElementById('tab-predict')?.scrollIntoView({behavior: 'smooth', block: 'start'});
   renderPredict();
 }
