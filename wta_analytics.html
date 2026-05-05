@@ -3627,11 +3627,16 @@ class TrapezoidApp {
     // information-dense single channel (captures overall strength relative to
     // the cohort). Tour color (ATP vs WTA) is rarely useful since users
     // typically have a tour selected anyway.
+    //
+    // F1 uses the GAMES-based serve/return metrics (hold rate × break rate)
+    // for consistency with the composite, which swapped from points-based BP
+    // efficiency to games-based outcomes 2026-05-05. The points-based
+    // servePtsWonPct/returnPtsWonPct are still available via the dropdowns.
     const map = {
-      f1: { x:'servePtsWonPct', y:'returnPtsWonPct', size:'matchWinPct', color:'composite', btn:0 },
-      f2: { x:'decSetWinPct',   y:'composite',       size:'matchWinPct', color:'composite', btn:1 },
-      f3: { x:'totalPtsWonPct', y:'tbWinPct',        size:'matchWinPct', color:'composite', btn:2 },
-      f4: { x:'acesPerSvGm',    y:'bpSavedPct',      size:'matchWinPct', color:'composite', btn:3 },
+      f1: { x:'serviceGamesWonPct', y:'returnGamesWonPct', size:'matchWinPct', color:'composite', btn:0 },
+      f2: { x:'decSetWinPct',       y:'composite',         size:'matchWinPct', color:'composite', btn:1 },
+      f3: { x:'totalPtsWonPct',     y:'tbWinPct',          size:'matchWinPct', color:'composite', btn:2 },
+      f4: { x:'acesPerSvGm',        y:'bpSavedPct',        size:'matchWinPct', color:'composite', btn:3 },
     };
     const p = map[name];
     document.getElementById('trap-x').value = p.x;
