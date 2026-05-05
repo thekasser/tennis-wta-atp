@@ -551,6 +551,7 @@ select:focus{outline:none;border-color:var(--tc)}
     <div class="card" id="upcoming-panel" style="margin-bottom:18px"></div>
     <div class="card" id="h2h-panel"></div>
     <div class="card" id="mvm-panel" style="margin-top:18px"></div>
+    <div class="card" id="calibration-panel" style="margin-top:18px"></div>
   </div>
 </div>
 
@@ -2021,6 +2022,9 @@ function renderPredict() {
   const idB=parseInt(document.getElementById('pred-b')?.value)||0;
   const pA=psList.find(p=>p.id===idA),pB=psList.find(p=>p.id===idB);
   blufPEl.innerHTML = blufPredict();
+  // Calibration is a global view (no player selection required) — render
+  // before the early return so it shows even on first tab open.
+  renderCalibration();
   if(!pA||!pB) return;
   const surf=document.getElementById('pred-surf')?.value||'Hard';
   const sk=surf==='Hard'?'H':surf==='Clay'?'C':'G';
@@ -2396,6 +2400,198 @@ function renderModelVsMarket() {
         <th style="${thStyle}"  onclick="setMvmSort('verdict')">Verdict${arrow('verdict')}</th>
       </tr></thead>
       <tbody>${tbl}</tbody>
+    </table>
+    </div>
+  `;
+}
+
+// ── Calibration panel ─────────────────────────────────────────────────────
+// "When the model says X%, do those picks actually win X% of the time?"
+// Walks ALL completed matches in RECENT_MATCHES (not just active tournaments),
+// computes model prob + de-vigged market prob, bins by predicted confidence,
+// reports actual win rate per bin. Same soft-backtest caveat as MvM panel:
+// uses today's bio data, not a pre-match snapshot.
+//
+// Bins are keyed by the FAVORITE's predicted prob (max(p, 1-p)) so all bins
+// are 0.5–1.0 — easier to read than a 0-100 axis where every match shows up
+// twice (once on each side of 0.5).
+function renderCalibration() {
+  const el = document.getElementById('calibration-panel');
+  if (!el) return;
+  if (typeof RECENT_MATCHES === 'undefined' || !RECENT_MATCHES) { el.innerHTML = ''; return; }
+  const tk = TOUR.toLowerCase();
+  const recents = RECENT_MATCHES[tk] || {};
+  const psList = players();
+  const psById = new Map(psList.map(p => [p.id, p]));
+
+  // Build tId → surface lookup from the 2026 tournament catalog. Older 2025
+  // matches won't be in the catalog (different tIds per year) — those fall
+  // back to Hard, with a count tracked for the user-facing caveat.
+  const tIdToSurf = {};
+  TOURNAMENTS_DATA.forEach(t => {
+    if (t.apiId?.wta) tIdToSurf[t.apiId.wta] = t.surf;
+    if (t.apiId?.atp) tIdToSurf[t.apiId.atp] = t.surf;
+  });
+
+  // Walk every player's recent list, dedupe across both sides of each match
+  const seen = new Set();
+  let unknownSurf = 0;
+  const matches = [];
+  Object.entries(recents).forEach(([bidStr, list]) => {
+    const myBio = parseInt(bidStr);
+    (list || []).forEach(m => {
+      if (m.oppB == null || m.won == null) return;
+      const lo = Math.min(myBio, m.oppB);
+      const hi = Math.max(myBio, m.oppB);
+      const key = `${lo}-${hi}-${m.date}-${m.rd}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const pLo = psById.get(lo), pHi = psById.get(hi);
+      if (!pLo || !pHi) return;
+
+      const surfCode = tIdToSurf[m.tId];
+      if (!surfCode) unknownSurf++;
+      const surf = surfCode === 'C' ? 'Clay' : surfCode === 'G' ? 'Grass' : 'Hard';
+
+      const fromLo = myBio === lo;
+      const loWon = fromLo ? (m.won === true) : (m.won === false);
+      const modelLo = matchProb(pLo, pHi, surf);
+
+      let mktLo = null;
+      if (m.myOdd != null && m.oppOdd != null) {
+        const myInv = 1 / m.myOdd, oppInv = 1 / m.oppOdd;
+        const myP = myInv / (myInv + oppInv);
+        mktLo = fromLo ? myP : (1 - myP);
+      }
+      matches.push({ modelLo, mktLo, loWon });
+    });
+  });
+
+  if (!matches.length) {
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No completed matches available for calibration.</div>`;
+    return;
+  }
+
+  // Bins use a 5-pt step from 50% → 90%, then a 90%+ catch-all
+  const bins = [
+    [0.50, 0.55, '50–55%'], [0.55, 0.60, '55–60%'], [0.60, 0.65, '60–65%'],
+    [0.65, 0.70, '65–70%'], [0.70, 0.75, '70–75%'], [0.75, 0.80, '75–80%'],
+    [0.80, 0.85, '80–85%'], [0.85, 0.90, '85–90%'], [0.90, 1.01, '90%+'],
+  ];
+
+  // Aggregate items into bins. Each item = {probLo, loWon}; we convert to
+  // favorite-perspective (pred, didFavWin) before binning so all bins ≥ 50%.
+  const aggregate = items => {
+    const stats = bins.map(([lo, hi, label]) => ({lo, hi, label, n: 0, sumP: 0, wins: 0}));
+    let n = 0, brierSum = 0;
+    items.forEach(({probLo, loWon}) => {
+      const favIsLo = probLo >= 0.5;
+      const pred = favIsLo ? probLo : (1 - probLo);
+      const didFavWin = favIsLo === loWon;
+      n++;
+      brierSum += Math.pow(probLo - (loWon ? 1 : 0), 2);
+      const bin = stats.find(b => pred >= b.lo && pred < b.hi);
+      if (bin) {
+        bin.n++;
+        bin.sumP += pred;
+        if (didFavWin) bin.wins++;
+      }
+    });
+    return { stats, brier: n ? brierSum/n : null, n };
+  };
+
+  const modelAgg = aggregate(matches.map(m => ({probLo: m.modelLo, loWon: m.loWon})));
+  const mktItems = matches.filter(m => m.mktLo != null)
+                          .map(m => ({probLo: m.mktLo, loWon: m.loWon}));
+  const mktAgg = aggregate(mktItems);
+
+  // Verdict heuristic: average gap between actual and predicted in 70%+ bins
+  // with at least 5 samples. A consistent positive gap = model is hedging too
+  // hard on its top picks (underconfident); negative = top picks are losing
+  // more than predicted (overconfident).
+  const highConfBins = modelAgg.stats.filter(b => b.lo >= 0.70 && b.n >= 5);
+  const avgGap = highConfBins.length
+    ? highConfBins.reduce((acc, b) => acc + (b.wins/b.n - b.sumP/b.n), 0) / highConfBins.length
+    : null;
+  let verdict;
+  if (avgGap == null) {
+    verdict = `Need more matches in 70%+ confidence bins to assess calibration. Bins below 70% are dominated by close matchups where small sample noise dwarfs the calibration signal.`;
+  } else if (avgGap > 0.05) {
+    verdict = `<strong style="color:var(--accent-green)">Underconfident on high-confidence picks</strong> — the model's 70%+ predictions actually win at +${(avgGap*100).toFixed(1)}% above predicted. <em>Tuning suggestion:</em> the favorite-side weights (Elo, composite) could be amped slightly without losing accuracy — top picks are stronger than the model says.`;
+  } else if (avgGap < -0.05) {
+    verdict = `<strong style="color:var(--accent-rose)">Overconfident on high-confidence picks</strong> — the model's 70%+ predictions only win at ${(avgGap*100).toFixed(1)}% versus predicted. <em>Tuning suggestion:</em> the favorite-side weights are too aggressive; top picks aren't winning as often as the model implies. Consider damping Elo or composite weight, or widening the prob-clamp range.`;
+  } else {
+    verdict = `<strong style="color:var(--accent-green)">Reasonably calibrated</strong> in 70%+ bins (avg ±${(Math.abs(avgGap)*100).toFixed(1)}% vs predicted). Brier score is the more sensitive next-level check below.`;
+  }
+
+  const fmtPct = v => (v * 100).toFixed(1);
+  const renderRow = (b, mb) => {
+    if (b.n === 0) return '';
+    const meanP = b.sumP / b.n;
+    const actual = b.wins / b.n;
+    const delta = actual - meanP;
+    const absD = Math.abs(delta);
+    const dColor = absD < 0.05 ? 'var(--accent-green)' :
+                   absD < 0.10 ? 'var(--accent-amber)' :
+                   'var(--accent-rose)';
+    let mktCells = '<td style="padding:5px 4px;color:var(--muted);text-align:right">—</td><td style="padding:5px 4px;color:var(--muted);text-align:right">—</td>';
+    if (mb && mb.n > 0) {
+      const mMean = mb.sumP / mb.n;
+      const mAct  = mb.wins / mb.n;
+      const mDelta = mAct - mMean;
+      const mAbsD = Math.abs(mDelta);
+      const mColor = mAbsD < 0.05 ? 'var(--accent-green)' :
+                     mAbsD < 0.10 ? 'var(--accent-amber)' :
+                     'var(--accent-rose)';
+      mktCells = `<td style="padding:5px 4px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums">${fmtPct(mAct)}%</td>
+                  <td style="padding:5px 4px;text-align:right;font-variant-numeric:tabular-nums;color:${mColor};font-weight:700">${mDelta >= 0 ? '+' : ''}${(mDelta*100).toFixed(1)}</td>`;
+    }
+    return `<tr>
+      <td style="padding:5px 4px">${b.label}</td>
+      <td style="padding:5px 4px;text-align:right;color:var(--muted)">${b.n}</td>
+      <td style="padding:5px 4px;text-align:right;font-variant-numeric:tabular-nums">${fmtPct(meanP)}%</td>
+      <td style="padding:5px 4px;text-align:right;font-variant-numeric:tabular-nums">${fmtPct(actual)}%</td>
+      <td style="padding:5px 4px;text-align:right;font-variant-numeric:tabular-nums;color:${dColor};font-weight:700">${delta >= 0 ? '+' : ''}${(delta*100).toFixed(1)}</td>
+      ${mktCells}
+    </tr>`;
+  };
+
+  const rows = modelAgg.stats.map((b, i) => renderRow(b, mktAgg.stats[i])).join('');
+
+  const surfNote = unknownSurf > 0
+    ? `<br><em>Surface caveat:</em> ${unknownSurf} matches (~${Math.round(unknownSurf/matches.length*100)}%) had unknown surface (tournament not in 2026 catalog) — defaulted to Hard. Surface is ~25% of the model's blend, so this adds modest noise.`
+    : '';
+
+  el.innerHTML = `
+    <div style="font-weight:600;color:var(--ink);font-size:13px;margin-bottom:6px">
+      Model Calibration — ${modelAgg.n} ${TOUR} matches
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55">
+      <em>When the model says X%, do those picks actually win X% of the time?</em>
+      Bins group predictions by the favorite's predicted probability. <strong>Δ% pts = actual − predicted</strong>; within ±5% (green) is well-calibrated, ±5–10% (amber) is drifting, &gt;10% (rose) is biased.
+      <br>
+      <em>Same caveat as MvM:</em> uses today's bio data on past matches, not a true forecast snapshot — adds ~3–5% of cosmetic noise even on a perfectly-calibrated model.
+      ${surfNote}
+    </div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:12px">
+      <div>
+        <strong style="color:var(--ink)">Brier score</strong> (lower = better; perfect = 0, 50/50-on-everything = 0.25):
+        <strong style="color:var(--ink);margin-left:6px">${modelAgg.brier.toFixed(3)}</strong> model${mktAgg.n ? ` · <strong style="color:var(--ink)">${mktAgg.brier.toFixed(3)}</strong> market (${mktAgg.n} matches w/ odds)` : ''}
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--ink);margin-bottom:14px;padding:10px 14px;background:var(--bg-soft);border-radius:8px;line-height:1.5">${verdict}</div>
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:11px">
+      <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line)">
+        <th style="padding:6px 4px">Confidence bin</th>
+        <th style="padding:6px 4px;text-align:right">N</th>
+        <th style="padding:6px 4px;text-align:right">Mean predicted</th>
+        <th style="padding:6px 4px;text-align:right">Model actual</th>
+        <th style="padding:6px 4px;text-align:right">Model Δ</th>
+        <th style="padding:6px 4px;text-align:right">Market actual</th>
+        <th style="padding:6px 4px;text-align:right">Market Δ</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
     </table>
     </div>
   `;
