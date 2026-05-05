@@ -44,6 +44,17 @@ from push_to_d1 import (
     SOURCES, DATA_DIR, _extract, _extract_trapezoid,
 )
 
+# Auto-load .env so the user doesn't have to `export` ADMIN_SYNC_TOKEN every
+# manual run. CI uses GH Actions secrets directly (no .env), which is fine —
+# os.environ.setdefault means CI's already-exported value wins. Same minimal
+# loader pattern used by other scripts in this project (e.g. probe_odds.py).
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text().splitlines():
+        if "=" in _line and not _line.strip().startswith("#"):
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
+
 
 DEFAULT_URL = "https://tennis-wta-atp.kasserconnor.workers.dev/api/admin/sync"
 
