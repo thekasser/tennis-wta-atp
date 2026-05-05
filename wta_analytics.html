@@ -80,23 +80,18 @@ body.tab-trapezoid #btn-both{display:inline-flex}
 .sticky-nav .tour-toggle{margin-left:auto}
 :root{--sticky-top:68px}
 @media (max-width:760px){:root{--sticky-top:120px}.sticky-nav{flex-direction:column;align-items:stretch}.sticky-nav .tour-toggle{margin-left:0;align-self:flex-start}}
-/* Filter rows above tables — sticky between the tab nav and column headers.
-   So as you scroll: nav stays, then filter row (which filters/toggles are
-   active), then column header — column meaning never gets lost. */
-.filter-row, .tbl-wrap > .tbl-title{position:sticky;top:var(--sticky-top);z-index:6;background:var(--bg-panel);padding:14px 18px}
+/* Big tables (Rankings + Trapezoid) live inside a bounded scroll container
+   with their own scrollbar — the data-grid pattern (Excel/Notion/Linear).
+   Column headers stick to the WRAPPER top, not the viewport top, so they
+   never compete with page-level scroll or other sticky elements. Filter row
+   + title scroll naturally with the page until the wrapper itself comes
+   into view; once the user scrolls inside the wrapper, only the column
+   headers stay pinned. See `.tbl-wrap` and `.trap-table-wrap` below for
+   the actual max-height + overflow rules. */
 .filter-row{padding:12px 18px;border-bottom:1px solid var(--line)}
-/* Column headers stack just below the filter row. The 56px offset matches
-   the rendered height of .filter-row / .tbl-title at standard viewport. */
-table th{position:sticky;top:calc(var(--sticky-top) + 56px);z-index:5;background:#ecebe1}
-/* Trapezoid filter row scrolls normally with the page — sticky was getting
-   in the way and the table is the focus, not the controls. Column headers
-   inherit the global sticky rule (top: --sticky-top + 56px). */
 .trap-controls{padding-top:8px;padding-bottom:8px}
-/* Modal tables stick to top of their own scroll container, no nav offset. */
-.modal table th{top:0;background:#f4efe4}
-/* Predictor tab stacks 3 tables (upcoming / MvM / etc.) — sticky <th> on
-   each fights for the same scroll-offset and looks broken. Static here. */
-#tab-predict table th{position:static}
+/* Modal tables sticky to the modal's scroll container. */
+.modal table th{position:sticky;top:0;z-index:5;background:#f4efe4}
 .tab-btn{padding:9px 16px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;background:transparent;border:none;color:var(--muted);transition:all .15s;font-family:inherit}
 .tab-btn:hover{color:var(--ink)}
 .tab-btn.active{background:var(--ink);color:#fffef9;box-shadow:var(--shadow-sm)}
@@ -125,7 +120,12 @@ tr:hover td{background:rgba(36,43,42,.03)}
    reach the viewport. `hidden` would block that. Mobile gets `overflow-x:auto`
    below so wide tables remain horizontally scrollable (sticky breaks there
    but mobile doesn't typically vertical-scroll long tables). */
-.tbl-wrap{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);overflow:clip;margin-bottom:18px;box-shadow:var(--shadow-sm)}
+.tbl-wrap{background:var(--bg-panel);border:1px solid var(--line);border-radius:var(--radius);max-height:80vh;overflow:auto;margin-bottom:18px;box-shadow:var(--shadow-sm)}
+.tbl-wrap thead th{position:sticky;top:0;z-index:5;background:#ecebe1}
+/* When .tbl-wrap nests a .trap-table-wrap (Trapezoid Player Detail), the
+   inner is the real scroll container — don't double-bound it on the outer
+   or thead inside the inner loses its sticky reference. */
+.tbl-wrap:has(> .trap-table-wrap){max-height:none;overflow:visible}
 .tbl-title{padding:14px 18px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line)}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;background:var(--tbg);color:var(--tc);margin-left:5px}
 .badge.atp{background:var(--accent-steel-soft);color:var(--accent-steel)}
@@ -254,8 +254,6 @@ select:focus{outline:none;border-color:var(--tc)}
   .hdr-right{gap:8px}
   /* tab nav: don't overflow viewport */
   .tab-nav{max-width:100%;box-sizing:border-box}
-  /* tables: scroll horizontally instead of clipping */
-  .tbl-wrap{overflow-x:auto}
   /* hide low-priority ranking columns */
   #tbl-rankings th:nth-child(2),#tbl-rankings td:nth-child(2),
   #tbl-rankings th:nth-child(6),#tbl-rankings td:nth-child(6),
@@ -300,12 +298,11 @@ select:focus{outline:none;border-color:var(--tc)}
 .tour-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700}
 .tour-badge.atp{background:var(--accent-steel-soft);color:var(--accent-steel)}
 .tour-badge.wta{background:var(--accent-green-soft);color:var(--accent-green)}
-/* trap-table-wrap allows horizontal scroll so wide metric tables (9+ columns)
-   don't get clipped on narrower desktop viewports. Trade-off: sticky <th>
-   inside an overflow-x:auto container sticks to the WRAPPER top, not the
-   viewport top — which is fine since the filter row above is no longer
-   sticky either. */
-.trap-table-wrap{overflow-x:auto}
+/* trap-table-wrap is a bounded scroll container — same data-grid pattern as
+   .tbl-wrap above. max-height keeps the table from dominating the viewport,
+   overflow:auto gives both axes their own scrollbars (the "slider" the user
+   asked for), and column headers stick to the wrapper top. */
+.trap-table-wrap{max-height:70vh;overflow:auto}
 /* Custom autocomplete dropdown for matchup predictor — replaces native
    <datalist> which Chrome hijacks with overlay autocomplete that overwrites
    typed text. This dropdown is fully under our control. */
@@ -323,7 +320,7 @@ select:focus{outline:none;border-color:var(--tc)}
 .pred-breakdown-bar{height:5px;border-radius:3px;background:var(--bg-soft);position:relative;overflow:hidden}
 .pred-breakdown-bar div{position:absolute;top:0;bottom:0}
 #trap-table table{width:100%;border-collapse:collapse;font-size:12.5px}
-#trap-table th{padding:11px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);background:#ecebe1;cursor:pointer;white-space:nowrap;user-select:none;border-bottom:1px solid var(--line);position:sticky;top:var(--sticky-top);z-index:5}
+#trap-table th{padding:11px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);background:#ecebe1;cursor:pointer;white-space:nowrap;user-select:none;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 #trap-table th:hover{color:var(--ink)}
 #trap-table td{padding:10px 14px;border-top:1px solid var(--line);color:var(--ink);white-space:nowrap}
 #trap-table tbody tr:first-child td{border-top:0}
@@ -3105,6 +3102,13 @@ function decorateTrapezoidComposite(rows) {
     }
     stats.set(key, s);
   }
+  // Bayesian shrinkage: a low-sample player's raw z-score is inflated by
+  // small-sample noise (e.g., a 5-2 record reads as 71% win rate). Multiply
+  // the final composite by n / (n + n0) so a 7-match player gets ~32% of
+  // their raw z, while a 36-match player keeps ~71%. n0=15 means "the prior
+  // is roughly that you need 15 matches before we trust your z-score 50%."
+  // Same regression-to-the-mean trick used in baseball Pythagorean stats.
+  const SHRINK_PRIOR = 15;
   rows.forEach(r => {
     const surf = r.surf || 'All';
     const s = stats.get(`${r.year}|${r.tour}|${surf}`);
@@ -3116,7 +3120,11 @@ function decorateTrapezoidComposite(rows) {
       if (v == null || isNaN(v) || !ms) continue;
       zs.push((v - ms.mean) / ms.std);
     }
-    r.composite = zs.length >= 3 ? +(zs.reduce((a,b)=>a+b,0) / zs.length).toFixed(2) : null;
+    if (zs.length < 3) { r.composite = null; return; }
+    const raw = zs.reduce((a,b)=>a+b,0) / zs.length;
+    const n = r.matches || 0;
+    const shrinkage = n / (n + SHRINK_PRIOR);
+    r.composite = +(raw * shrinkage).toFixed(2);
   });
 }
 
