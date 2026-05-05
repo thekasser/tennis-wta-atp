@@ -141,15 +141,35 @@ def _now_utc() -> str:
 
 def _compute_active_tournaments(conn, tour: str) -> list[dict]:
     """For each active tournament, derive {id, stage, players: {bio_id: {r, elim}}}
-    purely from match data. Replaces patch_wta_active.py + the client-side
-    enrichActiveTournaments() path.
+    purely from match data.
+
+    "Active" is determined by date window, NOT the manually-set tournaments.active
+    flag — that was failing during weekly transitions (Madrid still showing as
+    current after the final, Rome quals not picked up). The window is:
+        start_date − 7 days  (qualifying rounds are typically -1 week)
+        end_date   + 1 day   (1-day grace period after the final)
+    A tournament inside that window with at least one match in our DB shows
+    as active. The active flag in tournaments.js is now informational only.
     """
+    today = date.today()
     api_id_col = f"api_id_{tour}"
-    actives = list(conn.execute(f"""
-        SELECT id, name, draw_size, {api_id_col} AS api_id
+    candidates = list(conn.execute(f"""
+        SELECT id, name, draw_size, start_date, end_date, {api_id_col} AS api_id
         FROM tournaments
-        WHERE active = 1 AND (tour = ? OR tour = 'both')
+        WHERE (tour = ? OR tour = 'both')
+          AND start_date IS NOT NULL AND end_date IS NOT NULL
     """, (tour,)))
+    actives = []
+    for c in candidates:
+        try:
+            sd = date.fromisoformat(c["start_date"])
+            ed = date.fromisoformat(c["end_date"])
+        except (ValueError, TypeError):
+            continue
+        quals_start = sd - timedelta(days=7)
+        grace_end   = ed + timedelta(days=1)
+        if quals_start <= today <= grace_end:
+            actives.append(c)
 
     out = []
     for t in actives:
@@ -238,17 +258,30 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
 
 def _compute_results_per_player(conn, tour: str) -> dict[int, dict]:
     """For each bio, return {tournament_id: {r, pts}} of completed events.
-    Only non-active tournaments (active=0) are counted as "results"; active
-    tournaments are projected via activeTournaments[] separately.
+    Excludes any tournament currently inside its active window (those are
+    projected via activeTournaments[] separately so we don't double-count).
     """
+    today = date.today()
+    # Build set of currently-active tournament ids (date-windowed) to exclude.
+    active_ids = set()
+    for r in conn.execute("SELECT id, start_date, end_date FROM tournaments WHERE start_date IS NOT NULL AND end_date IS NOT NULL"):
+        try:
+            sd = date.fromisoformat(r["start_date"])
+            ed = date.fromisoformat(r["end_date"])
+        except (ValueError, TypeError):
+            continue
+        if (sd - timedelta(days=7)) <= today <= (ed + timedelta(days=1)):
+            active_ids.add(r["id"])
+    placeholders = ",".join("?" * len(active_ids)) if active_ids else "''"
     api_id_col = f"api_id_{tour}"
     rows = list(conn.execute(f"""
         SELECT m.date, m.round, m.p1_id, m.p2_id, m.winner_id,
-               t.id AS tid, t.draw_size, t.points_table, t.active
+               t.id AS tid, t.draw_size, t.points_table
         FROM matches m
         JOIN tournaments t ON t.id = m.tournament_id
-        WHERE m.tour = ? AND t.active = 0
-    """, (tour,)))
+        WHERE m.tour = ?
+          {f"AND t.id NOT IN ({placeholders})" if active_ids else ""}
+    """, (tour, *active_ids) if active_ids else (tour,)))
     mid_to_bio = {row["mid"]: row["bio_id"] for row in conn.execute(
         "SELECT mid, bio_id FROM players WHERE tour = ?", (tour,)
     )}
