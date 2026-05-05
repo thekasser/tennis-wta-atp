@@ -1005,8 +1005,15 @@ function matchProbBreakdown(pA, pB, surf) {
   const sA = pA.surf[sk], sB = pB.surf[sk];
   const surfP = (sA+sB) > 0 ? sA/(sA+sB) : .5;
 
-  // 3. Form
-  const fA = formPct(pA.form)/100, fB = formPct(pB.form)/100;
+  // 3. Form — force tour-only filter regardless of caller's global toggle.
+  // Without this, the upcoming-matches table and MvM panel call matchProb
+  // with whatever form players() produced (driven by the FORM_FILTER toggle),
+  // while renderPredict mutates pA.form to tour-only — so the same matchup
+  // shows different probs in different panels (e.g. Ostapenko 87% predictor
+  // vs 74% table). Centralizing the policy here is the single source of truth.
+  const formStrA = derivedForm(pA.id, pA.form, 'tour');
+  const formStrB = derivedForm(pB.id, pB.form, 'tour');
+  const fA = formPct(formStrA)/100, fB = formPct(formStrB)/100;
   const formP = (fA + fB) > 0 ? fA/(fA+fB) : .5;
 
   // 4. Composite z-delta → sigmoid
@@ -1086,7 +1093,7 @@ function matchProbBreakdown(pA, pB, surf) {
           `${Math.round(sA*100)}%`, `${Math.round(sB*100)}%`,
           surfP, weights.surf, null);
   pushRow('form', 'Form (last 10)',
-          `${formPct(pA.form)}%`, `${formPct(pB.form)}%`,
+          `${formPct(formStrA)}%`, `${formPct(formStrB)}%`,
           formP, weights.form, null);
   if (compAvail) pushRow('comp', `Composite (${cA.period})`,
           `${compZA >= 0 ? '+' : ''}${compZA.toFixed(2)}z`,
