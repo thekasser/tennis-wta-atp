@@ -69,3 +69,6 @@ node_modules/
 # Claude/Cowork local state (paranoia — these don't usually live in workspace folders, but in case)
 .claude/
 .cowork/
+data/predictions.js
+data/backtest_*.csv
+data/backtest_*.gsheet
