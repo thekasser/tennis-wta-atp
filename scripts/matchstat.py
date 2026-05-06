@@ -114,9 +114,15 @@ class MatchstatClient:
         self.verbose = verbose
         self._auto_log    = auto_log
         self._log_db_path = log_db_path
-        # Rate-limit throttle (Pro plan ≈ 5 req/s; 250 ms gives margin).
+        # Rate-limit throttle. Originally 0.25s (4 req/s) for the documented
+        # Pro-plan limit of ~5 req/s, but Matchstat's WTA past-matches
+        # endpoint silently throttles bursts well below that — 2026-05-06
+        # CI run hit 93% NULL-row rate even with 250ms intervals. Bumped to
+        # 750ms (1.3 req/s) which adds ~2 minutes to a full sync but stays
+        # comfortably under whatever per-key rate limit they're enforcing.
+        # If we ever hit it again, raise to 1.0s or split per-tour.
         self._last_request_at = 0.0
-        self._min_interval    = 0.25
+        self._min_interval    = 0.75
 
     # ─── Core HTTP ─────────────────────────────────────────────────────────
 
