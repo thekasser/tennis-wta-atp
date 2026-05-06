@@ -204,6 +204,7 @@ export default {
         case "/api/tournament-history":  return blobResponse(env, "tournament_history");
         case "/api/trapezoid":           return blobResponse(env, "trapezoid");
         case "/api/upcoming":            return blobResponse(env, "upcoming_matches");
+        case "/api/predictions":         return blobResponse(env, "predictions");
         case "/api/health": {
           // Quick liveness probe — counts blobs + reports last update.
           const stats = await env.DB

@@ -550,6 +550,8 @@ select:focus{outline:none;border-color:var(--tc)}
     <div class="card" id="upcoming-panel" style="margin-bottom:18px"></div>
     <div class="card" id="h2h-panel"></div>
     <div class="card" id="mvm-panel" style="margin-top:18px"></div>
+    <div class="card" id="track-record-panel" style="margin-top:18px"></div>
+    <div class="card" id="recent-calls-panel" style="margin-top:18px"></div>
     <div class="card" id="calibration-panel" style="margin-top:18px"></div>
   </div>
 </div>
@@ -577,6 +579,10 @@ let TOURNAMENTS_DATA, PLAYERS_WTA, PLAYERS_ATP, SEASON_WTA, SEASON_ATP;
 let TRAPEZOID_ATP, TRAPEZOID_WTA, TRAPEZOID_YEARS, TRAPEZOID_METRICS,
     TRAPEZOID_LABELS, TRAPEZOID_MIN_DEFAULTS;
 let RECENT_MATCHES, TOURNAMENT_HISTORY, H2H, UPCOMING_MATCHES;
+// Prospective prediction log — populated by scripts/log_predictions.py and
+// scored against matches.winner_id by scripts/materialize.py. Shape:
+//   { recent: [...], stats: {n, brier_us, brier_odds, ...}, calibration: [...] }
+let PREDICTIONS_DATA;
 
 // PTS table + getTournamentPts() helper used to live in data/tournaments.js
 // alongside the calendar data. They're stable lookup logic, not data, so
@@ -612,7 +618,7 @@ async function loadDashboardData() {
   });
   const [
     tournaments, playersWTA, playersATP, seasonWTA, seasonATP,
-    trapezoid, recentMatches, tournamentHistory, h2h, upcoming,
+    trapezoid, recentMatches, tournamentHistory, h2h, upcoming, predictions,
   ] = await Promise.all([
     get('/api/tournaments'),
     get('/api/players/wta'),
@@ -624,6 +630,7 @@ async function loadDashboardData() {
     get('/api/tournament-history'),
     get('/api/h2h'),
     get('/api/upcoming').catch(() => ({atp: [], wta: []})),  // graceful: not all envs have it yet
+    get('/api/predictions').catch(() => ({recent: [], stats: {n: 0}, calibration: []})), // empty until log accumulates
   ]);
   TOURNAMENTS_DATA   = tournaments;
   PLAYERS_WTA        = playersWTA;
@@ -640,6 +647,7 @@ async function loadDashboardData() {
   TOURNAMENT_HISTORY = tournamentHistory;
   H2H                = h2h;
   UPCOMING_MATCHES   = upcoming;
+  PREDICTIONS_DATA   = predictions;
 }
 
 
@@ -2156,8 +2164,10 @@ function renderPredict() {
   const idB=parseInt(document.getElementById('pred-b')?.value)||0;
   const pA=psList.find(p=>p.id===idA),pB=psList.find(p=>p.id===idB);
   blufPEl.innerHTML = blufPredict();
-  // Calibration is a global view (no player selection required) — render
-  // before the early return so it shows even on first tab open.
+  // Global views (no player selection needed) — render before the early
+  // return so they show even on first tab open with no players picked.
+  renderTrackRecord();
+  renderRecentCalls();
   renderCalibration();
   if(!pA||!pB) return;
   const surf=document.getElementById('pred-surf')?.value||'Hard';
@@ -2537,6 +2547,192 @@ function renderModelVsMarket() {
     </table>
     </div>
   `;
+}
+
+// ── Tier 2: Model Track Record ────────────────────────────────────────────
+// Pulls from PREDICTIONS_DATA — the prospective prediction log populated by
+// scripts/log_predictions.py. Unlike renderCalibration() below (which uses
+// today's bios on past matches → hindsight-biased), this panel uses the
+// model's ACTUAL pre-match prediction recorded at the time, then JOINs
+// against the eventual outcome. Numbers here are trustworthy.
+//
+// Brier_us: model's Brier on all logged predictions (any tour).
+// Brier_odds: market's Brier on the subset where pre-match odds were known
+//   (de-vigged from raw fixture odds). Same matches as Brier_us_subset so
+//   the comparison is apples-to-apples.
+function renderTrackRecord() {
+  const el = document.getElementById('track-record-panel');
+  if (!el) return;
+  if (!PREDICTIONS_DATA || !PREDICTIONS_DATA.stats || !PREDICTIONS_DATA.stats.n) {
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <h3 style="margin:0">Model Track Record</h3>
+        <span style="font-size:11px;color:var(--muted)">prospective log</span>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6">
+        Prospective prediction log is empty — the daily prediction snapshot
+        started 2026-05-05 and needs matches to resolve before this panel
+        is meaningful. Check back after Rome's first round (~2026-05-07).
+      </div>`;
+    return;
+  }
+  const s = PREDICTIONS_DATA.stats;
+  const baseBrier = 0.25;  // 50/50 random baseline
+  const _bssVs = (b) => b == null ? null : 1 - (b / baseBrier);
+  const bss_us   = _bssVs(s.brier_us);
+  const bss_odds = _bssVs(s.brier_odds);
+
+  // Comparison row: us vs odds on the SAME subset (where odds known)
+  const subsetCompare = (s.brier_us_subset != null && s.brier_odds != null)
+    ? (s.brier_us_subset < s.brier_odds
+        ? `<span style="color:var(--accent-green);font-weight:600">model beats market</span> by ${((s.brier_odds - s.brier_us_subset)*1000).toFixed(1)} Brier-pts (lower is better)`
+        : `<span style="color:var(--accent-rose);font-weight:600">market beats model</span> by ${((s.brier_us_subset - s.brier_odds)*1000).toFixed(1)} Brier-pts`)
+    : 'awaiting matches with both prediction + market odds';
+
+  // Calibration bin chart (text-based — keep it scannable on mobile)
+  const bins = (PREDICTIONS_DATA.calibration || []).filter(b => b.n > 0);
+  const calRows = bins.map(b => {
+    const delta = (b.actual - b.pred) * 100;
+    const color = Math.abs(delta) < 5 ? 'var(--accent-green)'
+                : Math.abs(delta) < 12 ? 'var(--muted)'
+                : 'var(--accent-rose)';
+    return `<tr>
+      <td style="font-family:monospace;font-size:11px">${b.lo.toFixed(2)}–${b.hi.toFixed(2)}</td>
+      <td style="text-align:right">${b.n}</td>
+      <td style="text-align:right;font-family:monospace">${(b.pred*100).toFixed(1)}%</td>
+      <td style="text-align:right;font-family:monospace">${(b.actual*100).toFixed(1)}%</td>
+      <td style="text-align:right;font-family:monospace;color:${color}">${delta>0?'+':''}${delta.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+      <h3 style="margin:0">Model Track Record</h3>
+      <span style="font-size:11px;color:var(--muted)" title="Predictions logged by scripts/log_predictions.py and scored against actual outcomes. No hindsight — this is the model's real-world performance.">prospective log · ${s.n} prediction${s.n===1?'':'s'} resolved</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px">
+      <div class="stat-card">
+        <div class="val" style="color:var(--tc)">${s.brier_us != null ? s.brier_us.toFixed(4) : '—'}</div>
+        <div class="lbl" title="(p − y)² averaged across all predictions. 0.25 = random; lower = better.">Model Brier</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="color:${bss_us>0?'var(--accent-green)':'var(--accent-rose)'}">${bss_us != null ? (bss_us*100).toFixed(1)+'%' : '—'}</div>
+        <div class="lbl" title="Brier Skill Score: 1 − (Brier_model / 0.25). What fraction of available signal we captured beyond random.">Skill vs random</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="color:var(--muted)">${s.brier_odds != null ? s.brier_odds.toFixed(4) : '—'}</div>
+        <div class="lbl" title="Market's Brier on the subset of matches where pre-match odds were available. De-vigged: implied probs normalized to remove bookmaker overround.">Market Brier${s.n_with_odds ? ` <span style="opacity:.6">(${s.n_with_odds})</span>` : ''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="font-size:14px;color:var(--muted);font-weight:500">${subsetCompare}</div>
+        <div class="lbl">Head-to-head</div>
+      </div>
+    </div>
+    ${calRows ? `
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px">
+        Calibration by predicted-prob bin
+        <span style="text-transform:none;letter-spacing:0;font-weight:500;margin-left:6px;opacity:.7">— Δ near 0 = well-calibrated</span>
+      </div>
+      <table class="tbl" style="font-size:12px">
+        <thead><tr>
+          <th style="text-align:left">Bin</th><th style="text-align:right">n</th>
+          <th style="text-align:right">Predicted</th><th style="text-align:right">Actual</th>
+          <th style="text-align:right">Δ (pp)</th>
+        </tr></thead>
+        <tbody>${calRows}</tbody>
+      </table>` : ''}
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6">
+      Model version: <code>${s.model_version || '—'}</code>.
+      Brier guide: 0.25 = random · 0.20–0.23 = decent · &lt;0.20 = strong.
+    </div>`;
+}
+
+// ── Tier 1: Recent Calls strip ────────────────────────────────────────────
+// Compact horizontal-ish list of the last N resolved predictions. Each row
+// shows: date, matchup, model prediction, actual outcome (✓ hit / ✗ miss),
+// and market line when available. Click anywhere on a row → loads that
+// matchup back into the predictor for retro inspection.
+function renderRecentCalls() {
+  const el = document.getElementById('recent-calls-panel');
+  if (!el) return;
+  if (!PREDICTIONS_DATA || !PREDICTIONS_DATA.recent || !PREDICTIONS_DATA.recent.length) {
+    el.innerHTML = '';
+    return;
+  }
+  // Filter to current tour for relevance
+  const tk = TOUR.toLowerCase();
+  const rows = PREDICTIONS_DATA.recent
+    .filter(r => (r.tour || '').toLowerCase() === tk)
+    .slice(0, 15);
+  if (!rows.length) { el.innerHTML = ''; return; }
+
+  const rowHtml = rows.map(r => {
+    // Determine the model's PICK (whichever side has p > 0.5) and whether it hit.
+    const modelPickedA = r.p_pred >= 0.5;
+    const modelConf    = modelPickedA ? r.p_pred : (1 - r.p_pred);
+    const modelPicked  = modelPickedA ? r.p1_name : r.p2_name;
+    const winnerName   = r.won_a ? r.p1_name : r.p2_name;
+    const hit          = (modelPickedA && r.won_a === 1) || (!modelPickedA && r.won_a === 0);
+    const surfEmoji    = {H:'🔵',C:'🟤',G:'🟢'}[r.surface] || '';
+
+    // Market comparison if available
+    let marketStr = '';
+    if (r.market_p_a != null) {
+      const marketConf = modelPickedA ? r.market_p_a : (1 - r.market_p_a);
+      const marketPick = r.market_p_a >= 0.5 ? r.p1_name : r.p2_name;
+      const marketSamePick = (modelPickedA === (r.market_p_a >= 0.5));
+      marketStr = marketSamePick
+        ? `<span style="color:var(--muted);font-size:11px">market: ${(marketConf*100).toFixed(0)}%</span>`
+        : `<span style="color:var(--accent-rose);font-size:11px" title="Market disagreed: picked ${marketPick} at ${(Math.max(r.market_p_a, 1-r.market_p_a)*100).toFixed(0)}%">market ⇆</span>`;
+    }
+
+    return `
+      <tr>
+        <td style="font-size:11px;color:var(--muted);white-space:nowrap">${r.date}</td>
+        <td>${surfEmoji} <span style="font-size:11px;color:var(--muted);text-transform:uppercase">${r.surface}</span></td>
+        <td style="font-size:13px">
+          <strong>${r.p1_name}</strong> <span style="color:var(--muted)">vs</span> <strong>${r.p2_name}</strong>
+          ${r.score ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">${r.score}</div>` : ''}
+        </td>
+        <td style="text-align:right;white-space:nowrap">
+          <div style="font-size:13px;font-weight:600">${(modelConf*100).toFixed(0)}% ${modelPicked.split(' ').slice(-1)[0]}</div>
+          ${marketStr ? `<div style="margin-top:2px">${marketStr}</div>` : ''}
+        </td>
+        <td style="text-align:center;white-space:nowrap">
+          <span style="font-size:18px;font-weight:700;color:${hit ? 'var(--accent-green)' : 'var(--accent-rose)'}">
+            ${hit ? '✓' : '✗'}
+          </span>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">${winnerName.split(' ').slice(-1)[0]} won</div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const hits = rows.filter(r => {
+    const modelPickedA = r.p_pred >= 0.5;
+    return (modelPickedA && r.won_a === 1) || (!modelPickedA && r.won_a === 0);
+  }).length;
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+      <h3 style="margin:0">Recent Calls</h3>
+      <span style="font-size:11px;color:var(--muted)">${TOUR} · last ${rows.length} resolved · ${hits}/${rows.length} hits</span>
+    </div>
+    <div class="tbl-wrap" style="overflow-x:auto">
+      <table class="tbl" style="font-size:12px">
+        <thead><tr>
+          <th style="text-align:left">Date</th>
+          <th style="text-align:left">Surf</th>
+          <th style="text-align:left">Matchup</th>
+          <th style="text-align:right">Model pick</th>
+          <th style="text-align:center">Result</th>
+        </tr></thead>
+        <tbody>${rowHtml}</tbody>
+      </table>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">
+      <strong>✓ hit</strong> = model's favored side won. <strong>✗ miss</strong> = upset.
+      <strong>market ⇆</strong> = market favored the other player. Hit rate ≠ Brier — a 51% pick that wins counts the same here as a 95% pick that wins.
+    </div>`;
 }
 
 // ── Calibration panel ─────────────────────────────────────────────────────

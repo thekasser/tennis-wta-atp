@@ -1149,7 +1149,8 @@ def materialize_trapezoid(conn) -> bool:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--only", choices=["season", "recent_matches", "tournament_history",
-                                      "h2h", "trapezoid", "upcoming"], default=None)
+                                      "h2h", "trapezoid", "upcoming", "predictions"],
+                   default=None)
     args = p.parse_args()
 
     init_db(verbose=False)
@@ -1171,9 +1172,142 @@ def main() -> int:
         if materialize_trapezoid(conn): changed += 1
     if args.only in (None, "upcoming"):
         if materialize_upcoming(conn): changed += 1
+    if args.only in (None, "predictions"):
+        if materialize_predictions(conn): changed += 1
 
     print(f"\n{changed} file(s) changed.")
     return 0
+
+
+def materialize_predictions(conn) -> bool:
+    """Read predictions JOIN matches → write data/predictions.js with the
+    last 30 resolved predictions + aggregate stats (Brier, calibration).
+
+    Includes pre-match odds (de-vigged) when available so the dashboard
+    can show a Brier-vs-market comparison. Odds are a benchmark, not an
+    input feature — used to measure whether our model beats market
+    consensus on the matches we both opined on.
+    """
+    rows = list(conn.execute("""
+        SELECT
+            p.match_id, p.tour, p.surface, p.date,
+            p.p1_mid, p.p2_mid, p.p1_name, p.p2_name,
+            p.p_pred, p.predicted_at, p.model_version,
+            p.tournament_id,
+            m.winner_id, m.raw, m.score
+        FROM predictions p
+        JOIN matches m ON CAST(p.match_id AS TEXT) = m.id
+        WHERE m.winner_id IS NOT NULL
+          AND p.predicted_at = (
+            SELECT MIN(predicted_at) FROM predictions p2
+            WHERE p2.match_id = p.match_id
+          )
+        ORDER BY p.date DESC, p.match_id DESC
+    """))
+
+    def _devigged_p1(odd1, odd2):
+        """Convert odds to de-vigged implied probability of player 1 winning.
+        Standard market normalization: divide by sum of inverses to remove
+        bookmaker overround."""
+        try:
+            ip1 = 1.0 / float(odd1)
+            ip2 = 1.0 / float(odd2)
+            tot = ip1 + ip2
+            return ip1 / tot if tot > 0 else None
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+    enriched = []
+    for r in rows:
+        won_a = 1 if r["winner_id"] == r["p1_mid"] else 0
+        odd1 = odd2 = None
+        market_p_a = None
+        if r["raw"]:
+            try:
+                raw = json.loads(r["raw"])
+                # Matchstat: raw.odd1 = odds for player1 in match payload.
+                # Slot A in our predictions is lower-mid, may be p1 or p2 in raw.
+                # Need to map back.
+                raw_p1 = raw.get("player1Id") or raw.get("p1Id")
+                if raw_p1 == r["p1_mid"]:
+                    odd1, odd2 = raw.get("odd1"), raw.get("odd2")
+                else:
+                    odd1, odd2 = raw.get("odd2"), raw.get("odd1")
+                market_p_a = _devigged_p1(odd1, odd2)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        enriched.append({
+            "match_id":  r["match_id"],
+            "date":      r["date"],
+            "tour":      r["tour"],
+            "surface":   r["surface"],
+            "tournament_id": r["tournament_id"],
+            "p1_name":   r["p1_name"],
+            "p2_name":   r["p2_name"],
+            "p_pred":    round(r["p_pred"], 4),
+            "won_a":     won_a,
+            "market_p_a": round(market_p_a, 4) if market_p_a is not None else None,
+            "score":     r["score"],
+            "model_version": r["model_version"],
+        })
+
+    n = len(enriched)
+    if n:
+        brier_us = sum((e["p_pred"] - e["won_a"]) ** 2 for e in enriched) / n
+        with_odds = [e for e in enriched if e["market_p_a"] is not None]
+        if with_odds:
+            brier_odds = sum((e["market_p_a"] - e["won_a"]) ** 2 for e in with_odds) / len(with_odds)
+            # Brier_us on the SAME subset (so comparison is apples-to-apples)
+            brier_us_subset = sum((e["p_pred"] - e["won_a"]) ** 2 for e in with_odds) / len(with_odds)
+        else:
+            brier_odds = brier_us_subset = None
+    else:
+        brier_us = brier_odds = brier_us_subset = None
+        with_odds = []
+
+    # 10-bin calibration table
+    bins: list[list] = [[] for _ in range(10)]
+    for e in enriched:
+        idx = min(int(e["p_pred"] * 10), 9)
+        bins[idx].append(e)
+    calibration = []
+    for i, bin_rows in enumerate(bins):
+        lo, hi = i / 10, (i + 1) / 10
+        if not bin_rows:
+            calibration.append({"lo": lo, "hi": hi, "n": 0,
+                                "pred": None, "actual": None})
+            continue
+        pred = sum(e["p_pred"] for e in bin_rows) / len(bin_rows)
+        actual = sum(e["won_a"] for e in bin_rows) / len(bin_rows)
+        calibration.append({"lo": lo, "hi": hi, "n": len(bin_rows),
+                            "pred": round(pred, 3),
+                            "actual": round(actual, 3)})
+
+    payload = {
+        "recent": enriched[:30],
+        "stats": {
+            "n":               n,
+            "brier_us":        round(brier_us, 4) if brier_us is not None else None,
+            "brier_odds":      round(brier_odds, 4) if brier_odds is not None else None,
+            "brier_us_subset": round(brier_us_subset, 4) if brier_us_subset is not None else None,
+            "n_with_odds":     len(with_odds),
+            "model_version":   enriched[0]["model_version"] if enriched else None,
+        },
+        "calibration": calibration,
+    }
+    hash_input = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    path = DATA_DIR / "predictions.js"
+
+    def render(h: str) -> str:
+        return (
+            f"// predictions.js — AUTO-GENERATED by scripts/materialize.py from data/tennis.db\n"
+            f"// Do not edit manually. Last updated: {_now_utc()}\n"
+            f"/* hash: {h} */\n"
+            f"\n"
+            f"const PREDICTIONS_DATA = {json.dumps(payload, indent=2)};\n"
+        )
+
+    return _write_if_changed(path, hash_input, render, label="predictions")
 
 
 def materialize_upcoming(conn) -> bool:

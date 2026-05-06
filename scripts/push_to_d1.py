@@ -45,6 +45,7 @@ SOURCES = [
     ("players_atp",        "players_atp.js",        "const PLAYERS_ATP",       "[", "]"),
     ("players_wta",        "players_wta.js",        "const PLAYERS_WTA",       "[", "]"),
     ("upcoming_matches",   "upcoming_matches.js",   "const UPCOMING_MATCHES",  "{", "}"),
+    ("predictions",        "predictions.js",        "const PREDICTIONS_DATA",  "{", "}"),
     # Trapezoid handled separately — 5 const exports to bundle.
 ]
 
