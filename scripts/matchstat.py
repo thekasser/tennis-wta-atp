@@ -177,6 +177,35 @@ class MatchstatClient:
                     body = resp.read().decode("utf-8")
                     data = json.loads(body)
                     meta["http_status"] = resp.status
+
+                # Silent-throttle detection. Matchstat's WTA past-matches
+                # endpoint (and possibly others) returns HTTP 200 with
+                # `data: null` or missing `data` key when the per-key burst
+                # rate is exceeded — instead of a proper 429. We hit this
+                # 2026-05-06: 774 WTA fetches in cron, all returned empty,
+                # zero matches ingested. Treat empty-when-data-expected as
+                # a soft 429: back off + retry.
+                #
+                # This check is safe because endpoints that legitimately
+                # return scalars (e.g., a smoke probe) don't go through
+                # this client method's "data is dict with `data` list"
+                # contract — they get returned as-is on first attempt.
+                inner = data.get("data") if isinstance(data, dict) else data
+                empty_response = (
+                    isinstance(data, dict)
+                    and ("data" in data)
+                    and inner is None
+                )
+                if empty_response and attempt < max_attempts:
+                    wait = 2.0 * (2 ** (attempt - 1))
+                    if self.verbose:
+                        print(
+                            f"  [empty] {full_endpoint} — silent throttle? "
+                            f"retry {attempt}/{max_attempts-1} after {wait:.1f}s",
+                            file=sys.stderr,
+                        )
+                    time.sleep(wait)
+                    continue
                 break
             except urllib.error.HTTPError as e:
                 if e.code == 429 and attempt < max_attempts:
