@@ -2582,12 +2582,21 @@ function renderTrackRecord() {
   const bss_us   = _bssVs(s.brier_us);
   const bss_odds = _bssVs(s.brier_odds);
 
-  // Comparison row: us vs odds on the SAME subset (where odds known)
-  const subsetCompare = (s.brier_us_subset != null && s.brier_odds != null)
-    ? (s.brier_us_subset < s.brier_odds
-        ? `<span style="color:var(--accent-green);font-weight:600">model beats market</span> by ${((s.brier_odds - s.brier_us_subset)*1000).toFixed(1)} Brier-pts (lower is better)`
-        : `<span style="color:var(--accent-rose);font-weight:600">market beats model</span> by ${((s.brier_us_subset - s.brier_odds)*1000).toFixed(1)} Brier-pts`)
-    : 'awaiting matches with both prediction + market odds';
+  // Comparison row: us vs odds on the SAME subset (where odds known).
+  // Brier is high-variance on small samples — a single 90%-confident wrong
+  // call adds ~0.08 to the per-match average. Show the comparison only
+  // when we have enough overlap to make the difference informative.
+  const MIN_N_FOR_COMPARE = 20;
+  let subsetCompare;
+  if (s.brier_us_subset == null || s.brier_odds == null) {
+    subsetCompare = 'awaiting matches with both prediction + market odds';
+  } else if (s.n_with_odds < MIN_N_FOR_COMPARE) {
+    subsetCompare = `<span style="color:var(--muted)">need ${MIN_N_FOR_COMPARE - s.n_with_odds} more match${MIN_N_FOR_COMPARE - s.n_with_odds === 1 ? '' : 'es'}</span> with odds before comparison is meaningful (current n=${s.n_with_odds})`;
+  } else {
+    subsetCompare = (s.brier_us_subset < s.brier_odds
+      ? `<span style="color:var(--accent-green);font-weight:600">model beats market</span> by ${((s.brier_odds - s.brier_us_subset)*1000).toFixed(1)} Brier-pts (lower is better)`
+      : `<span style="color:var(--accent-rose);font-weight:600">market beats model</span> by ${((s.brier_us_subset - s.brier_odds)*1000).toFixed(1)} Brier-pts`);
+  }
 
   // Calibration bin chart (text-based — keep it scannable on mobile)
   const bins = (PREDICTIONS_DATA.calibration || []).filter(b => b.n > 0);
@@ -2605,10 +2614,20 @@ function renderTrackRecord() {
     </tr>`;
   }).join('');
 
+  // Sample-size warning. Brier has standard error roughly √(0.25/n), so
+  // n=11 → SE ~0.15, n=50 → SE ~0.07, n=200 → SE ~0.035. Below ~50, the
+  // headline Brier is dominated by 1-2 surprise upsets and shouldn't be
+  // trusted as a stable signal.
+  const STABLE_N = 50;
+  const sampleNote = s.n < STABLE_N
+    ? `<span style="color:var(--accent-rose);font-size:11px;font-weight:600;background:rgba(190,90,90,.08);padding:2px 8px;border-radius:6px" title="Brier on small samples is dominated by 1-2 surprise upsets. PiT backtest on 1844 historical matches puts the population Brier at ~0.227. Wait for n≥${STABLE_N} before reading this Track Record as authoritative.">small-sample warning · numbers below noisy until n≥${STABLE_N}</span>`
+    : '';
+
   el.innerHTML = `
     <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:14px">
       <h3 style="margin:0">Model Track Record</h3>
       <span style="font-size:11px;color:var(--muted)" title="Predictions logged by scripts/log_predictions.py and scored against actual outcomes. No hindsight — this is the model's real-world performance.">prospective log · ${s.n} prediction${s.n===1?'':'s'} resolved</span>
+      ${sampleNote}
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px">
       <div class="stat-card">
