@@ -319,10 +319,68 @@ def _compute_results_per_player(conn, tour: str) -> dict[int, dict]:
     return results
 
 
+def _compute_synthetic_ytd(conn, mid: int | None, year: int) -> int:
+    """Compute YTD race points by summing tournament results in `year`.
+
+    Fallback for players the Matchstat race endpoint omits — typically
+    anyone ranked outside top-200 in the race. We hit this regularly for
+    bio'd players who had a strong T12M (e.g. Munar #38) but a quiet
+    current year (race rank > 200).
+
+    Mirrors backtest.synthetic_ranking's YTD branch — same SEMANTICS,
+    same RD_NAME_DEPTH, same points_table lookup. Returns 0 if mid is
+    missing or no in-year tournaments found.
+    """
+    if not mid:
+        return 0
+    year_start = f"{year}-01-01"
+    rows = list(conn.execute("""
+        SELECT m.tournament_id, m.round, m.winner_id,
+               t.end_date, t.draw_size, t.points_table
+        FROM matches m
+        LEFT JOIN tournaments t ON m.tournament_id = t.id
+        WHERE (m.p1_id = ? OR m.p2_id = ?)
+          AND m.tournament_id IS NOT NULL
+          AND t.points_table IS NOT NULL
+          AND t.end_date >= ?
+    """, (mid, mid, year_start)))
+
+    by_tournament: dict[str, list] = {}
+    for r in rows:
+        by_tournament.setdefault(r["tournament_id"], []).append(r)
+
+    total = 0
+    for _, t_matches in by_tournament.items():
+        end_date = t_matches[0]["end_date"]
+        if not end_date or end_date < year_start:
+            continue
+        try:
+            pts_table = json.loads(t_matches[0]["points_table"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+        sem = semantics_for(t_matches[0]["draw_size"])
+        deepest_d, deepest_round, deepest_won = 0, None, False
+        for m in t_matches:
+            d = RD_NAME_DEPTH.get(m["round"], 0)
+            if d > deepest_d:
+                deepest_d = d
+                deepest_round = m["round"]
+                deepest_won = (m["winner_id"] == mid)
+        if not deepest_round:
+            continue
+        sem_entry = sem.get(deepest_round)
+        if not sem_entry:
+            continue
+        stage = sem_entry["next"] if deepest_won else sem_entry["played"]
+        total += pts_table.get(stage, 0)
+    return total
+
+
 def materialize_season(conn, tour: str) -> bool:
     today = date.today().isoformat()
+    today_year = date.today().year
     bios = list(conn.execute("""
-        SELECT bio_id, name FROM players WHERE tour = ? ORDER BY bio_id
+        SELECT bio_id, name, mid FROM players WHERE tour = ? ORDER BY bio_id
     """, (tour,)))
 
     # Latest snapshot per bio.
@@ -352,19 +410,33 @@ def materialize_season(conn, tour: str) -> bool:
 
     # Build the players block in bio_id order so the file diff is stable.
     players_obj: dict[int, dict] = {}
+    n_synth_ytd = 0
     for b in bios:
         bid = b["bio_id"]
         s = snap.get(bid) or {}
         prev_rank = baseline.get(bid)
         cur_rank  = s.get("rank") or bid
         rank_move = (prev_rank - cur_rank) if (prev_rank and cur_rank) else 0
+        # YTD fallback: if the API didn't include this player in its race
+        # response (typical for bio'd players ranked > 200 in the race),
+        # compute synthetic YTD from their in-year tournament results.
+        ytd_api = s.get("ytd_pts")
+        if ytd_api is None:
+            ytd = _compute_synthetic_ytd(conn, b["mid"], today_year)
+            if ytd > 0:
+                n_synth_ytd += 1
+        else:
+            ytd = ytd_api
         players_obj[bid] = {
             "rank":     cur_rank,
             "pts":      s.get("pts") or 0,
-            "ytd":      s.get("ytd_pts") or 0,
+            "ytd":      ytd,
             "rankMove": rank_move,
             "results":  results_by_bio.get(bid, {}),
         }
+    if n_synth_ytd:
+        print(f"  [{tour}] synthetic YTD computed for {n_synth_ytd} player(s) "
+              "(missing from API race response)")
 
     # Hash input must EXCLUDE timestamps so unchanged data → unchanged hash.
     payload = {
