@@ -233,6 +233,29 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
                 deepest_round_name = r
                 deepest_winner = latest_winner if latest_won else None
 
+        # Augment with fixtures-based players who haven't played yet but are
+        # in the draw. Without this, the early-tournament player count
+        # (Live Events stat-card) only shows players from QUALIFYING
+        # matches that have completed, missing the ~80-100 main-draw
+        # players who haven't taken the court yet. Fixtures has them all.
+        # We mark them as alive at "scheduled" stage — exact round name
+        # doesn't matter for the count, just elim=False to flag in-draw.
+        scheduled_stage = sem.get("First", {}).get("played") or "R128"
+        for r in conn.execute("""
+            SELECT DISTINCT mid FROM (
+              SELECT p1_mid AS mid FROM fixtures
+              WHERE tournament_id = ? AND tour = ? AND p1_mid IS NOT NULL
+              UNION
+              SELECT p2_mid FROM fixtures
+              WHERE tournament_id = ? AND tour = ? AND p2_mid IS NOT NULL
+            )
+        """, (t["id"], tour, t["id"], tour)):
+            mid = r["mid"]
+            bio_id = mid_to_bio.get(mid)
+            if not bio_id or bio_id in players_block:
+                continue
+            players_block[bio_id] = {"r": scheduled_stage, "elim": False}
+
         if not players_block:
             continue
 

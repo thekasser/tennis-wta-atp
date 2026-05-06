@@ -49,6 +49,18 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 scripts/sync_matches.py --tour both
 
+      # ── Sync fixtures (upcoming match schedule) ────────────────────────
+      # Pulls scheduled matches from getTournamentFixtures for each
+      # tournament currently in its active window (date-derived). Cheap:
+      # 1-2 calls per active tournament. The matchup predictor's "tomorrow"
+      # panel and Live Events draw count both depend on this.
+      - name: Sync fixtures
+        env:
+          MATCHSTAT_API_KEY: ${{ secrets.MATCHSTAT_API_KEY }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/sync_fixtures.py --tour both
+
       # ── Materialize all data/*.js files from the DB ────────────────────
       # Hash-based change detection means files only rewrite if data changed.
       - name: Materialize data files
