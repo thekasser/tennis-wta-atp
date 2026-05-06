@@ -74,7 +74,9 @@ from materialize import (
 # ─── Model port: Python mirror of matchProbBreakdown ─────────────────────────
 # Source: wta_analytics.html lines 969-1106. Defaults below MUST match the JS;
 # the function accepts overrides so the backtest can sweep tuning values.
-DEFAULT_SHARPEN          = 2.5
+# When updating either side, update both. The prospective prediction log
+# (scripts/log_predictions.py) uses these as the live model fingerprint.
+DEFAULT_SHARPEN          = 1.25   # was 2.5 → 1.0 → 1.25; PiT-backtest optimum
 DEFAULT_BARE_ELO_WEIGHT  = 0.35   # bare-case (no comp, no h2h) Elo share
 PYTHAGOREAN_K            = 1.5
 PROB_FLOOR, PROB_CAP     = 0.05, 0.95
@@ -714,6 +716,66 @@ def score_features(features: list[MatchFeatures], *,
     return rows
 
 
+def load_prospective_rows(conn, model_version: str | None = None,
+                          limit: int | None = None) -> list[BacktestRow]:
+    """Read prospective predictions from the predictions table and JOIN
+    against matches.winner_id to score them. Each match contributes ONE
+    row — its EARLIEST logged prediction (T-N days before the match), so
+    the scored Brier reflects the model's pre-match call, not last-second
+    knowledge. Predictions on matches that haven't completed yet are
+    skipped.
+
+    model_version filter lets you compare apples-to-apples after a tuning
+    change (e.g. only score predictions made under 'sharpen=1.25/...').
+    """
+    sql = """
+        SELECT
+          p.match_id, p.tour, p.surface, p.date,
+          p.p1_mid, p.p2_mid, p.p1_name, p.p2_name,
+          p.pts_p1, p.ytd_p1, p.pts_p2, p.ytd_p2,
+          p.form_p1, p.form_p2, p.h2h_p1, p.h2h_p2,
+          p.comp_p1, p.comp_p2,
+          p.p_pred, p.weights_json, p.signals_json,
+          p.predicted_at, p.model_version,
+          m.winner_id
+        FROM predictions p
+        JOIN matches m ON CAST(p.match_id AS TEXT) = m.id
+        WHERE m.winner_id IS NOT NULL
+          AND p.predicted_at = (
+            SELECT MIN(predicted_at) FROM predictions p2
+            WHERE p2.match_id = p.match_id
+              AND (? IS NULL OR p2.model_version = ?)
+          )
+    """
+    params: list = [model_version, model_version]
+    if model_version:
+        sql += " AND p.model_version = ?"
+        params.append(model_version)
+    sql += " ORDER BY p.date ASC, p.match_id ASC"
+    if limit:
+        sql += " LIMIT ?"
+        params.append(limit)
+
+    rows: list[BacktestRow] = []
+    for r in conn.execute(sql, params):
+        won = 1 if r["winner_id"] == r["p1_mid"] else 0
+        rows.append(BacktestRow(
+            match_id=r["match_id"], date=r["date"], tour=r["tour"],
+            surface=r["surface"],
+            p1_mid=r["p1_mid"], p2_mid=r["p2_mid"],
+            p1_name=r["p1_name"], p2_name=r["p2_name"],
+            p1_pts=r["pts_p1"] or 0, p1_ytd=r["ytd_p1"] or 0,
+            p2_pts=r["pts_p2"] or 0, p2_ytd=r["ytd_p2"] or 0,
+            form_p1=r["form_p1"] or "", form_p2=r["form_p2"] or "",
+            h2h_p1=r["h2h_p1"] or 0, h2h_p2=r["h2h_p2"] or 0,
+            comp_p1=r["comp_p1"], comp_p2=r["comp_p2"],
+            p_pred=r["p_pred"], won=won,
+            weights_json=r["weights_json"] or "{}",
+            signals_json=r["signals_json"] or "{}",
+        ))
+    return rows
+
+
 def write_csv(rows: list[BacktestRow], output_csv: Path) -> None:
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     with output_csv.open("w", newline="", encoding="utf-8") as f:
@@ -913,6 +975,19 @@ def main() -> int:
                    help="Print the top N highest-confidence wrong calls "
                         "(losing favorites) at the end of every run. "
                         "Set to 0 to disable. Default 10.")
+    p.add_argument("--prospective", action="store_true",
+                   help="Score the prospective prediction log instead of "
+                        "reconstructing PiT inputs. Reads from the "
+                        "predictions table populated by log_predictions.py "
+                        "and JOINs against matches.winner_id. Each match "
+                        "contributes its EARLIEST logged prediction. No "
+                        "PiT reconstruction error — gold-standard Brier.")
+    p.add_argument("--model-version", type=str, default=None,
+                   help="With --prospective, filter predictions table to "
+                        "this model_version string (e.g. "
+                        "'sharpen=1.25/bare_elo=0.35/comp=games-v1'). "
+                        "Lets you segment by model config so a SHARPEN "
+                        "change doesn't pollute prior data.")
     args = p.parse_args()
 
     if args.output is None:
@@ -925,6 +1000,22 @@ def main() -> int:
         args.output = ROOT / "data" / f"backtest{suffix}.csv"
 
     conn = connect(read_only=True)
+
+    if args.prospective:
+        rows = load_prospective_rows(conn, model_version=args.model_version,
+                                     limit=args.limit)
+        print(f"[prospective] loaded {len(rows)} scored prediction(s) "
+              f"from predictions table"
+              f"{f' (model={args.model_version})' if args.model_version else ''}")
+        if not rows:
+            print("[prospective] no completed-match predictions yet — log "
+                  "needs time to accumulate before this is meaningful")
+            return 0
+        write_csv(rows, args.output)
+        summarize(rows, composite_only=args.composite_only,
+                  sharpen=args.sharpen, bare_elo=args.bare_elo_weight,
+                  show_misses=args.show_misses)
+        return 0
 
     if args.sweep_sharpen:
         sharpen_vals = [float(s.strip()) for s in args.sweep_sharpen.split(",")]

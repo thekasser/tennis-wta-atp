@@ -56,6 +56,16 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 scripts/materialize.py
 
+      # ── Log prospective predictions for upcoming/active matches ────────
+      # Uses match_prob from backtest.py — same Python port the PiT
+      # backtest trusts. After matches finish, JOIN predictions on
+      # matches.winner_id for clean prospective Brier (no PiT
+      # reconstruction). Zero API calls; pure DB read + Python compute.
+      - name: Log predictions
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/log_predictions.py
+
       # ── Update the committed DB snapshot ───────────────────────────────
       - name: Snapshot DB
         run: |
