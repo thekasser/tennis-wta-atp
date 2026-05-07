@@ -663,6 +663,33 @@ let RANK_SORT = 'rank';
 let RANK_ASC  = true;
 let PRED_FILTER = 'all';
 let LIVE_FILTER = 'all';   // 'all' | 'alive' | 'defenders' — Live Events table filter
+let LIVE_SORT   = { col: 'rank', dir: 'asc' };   // sortable header state — column key matches liveSortAccessors keys
+
+// Click handler for Live Events column headers. Re-clicking the active
+// column toggles direction; clicking a new column resets to a sensible
+// default (numeric/round-depth columns descend, name/rank/status ascend).
+function setLiveSort(col) {
+  const numericDescDefault = new Set(['pts', 'ytd', 'guar', 'projected', 'defending', 'net', 'projT12M', 'projYTD', 'round']);
+  if (LIVE_SORT.col === col) {
+    LIVE_SORT.dir = LIVE_SORT.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    LIVE_SORT = { col, dir: numericDescDefault.has(col) ? 'desc' : 'asc' };
+  }
+  renderLive();
+}
+
+// Build a <th> with click-to-sort, an arrow on the active column, and an
+// optional title tooltip. `numeric` adds right-alignment to match the data
+// cells. Used by renderLive's table head template.
+function liveTh(col, label, numeric = false, title = '') {
+  const isActive = LIVE_SORT.col === col;
+  const arrow = isActive
+    ? `<span style="font-size:9px;margin-left:3px;color:var(--ink)">${LIVE_SORT.dir === 'desc' ? '▼' : '▲'}</span>`
+    : '';
+  const align = numeric ? 'text-align:right;' : '';
+  const titleAttr = title ? ` title="${title}"` : '';
+  return `<th${titleAttr} onclick="setLiveSort('${col}')" style="cursor:pointer;user-select:none;${align}">${label}${arrow}</th>`;
+}
 let PRED_SURF   = 'Hard';
 let USE_PROJ_RANKINGS = false;  // Toggle: show projected T12M in Rankings tab
 const CHARTS = {};
@@ -1386,8 +1413,37 @@ function renderLive() {
   let visibleRows = rows;
   if (LIVE_FILTER === 'alive') visibleRows = rows.filter(r => !r.status.elim);
 
-  // Sort by rank
-  visibleRows.sort((a,b)=>a.rank-b.rank);
+  // Sort by user-selected column. LIVE_SORT.col matches the data property
+  // we want to compare; LIVE_SORT.dir is 'asc' (smaller first — natural for
+  // rank, round-depth) or 'desc' (bigger first — natural for points, pts
+  // earned). Click a header to set/toggle. Default = rank asc.
+  // Round depth lookup — mirrors materialize.py ROUND_DEPTH so the
+  // Round column sorts in tournament-progress order rather than
+  // alphabetically. Higher = deeper.
+  const ROUND_DEPTH = {R128:1, R64:2, R32:3, R16:4, QF:5, SF:6, F:7, W:8};
+  const liveSortAccessors = {
+    rank:       r => r.rank,
+    name:       r => r.name || '',
+    pts:        r => r.pts || 0,
+    ytd:        r => r.ytd || 0,
+    event:      r => r.tourn?.short || '',
+    round:      r => ROUND_DEPTH[r.status.r] || 0,
+    status:     r => r._notInDraw ? 2 : (r.status.elim ? 1 : 0),
+    guar:       r => r.guarPts || 0,
+    projected:  r => r.projected || 0,
+    defending:  r => r.defending || 0,
+    net:        r => (r.guarPts || 0) - (r.defending || 0),
+    projT12M:   r => (r.pts || 0) + (r.status.elim ? (r.guarPts || 0) : (r.projected || 0)) - (r.defending || 0),
+    projYTD:    r => (r.ytd || 0) + (r.status.elim ? (r.guarPts || 0) : (r.projected || 0)),
+  };
+  const acc = liveSortAccessors[LIVE_SORT.col] || liveSortAccessors.rank;
+  visibleRows.sort((a, b) => {
+    const av = acc(a), bv = acc(b);
+    let cmp;
+    if (typeof av === 'string' && typeof bv === 'string') cmp = av.localeCompare(bv);
+    else cmp = (av || 0) - (bv || 0);
+    return LIVE_SORT.dir === 'desc' ? -cmp : cmp;
+  });
 
   const surfEmoji = {H:'🔵',C:'🟤',G:'🟢'};
   const aliveCount = rows.filter(r => !r.status.elim && !r._notInDraw).length;
@@ -1424,19 +1480,19 @@ function renderLive() {
       </div>
       <table>
         <thead><tr>
-          <th>Rank</th>
-          <th>Player</th>
-          <th>T12M</th>
-          <th>YTD</th>
-          <th>Event</th>
-          <th>Round</th>
-          <th>Status</th>
-          <th>Guar. Pts</th>
-          <th>Projected</th>
-          <th title="Pts earned at this tournament last year — what they're defending">Defending</th>
-          <th>Net</th>
-          <th title="Projected T12M after this tournament settles">Proj T12M</th>
-          <th title="Projected YTD after this tournament settles">Proj YTD</th>
+          ${liveTh('rank',      'Rank')}
+          ${liveTh('name',      'Player')}
+          ${liveTh('pts',       'T12M', true)}
+          ${liveTh('ytd',       'YTD',  true)}
+          ${liveTh('event',     'Event')}
+          ${liveTh('round',     'Round', true)}
+          ${liveTh('status',    'Status')}
+          ${liveTh('guar',      'Guar. Pts', true)}
+          ${liveTh('projected', 'Projected', true)}
+          ${liveTh('defending', 'Defending', true, "Pts earned at this tournament last year — what they're defending")}
+          ${liveTh('net',       'Net', true)}
+          ${liveTh('projT12M',  'Proj T12M', true, 'Projected T12M after this tournament settles')}
+          ${liveTh('projYTD',   'Proj YTD', true, 'Projected YTD after this tournament settles')}
         </tr></thead>
         <tbody>
           ${visibleRows.map(p => {
