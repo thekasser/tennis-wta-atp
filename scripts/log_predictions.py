@@ -46,6 +46,7 @@ MODEL_VERSION = (
     f"sharpen={DEFAULT_SHARPEN}"
     f"/bare_elo={DEFAULT_BARE_ELO_WEIGHT}"
     f"/comp=games-v1"   # bump suffix when COMPOSITE_METRICS changes
+    f"/h2h=shrunk5"     # bump when H2H formula changes (added 2026-05-06)
 )
 
 
@@ -85,8 +86,16 @@ def matches_to_predict(conn) -> list[dict]:
             d["surface"] = None
         rows.append(d)
 
-    # Recently-completed active-tournament matches (yesterday + today)
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    # Completed active-tournament matches in the past 14 days. Wider than
+    # "yesterday + today" so we backfill matches that completed BEFORE the
+    # prospective log started, OR before sync_matches caught up. PiT inputs
+    # (form/H2H/composite/ranking) are still correctly date-filtered by
+    # the asof_date passed into pit_form/pit_h2h/pit_composite — they
+    # ignore the asof match itself and everything after — so even though
+    # we're "logging" the prediction days late, the inputs reflect
+    # genuine pre-match state. The dedup check (already_predicted_today)
+    # prevents duplicate rows on subsequent crons.
+    cutoff = (date.today() - timedelta(days=14)).isoformat()
     for r in conn.execute("""
         SELECT m.id AS match_id, m.tour, m.tournament_id, m.date,
                m.p1_id AS p1_mid, m.p2_id AS p2_mid, m.surface
@@ -95,7 +104,7 @@ def matches_to_predict(conn) -> list[dict]:
         WHERE m.date >= ?
           AND date(t.start_date, '-7 days') <= date('now')
           AND date(t.end_date, '+1 day') >= date('now')
-    """, (yesterday,)):
+    """, (cutoff,)):
         d = dict(r)
         d["p1_name"] = None  # filled in by mid_idx below
         d["p2_name"] = None

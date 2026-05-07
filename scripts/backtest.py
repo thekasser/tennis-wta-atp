@@ -149,10 +149,18 @@ def match_prob(pA: dict, pB: dict, surf_code: str,
     comp_avail = cA is not None and cB is not None
     comp_p = (1 / (1 + math.exp(-(cA - cB) * 0.7))) if comp_avail else 0.5
 
+    # H2H with Bayesian shrinkage — see wta_analytics.html for rationale.
+    # Pre-shrinkage 1-0 records gave h2h_p=1.0 which the model treated as
+    # 100% confidence; feature-attribution backtest 2026-05-06 showed
+    # this bin had actual win rate of 17% (catastrophically over-confident).
+    H2H_SHRINK_PRIOR = 5
     h2h_a = pA.get("h2h_wins", 0)
     h2h_b = pB.get("h2h_wins", 0)
     h2h_avail = (h2h_a + h2h_b) > 0
-    h2h_p = (h2h_a / (h2h_a + h2h_b)) if h2h_avail else 0.5
+    if h2h_avail:
+        h2h_p = (h2h_a + 0.5 * H2H_SHRINK_PRIOR) / (h2h_a + h2h_b + H2H_SHRINK_PRIOR)
+    else:
+        h2h_p = 0.5
 
     if h2h_avail and comp_avail:
         weights = {"elo": .12, "surf": .20, "form": .18, "h2h": .12, "comp": .38}
@@ -807,6 +815,258 @@ def backtest(conn, tour: str, year: int, limit: int | None,
 
 # ─── Brier + calibration ─────────────────────────────────────────────────────
 
+# ─── Feature attribution ─────────────────────────────────────────────────────
+# Diagnostic for "which signals drive model errors". For each resolved
+# prediction we have:
+#   - signals_json  → {elo_p, surf_p, form_p, h2h_p, comp_p}  (per-signal probs)
+#   - weights_json  → {elo, surf, form, h2h, comp}            (blend weights)
+#   - p_pred                                                  (final blended)
+#   - won           (actual outcome, 1 if slot A won)
+#
+# The model is sigmoid(SHARPEN × Σ weight_i × logit(signal_i)). So we can
+# recompute "what would prob be without signal i" by subtracting that
+# signal's logit-contribution and re-applying sigmoid. The diff between
+# with-i and without-i, in raw probability units, is signal i's
+# contribution to the prediction. Sign × outcome tells us whether the
+# signal pushed correctly or not.
+
+SIGNAL_NAMES = ("elo_p", "surf_p", "form_p", "h2h_p", "comp_p")
+SIGNAL_TO_WEIGHT = {
+    "elo_p":  "elo",
+    "surf_p": "surf",
+    "form_p": "form",
+    "h2h_p":  "h2h",
+    "comp_p": "comp",
+}
+
+def _decompose_row(row: BacktestRow, sharpen: float = DEFAULT_SHARPEN
+                   ) -> dict | None:
+    """Per-signal contribution analysis for one prediction. Returns dict:
+       {signal: {p_with, p_without, contribution_pp, helpful_pp}, p_pred, won}
+    where helpful_pp is positive when the signal pushed toward the actual
+    outcome and negative when it pushed away. Returns None if signals
+    are missing from the row."""
+    try:
+        signals = json.loads(row.signals_json or "{}")
+        weights = json.loads(row.weights_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not signals or not weights:
+        return None
+
+    # Reconstruct sum_logit so we can subtract per-signal contributions.
+    sum_logit = 0.0
+    for sig, w_key in SIGNAL_TO_WEIGHT.items():
+        p = signals.get(sig)
+        w = weights.get(w_key, 0)
+        if p is None or w == 0:
+            continue
+        sum_logit += w * _logit(p)
+
+    p_full = 1 / (1 + math.exp(-sum_logit * sharpen))
+    p_full_clamped = max(PROB_FLOOR, min(PROB_CAP, p_full))
+
+    out: dict = {"p_full": p_full_clamped, "won": row.won, "signals": {}}
+    for sig, w_key in SIGNAL_TO_WEIGHT.items():
+        p = signals.get(sig)
+        w = weights.get(w_key, 0)
+        if p is None or w == 0:
+            out["signals"][sig] = {
+                "active": False, "p_signal": p, "weight": w,
+                "p_without": p_full_clamped, "contribution_pp": 0.0, "helpful_pp": 0.0,
+            }
+            continue
+        # Logit contribution of this single signal
+        logit_contrib = w * _logit(p)
+        # Recompute final prob WITHOUT this signal's logit contribution
+        sum_without = sum_logit - logit_contrib
+        p_without = 1 / (1 + math.exp(-sum_without * sharpen))
+        p_without_clamped = max(PROB_FLOOR, min(PROB_CAP, p_without))
+        contribution = p_full_clamped - p_without_clamped   # ∈ [-1, 1]
+        # helpful_pp: positive if signal pushed toward correct outcome.
+        # If won_a=1: contribution toward A (positive contribution) = helpful.
+        # If won_a=0: contribution away from A (negative) = helpful.
+        helpful = contribution * (1 if row.won == 1 else -1)
+        out["signals"][sig] = {
+            "active": True,
+            "p_signal": p,
+            "weight": w,
+            "p_without": p_without_clamped,
+            "contribution_pp": contribution * 100,
+            "helpful_pp":      helpful * 100,
+        }
+    return out
+
+
+def standalone_signal_brier(rows: list[BacktestRow], sharpen: float = DEFAULT_SHARPEN
+                             ) -> dict:
+    """Brier of each individual signal IF used alone. Excludes inactive
+    rows for a given signal (e.g., h2h_p=0.5 when no prior meetings —
+    that's effectively non-informative, not a real prediction).
+    """
+    out: dict = {}
+    for sig in SIGNAL_NAMES:
+        active_rows = []
+        sq_err = 0.0
+        for r in rows:
+            try:
+                sigs    = json.loads(r.signals_json or "{}")
+                weights = json.loads(r.weights_json or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            p = sigs.get(sig)
+            w = weights.get(SIGNAL_TO_WEIGHT[sig], 0)
+            # Inactive: missing signal OR zero-weight branch (h2h:0 when
+            # no prior meetings; comp:0 when one player lacks composite).
+            if p is None or w == 0:
+                continue
+            # The single-signal prediction is p directly (no SHARPEN — if
+            # we applied SHARPEN to a single signal, we'd over-amplify).
+            sq_err += (p - r.won) ** 2
+            active_rows.append(r)
+        out[sig] = {
+            "n":     len(active_rows),
+            "brier": (sq_err / len(active_rows)) if active_rows else None,
+        }
+    return out
+
+
+def signal_calibration(rows: list[BacktestRow], n_bins: int = 10) -> dict:
+    """Per-signal calibration table — bin each signal independently,
+    compare predicted-prob to actual win rate. Reveals individual
+    signal miscalibration that the blended Brier can hide."""
+    out: dict = {}
+    for sig in SIGNAL_NAMES:
+        bins: list[list] = [[] for _ in range(n_bins)]
+        for r in rows:
+            try:
+                sigs    = json.loads(r.signals_json or "{}")
+                weights = json.loads(r.weights_json or "{}")
+            except (json.JSONDecodeError, TypeError):
+                continue
+            p = sigs.get(sig)
+            w = weights.get(SIGNAL_TO_WEIGHT[sig], 0)
+            if p is None or w == 0:
+                continue
+            idx = min(int(p * n_bins), n_bins - 1)
+            bins[idx].append((p, r.won))
+        out[sig] = []
+        for i, b in enumerate(bins):
+            if not b:
+                out[sig].append({"lo": i/n_bins, "hi": (i+1)/n_bins,
+                                 "n": 0, "pred": None, "actual": None})
+                continue
+            pred = sum(p for p, _ in b) / len(b)
+            actual = sum(w for _, w in b) / len(b)
+            out[sig].append({"lo": i/n_bins, "hi": (i+1)/n_bins,
+                             "n": len(b),
+                             "pred": pred, "actual": actual,
+                             "delta_pp": (actual - pred) * 100})
+    return out
+
+
+def aggregate_attribution(rows: list[BacktestRow], sharpen: float = DEFAULT_SHARPEN
+                          ) -> dict:
+    """Sum per-signal helpfulness across all matches. Positive net =
+    signal is on average pushing predictions toward the correct outcome;
+    negative = on average pushing toward the wrong outcome.
+    Also tracks the count of times each signal was the "biggest mover"
+    for matches where the model was wrong."""
+    sums: dict[str, dict] = {sig: {"helpful_total": 0.0, "harmful_total": 0.0,
+                                    "n_active": 0,
+                                    "n_biggest_helpful": 0,
+                                    "n_biggest_harmful": 0}
+                              for sig in SIGNAL_NAMES}
+    for r in rows:
+        decomp = _decompose_row(r, sharpen)
+        if not decomp:
+            continue
+        # Aggregate helpfulness
+        biggest_helpful = (None, 0.0)
+        biggest_harmful = (None, 0.0)
+        for sig, info in decomp["signals"].items():
+            if not info["active"]:
+                continue
+            sums[sig]["n_active"] += 1
+            hp = info["helpful_pp"]
+            if hp > 0:
+                sums[sig]["helpful_total"] += hp
+            else:
+                sums[sig]["harmful_total"] += -hp  # store as positive
+            if hp > biggest_helpful[1]:
+                biggest_helpful = (sig, hp)
+            if hp < biggest_harmful[1]:
+                biggest_harmful = (sig, hp)
+        if biggest_helpful[0]:
+            sums[biggest_helpful[0]]["n_biggest_helpful"] += 1
+        if biggest_harmful[0]:
+            sums[biggest_harmful[0]]["n_biggest_harmful"] += 1
+    # Compute net per signal
+    for sig in SIGNAL_NAMES:
+        s = sums[sig]
+        s["net_pp"]    = s["helpful_total"] - s["harmful_total"]
+        s["mean_help"] = (s["net_pp"] / s["n_active"]) if s["n_active"] else 0
+    return sums
+
+
+def print_feature_attribution(rows: list[BacktestRow],
+                              sharpen: float = DEFAULT_SHARPEN) -> dict:
+    """Run all 4 attribution analyses on `rows` and print them."""
+    n = len(rows)
+    print(f"\n[feature-attribution] n={n} resolved predictions, "
+          f"sharpen={sharpen}")
+    if not n:
+        return {}
+
+    # 1. Standalone Brier per signal
+    sb = standalone_signal_brier(rows, sharpen)
+    print(f"\n  standalone Brier per signal (lower = better; baseline 0.25):")
+    print(f"    {'signal':<10} {'n':>5} {'brier':>8}")
+    for sig in SIGNAL_NAMES:
+        s = sb[sig]
+        if s["n"] == 0:
+            print(f"    {sig:<10} {0:>5}     —")
+            continue
+        marker = '↓' if s['brier'] < 0.25 else '↑'
+        print(f"    {sig:<10} {s['n']:>5} {s['brier']:>7.4f} {marker}")
+
+    # 2. Aggregate attribution (helpful vs harmful)
+    agg = aggregate_attribution(rows, sharpen)
+    print(f"\n  net signal contribution (sum of helpful_pp − harmful_pp across matches):")
+    print(f"    {'signal':<10} {'active':>7} {'+pp':>8} {'-pp':>8} {'net':>8} {'mean':>7}")
+    for sig in SIGNAL_NAMES:
+        s = agg[sig]
+        marker = '✓' if s['net_pp'] > 0 else '✗' if s['net_pp'] < 0 else ' '
+        print(f"    {sig:<10} {s['n_active']:>7} "
+              f"{s['helpful_total']:>+7.1f} {-s['harmful_total']:>+7.1f} "
+              f"{s['net_pp']:>+7.1f} {s['mean_help']:>+6.2f} {marker}")
+
+    # 3. Biggest-mover counts on misses
+    print(f"\n  signal most often the BIGGEST helpful / harmful mover:")
+    print(f"    {'signal':<10} {'biggest_+':>10} {'biggest_-':>10}")
+    for sig in SIGNAL_NAMES:
+        s = agg[sig]
+        print(f"    {sig:<10} {s['n_biggest_helpful']:>10} {s['n_biggest_harmful']:>10}")
+
+    # 4. Per-signal calibration — show only bins with n≥3 to cut noise
+    cal = signal_calibration(rows)
+    print(f"\n  per-signal calibration (worst bins where n≥3):")
+    for sig in SIGNAL_NAMES:
+        worst_bins = sorted(
+            [b for b in cal[sig] if b["n"] >= 3],
+            key=lambda b: -abs(b["delta_pp"]),
+        )[:3]
+        if not worst_bins:
+            continue
+        print(f"    {sig}:")
+        for b in worst_bins:
+            print(f"      [{b['lo']:.2f},{b['hi']:.2f})  n={b['n']:>3}  "
+                  f"pred {b['pred']*100:>5.1f}%  actual {b['actual']*100:>5.1f}%  "
+                  f"Δ {b['delta_pp']:>+5.1f}pp")
+
+    return {"standalone_brier": sb, "attribution": agg, "calibration": cal}
+
+
 def brier_score(rows: list[BacktestRow]) -> float:
     """Mean (p_pred - won)². Lower is better; 0.25 = 50/50 baseline."""
     if not rows:
@@ -982,6 +1242,12 @@ def main() -> int:
                         "and JOINs against matches.winner_id. Each match "
                         "contributes its EARLIEST logged prediction. No "
                         "PiT reconstruction error — gold-standard Brier.")
+    p.add_argument("--feature-attribution", action="store_true",
+                   help="Run per-signal diagnostic on the prospective log: "
+                        "standalone Brier per signal, net helpful/harmful "
+                        "contribution per signal, biggest-mover counts on "
+                        "wrong calls, per-signal calibration. Identifies "
+                        "which signals are net-positive vs net-harmful.")
     p.add_argument("--model-version", type=str, default=None,
                    help="With --prospective, filter predictions table to "
                         "this model_version string (e.g. "
@@ -1001,7 +1267,7 @@ def main() -> int:
 
     conn = connect(read_only=True)
 
-    if args.prospective:
+    if args.prospective or args.feature_attribution:
         rows = load_prospective_rows(conn, model_version=args.model_version,
                                      limit=args.limit)
         print(f"[prospective] loaded {len(rows)} scored prediction(s) "
@@ -1011,6 +1277,9 @@ def main() -> int:
             print("[prospective] no completed-match predictions yet — log "
                   "needs time to accumulate before this is meaningful")
             return 0
+        if args.feature_attribution:
+            print_feature_attribution(rows, sharpen=args.sharpen)
+            # Also print regular summary so we have full context
         write_csv(rows, args.output)
         summarize(rows, composite_only=args.composite_only,
                   sharpen=args.sharpen, bare_elo=args.bare_elo_weight,

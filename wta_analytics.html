@@ -1042,13 +1042,36 @@ function matchProbBreakdown(pA, pB, surf) {
     compAvail = true;
   }
 
-  // 5. H2H
+  // 5. H2H — Bayesian shrinkage to avoid the 1-0 catastrophe.
+  //
+  // Pre-shrinkage, a 1-0 record gave h2hP=1.0 (clamped to 0.98 by _logit
+  // floor), which under 13% h2h weight contributed +6.6pp toward the
+  // favored side. The 2026-05-06 feature-attribution backtest showed
+  // this was actively HARMFUL: when h2h_p screamed >90% confidence on
+  // tiny samples, the favored player won only 17% of the time
+  // (n=6 in the [0.90, 1.00) bin). Net contribution across 34 resolved
+  // predictions: -45pp. h2h was the only net-harmful signal in the
+  // model.
+  //
+  // Shrinkage formula: shrunk_p = (aW + 0.5·prior) / (total + prior).
+  // prior=5 means "we need ~5 prior meetings before we trust H2H 50%."
+  // 1-0 record: (1+2.5)/(1+5) = 0.583 instead of 1.0
+  // 3-0 record: (3+2.5)/(3+5) = 0.688
+  // 10-2 record: (10+2.5)/(12+5) = 0.735 (approaches truth as N grows)
+  //
+  // h2hAvail still gates the weight branch — only "real" H2H histories
+  // (any prior meetings at all) get the H2H weight. With shrinkage the
+  // signal contribution stays modest until samples justify confidence.
+  const H2H_SHRINK_PRIOR = 5;
   let h2hP = .5, h2hAvail = false, aW = 0, bW = 0;
   if (h2d) {
     aW = pA.id < pB.id ? h2d.aW : h2d.bW;
     bW = pA.id < pB.id ? h2d.bW : h2d.aW;
     const tot = aW + bW;
-    if (tot > 0) { h2hP = aW/tot; h2hAvail = true; }
+    if (tot > 0) {
+      h2hP = (aW + 0.5 * H2H_SHRINK_PRIOR) / (tot + H2H_SHRINK_PRIOR);
+      h2hAvail = true;
+    }
   }
 
   // 6. Weight blend — composite is the most predictive single signal we have
