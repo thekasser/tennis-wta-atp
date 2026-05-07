@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-07T03:35:04.883676+00:00
+# Generated: 2026-05-07T12:40:29.523499+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       265
   tournaments                   133
-  matches                    12,017
+  matches                    12,030
   rankings_snapshots          1,243
-  api_fetch_log               4,060
+  api_fetch_log               4,335
 
 ## Latest rankings snapshot: 2026-05-07
 
 ## Active tournaments
-  rome26         Internazionali BNL d'Italia      matches= 97  latest=2026-05-06
+  rome26         Internazionali BNL d'Italia      matches=108  latest=2026-05-07
 
 ## 5 most recent matches anywhere in DB
-  2026-05-06  Second    p1=13498 p2=30116 winner=13498  (Istanbul Open - Istanbul)
-  2026-05-06  Second    p1=39535 p2=70326 winner=39535  (Jiangxi Open - Jiujiang)
-  2026-05-06  First     p1=29732 p2=26140 winner=29732  (Internazionali BNL d'Italia - Rome)
-  2026-05-06  First     p1=13447 p2=7806 winner=13447  (Internazionali BNL d'Italia - Rome)
-  2026-05-06  First     p1=42971 p2=52140 winner=42971  (Internazionali BNL d'Italia - Rome)
+  2026-05-07  Second    p1=61667 p2=103193 winner=61667  (Wuxi Challenger)
+  2026-05-07  Second    p1=77934 p2=65417 winner=77934  (Internazionali BNL d'Italia - Rome)
+  2026-05-07  Second    p1=13351 p2=43866 winner=13351  (Internazionali BNL d'Italia - Rome)
+  2026-05-07  Second    p1=53128 p2=24344 winner=53128  (Internazionali BNL d'Italia - Rome)
+  2026-05-07  Second    p1=12570 p2=65912 winner=12570  (Istanbul Open - Istanbul)
