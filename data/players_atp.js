@@ -175,5 +175,9 @@ const PLAYERS_ATP = [
   {id:172, mid:68090, name:"Jacob Fearnley", ab:"Fearnley", nat:"GBR", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-06-20)
   {id:173, mid:91448, name:"Justin Engel", ab:"Engel", nat:"GER", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-06-13)
   {id:174, mid:14432, name:"Pablo Carreno Busta", ab:"Carreno Busta", nat:"ESP", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // manually added 2026-05-04 — playing Rome qualis vs Wawrinka
+  {id:175, mid:24840, name:"Cristian Garin",            ab:"Garin",         nat:"CHI", surf:{H:.55,C:.65,G:.55},form:"",inj:false},  // manual add — Chilean clay specialist, former top-20
+  {id:176, mid:27547, name:"Sebastian Ofner",           ab:"Ofner",         nat:"AUT", surf:{H:.55,C:.62,G:.55},form:"",inj:false},  // manual add — Austrian clay specialist
+  {id:177, mid:61857, name:"Valentin Royer",            ab:"Royer",         nat:"FRA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // manual add — French rising prospect
+  {id:178, mid:95698, name:"Federico Cina",             ab:"Cina",          nat:"ITA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // manual add — Italian junior phenom
 
 ];

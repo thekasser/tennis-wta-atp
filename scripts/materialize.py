@@ -154,7 +154,7 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
     today = date.today()
     api_id_col = f"api_id_{tour}"
     candidates = list(conn.execute(f"""
-        SELECT id, name, draw_size, start_date, end_date, {api_id_col} AS api_id
+        SELECT id, name, type, draw_size, start_date, end_date, {api_id_col} AS api_id
         FROM tournaments
         WHERE (tour = ? OR tour = 'both')
           AND start_date IS NOT NULL AND end_date IS NOT NULL
@@ -240,7 +240,11 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
         # players who haven't taken the court yet. Fixtures has them all.
         # We mark them as alive at "scheduled" stage — exact round name
         # doesn't matter for the count, just elim=False to flag in-draw.
+        # Track them in fixture_augmented_bios so the elim-cascade below
+        # doesn't sweep them up: they haven't played yet, so they
+        # CAN'T have been eliminated by tournament progress.
         scheduled_stage = sem.get("First", {}).get("played") or "R128"
+        fixture_augmented_bios: set[int] = set()
         for r in conn.execute("""
             SELECT DISTINCT mid FROM (
               SELECT p1_mid AS mid FROM fixtures
@@ -255,18 +259,62 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
             if not bio_id or bio_id in players_block:
                 continue
             players_block[bio_id] = {"r": scheduled_stage, "elim": False}
+            fixture_augmented_bios.add(bio_id)
+
+        # Top-seed bye augmentation. In 96-draw M1000s + 128-draw GS, top
+        # 32 seeds get byes through R1 — they have NO match record (no
+        # R1 match played) AND NO R1 fixture (R2 fixtures are scheduled
+        # only after R1 completes). Without this step, players like
+        # Sinner and Alcaraz disappear from the active draw entirely,
+        # then show as "missing/eliminated" in the dashboard.
+        #
+        # Heuristic: if the tournament is M1000/W1000/GS with draw≥96 OR
+        # ≥128, and a top-32 ranked player isn't already in players_block,
+        # they're almost certainly seeded with a bye. Add them at the
+        # "next" round (where byes enter) marked alive.
+        # sqlite3.Row supports __getitem__ but not .get() — use bracket
+        # access with a try/except for missing-key safety.
+        try:
+            tournament_type = t["type"]
+        except (IndexError, KeyError):
+            tournament_type = None
+        is_byes_draw = (t["draw_size"] or 0) >= 96 and tournament_type in (
+            "GS", "M1000", "W1000")
+        if is_byes_draw:
+            # Top-32 seeds skip R1 (bye) and enter at R2 — but for the
+            # dashboard's Live Events count, all that matters is they're
+            # in the draw and alive. Use scheduled_stage as the placeholder
+            # round so all "scheduled-but-not-yet-played" players cluster
+            # at the same stage label (avoids round-label confusion in
+            # the UI).
+            top_seeds = list(conn.execute("""
+                SELECT bio_id, mid FROM players
+                WHERE tour = ? AND bio_id <= 32
+            """, (tour,)))
+            for s in top_seeds:
+                bid = s["bio_id"]
+                if bid in players_block:
+                    continue
+                players_block[bid] = {"r": scheduled_stage, "elim": False}
+                fixture_augmented_bios.add(bid)
 
         if not players_block:
             continue
 
-        # Post-process: if the tournament has progressed past a player's stage
-        # (i.e. someone played a deeper round than them) and we don't have a
-        # later match for that player, they were eliminated by an opponent
-        # outside our top-200 fetch set. Mark elim:true so the dashboard
-        # doesn't show them as "Active in <early round>" when the tournament
-        # is well past it.
+        # Post-process: if the tournament has progressed past a player's
+        # stage AND that player actually played a match (i.e. wasn't just
+        # added from fixtures), they were eliminated by an opponent outside
+        # our top-200 fetch set. Skip fixture-augmented bios — they have
+        # an upcoming match scheduled, so by definition they're alive.
+        # Without this skip, qualifying-Final completions made deepest_played
+        # = 7, then ALL ~80 main-draw players with scheduled_stage="R128"
+        # (depth 1) got cascade-marked eliminated. WTA Rome 2026-05-07:
+        # 82 total, only 3 alive (rest were fixture-augmented main-draw
+        # players incorrectly swept by the cascade).
         tournament_deepest = deepest_played
         for bio_id, status in players_block.items():
+            if bio_id in fixture_augmented_bios:
+                continue
             cur = ROUND_DEPTH.get(status["r"], 0)
             if cur < tournament_deepest and not status["elim"]:
                 status["elim"] = True

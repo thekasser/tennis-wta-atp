@@ -130,6 +130,30 @@ def gc_stale(conn) -> int:
     return cur.rowcount
 
 
+def gc_dups(conn) -> int:
+    """Dedupe fixtures by (tournament_id, date_day, p1_mid, p2_mid).
+    Matchstat occasionally issues different fixture IDs for the SAME
+    matchup across pulls (e.g., schedule shifts produce a new id but the
+    old row stays). Keep only the row with the latest fetched_at per
+    canonical key. Without this, the matchup predictor renders the same
+    match twice (different fixture ids → two upsert paths → two rows)."""
+    cur = conn.execute("""
+        DELETE FROM fixtures
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (
+              PARTITION BY tournament_id, substr(date, 1, 10),
+                           MIN(p1_mid, p2_mid), MAX(p1_mid, p2_mid)
+              ORDER BY fetched_at DESC
+            ) AS rn
+            FROM fixtures
+            WHERE p1_mid IS NOT NULL AND p2_mid IS NOT NULL
+          ) WHERE rn > 1
+        )
+    """)
+    return cur.rowcount
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--tour", choices=("atp", "wta", "both"), default="both")
@@ -141,8 +165,9 @@ def main() -> int:
 
     if args.gc_only:
         n = gc_stale(conn)
+        n_dup = gc_dups(conn)
         conn.commit()
-        print(f"[gc] deleted {n} past fixtures")
+        print(f"[gc] deleted {n} past fixtures, {n_dup} duplicates")
         return 0
 
     api_key = os.environ.get("MATCHSTAT_API_KEY")
@@ -168,8 +193,9 @@ def main() -> int:
         conn.commit()
 
     n_gc = gc_stale(conn)
+    n_dup = gc_dups(conn)
     conn.commit()
-    print(f"\n[gc] cleaned {n_gc} past fixtures")
+    print(f"\n[gc] cleaned {n_gc} past fixtures, {n_dup} duplicate fixtures")
     print(f"[summary] upserted {total_inserted} fixtures total")
     return 0
 
