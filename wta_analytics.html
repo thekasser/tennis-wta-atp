@@ -3107,6 +3107,41 @@ function loadFixtureIntoPredictor(idA, idB, surfCode) {
   const searchB = document.getElementById('pred-b-search');
   const surfEl = document.getElementById('pred-surf');
   if (!sa || !sb) return;
+
+  // Ensure the dropdown options are populated FIRST. Without this, if
+  // the user clicked from another tab (so buildSelects never ran here),
+  // `sa.value = idA` silently rejects the unknown id and the predictor
+  // stays on whatever was selected (or empty). Same hazard if a new bio
+  // was just added: options were built before the bio existed in the
+  // current TOUR's player set.
+  //
+  // Also: if the clicked-on player isn't in the CURRENT TOUR's bio set
+  // (e.g. clicked on a WTA fixture while the ATP toggle is active),
+  // flip the tour first so players() returns the right cohort.
+  const psList = players();
+  const knownIds = new Set(psList.map(p => p.id));
+  if (!knownIds.has(idA) || !knownIds.has(idB)) {
+    // Try the other tour. If both ids are in the other tour's roster,
+    // flip TOUR. Otherwise we silently bail (clicked-on bio isn't in
+    // either tour's bio set — shouldn't happen given the click handler
+    // only attaches when both players are bio'd).
+    const otherTour = TOUR === 'WTA' ? 'ATP' : 'WTA';
+    const otherList = otherTour === 'WTA' ? PLAYERS_WTA : PLAYERS_ATP;
+    const otherIds = new Set((otherList || []).map(p => p.id));
+    if (otherIds.has(idA) && otherIds.has(idB)) {
+      TOUR = otherTour;
+      // Update the visible tour toggle button state
+      ['atp', 'wta'].forEach(t => {
+        const btn = document.getElementById(`tour-${t}`);
+        if (btn) btn.classList.toggle('active', t.toUpperCase() === TOUR);
+      });
+    } else {
+      console.warn('[predictor] clicked-on bios not found in either tour:', idA, idB);
+      return;
+    }
+  }
+  buildSelects();   // refresh options for the (possibly-flipped) tour
+
   sa.value = String(idA);
   sb.value = String(idB);
   if (surfEl && surfCode) {
