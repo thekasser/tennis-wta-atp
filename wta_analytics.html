@@ -2410,8 +2410,14 @@ function renderModelVsMarket() {
   const recents = PREDICTIONS_DATA.recent.filter(r =>
     (r.tour || '').toLowerCase() === tk && r.market_p_a != null);
 
+  // Total resolved predictions for this tour (with and without odds) so
+  // we can show "X of Y" in the header — clarifies why MvM count is
+  // smaller than Recent Calls (qualifying matches typically lack odds).
+  const totalResolvedForTour = PREDICTIONS_DATA.recent.filter(r =>
+    (r.tour || '').toLowerCase() === tk).length;
+
   if (!recents.length) {
-    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No ${TOUR} resolved predictions with market odds yet — try the other tour or wait for more matches to complete.</div>`;
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No ${TOUR} resolved predictions with market odds yet (${totalResolvedForTour} resolved without odds — qualifying matches typically lack lines). Try the other tour or wait for main-draw matches to complete.</div>`;
     return;
   }
 
@@ -2501,7 +2507,7 @@ function renderModelVsMarket() {
       <em>Why some matches don't appear:</em> bookmakers post lines a few hours before each match, and our feed only stores odds at fetch time. Past matches without recorded odds are excluded from this view.
     </div>
     <div style="display:flex;gap:18px;font-size:11px;color:var(--muted);margin-bottom:12px;flex-wrap:wrap">
-      <div><strong style="color:var(--ink)">${rows.length}</strong> completed matches</div>
+      <div><strong style="color:var(--ink)">${rows.length}</strong> of ${totalResolvedForTour} resolved predictions have market odds</div>
       <div>Favorite picked correctly — model: <strong style="color:var(--ink)">${modelFavRight}/${rows.length}</strong> (${Math.round(modelFavRight/rows.length*100)}%)</div>
       <div>Market: <strong style="color:var(--ink)">${mktFavRight}/${rows.length}</strong> (${Math.round(mktFavRight/rows.length*100)}%)</div>
     </div>
