@@ -2392,77 +2392,46 @@ function setMvmSort(col) {
 function renderModelVsMarket() {
   const el = document.getElementById('mvm-panel');
   if (!el) return;
-  if (typeof RECENT_MATCHES === 'undefined' || !RECENT_MATCHES) { el.innerHTML = ''; return; }
+
+  // Use prospective predictions, NOT today's-bios soft model. The previous
+  // version called matchProb() with current player data on past matches —
+  // hindsight bias made the model look unrealistically accurate (e.g. a
+  // Linette match the model picked her to win 84% pre-match showed up as
+  // a 17/17 hit because today's bios know she lost). The prospective
+  // log records what the model ACTUALLY said before the match, so the
+  // model accuracy column reflects real predictive performance.
+  if (!PREDICTIONS_DATA || !PREDICTIONS_DATA.recent || !PREDICTIONS_DATA.recent.length) {
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No prospective predictions resolved yet — Model-vs-Market view appears once the prediction log accumulates completed matches with odds.</div>`;
+    return;
+  }
+
   const tk = TOUR.toLowerCase();
-  const recents = RECENT_MATCHES[tk] || {};
+  // Filter: current tour AND market odds known (otherwise no comparison).
+  const recents = PREDICTIONS_DATA.recent.filter(r =>
+    (r.tour || '').toLowerCase() === tk && r.market_p_a != null);
 
-  // Active tournament api_ids for this tour
-  const sd = seasonData();
-  const activeIds = new Set();
-  (sd.activeTournaments || []).forEach(at => {
-    const t = TOURNAMENTS_DATA.find(x => x.id === at.id);
-    if (t && t.apiId) {
-      if (TOUR === 'WTA' && t.apiId.wta) activeIds.add(t.apiId.wta);
-      if (TOUR === 'ATP' && t.apiId.atp) activeIds.add(t.apiId.atp);
-    }
-  });
-  if (!activeIds.size) {
-    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No active tournaments — model-vs-market view appears once an event is in progress.</div>`;
+  if (!recents.length) {
+    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No ${TOUR} resolved predictions with market odds yet — try the other tour or wait for more matches to complete.</div>`;
     return;
   }
 
-  // Walk all bios' recent matches, dedupe, filter to active tournaments.
-  // Each match appears in BOTH players' lists; canonical key = sorted bio_ids + date.
-  const seen = new Set();
-  const matches = [];
-  Object.entries(recents).forEach(([bidStr, list]) => {
-    const myBio = parseInt(bidStr);
-    (list || []).forEach(m => {
-      if (!m.tId || !activeIds.has(m.tId)) return;
-      if (m.oppB == null) return;          // opponent not bio'd → can't predict
-      if (m.myOdd == null || m.oppOdd == null) return;  // no odds → no market signal
-      const lo = Math.min(myBio, m.oppB);
-      const hi = Math.max(myBio, m.oppB);
-      const key = `${lo}-${hi}-${m.date}-${m.rd}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      // Always render from "lo" player's POV for stable display.
-      const fromLo = myBio === lo;
-      matches.push({
-        date: m.date, rd: m.rd, tn: m.tn, tId: m.tId,
-        loId: lo, hiId: hi,
-        loOdd: fromLo ? m.myOdd : m.oppOdd,
-        hiOdd: fromLo ? m.oppOdd : m.myOdd,
-        score: m.score,
-        loWon: fromLo ? (m.won === true) : (m.won === false),
-      });
-    });
-  });
-
-  if (!matches.length) {
-    el.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:8px">No completed matches in the active tournament(s) with both players in our roster + odds available yet.</div>`;
-    return;
-  }
-
-  // Sort newest first
-  matches.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-
-  // For each match: compute model prob, market implied prob (de-vigged), delta
-  const psList = players();
-  const rows = matches.slice(0, 25).map(m => {
-    const pLo = psList.find(p => p.id === m.loId);
-    const pHi = psList.find(p => p.id === m.hiId);
-    if (!pLo || !pHi) return null;
-    const tourn = TOURNAMENTS_DATA.find(t =>
-      (t.apiId?.wta === m.tId) || (t.apiId?.atp === m.tId));
-    const surf = tourn?.surf === 'C' ? 'Clay' : tourn?.surf === 'G' ? 'Grass' : 'Hard';
-    const modelLo = matchProb(pLo, pHi, surf);
-    // De-vigged market implied prob: 1/odd / sum(1/odd)
-    const invLo = 1 / m.loOdd, invHi = 1 / m.hiOdd;
-    const mktLo = invLo / (invLo + invHi);
-    const delta = modelLo - mktLo;
-    return { ...m, pLo, pHi, surf, modelLo, mktLo, delta };
-  }).filter(Boolean);
+  // Reshape into MvM-table rows. p_pred is prob that p1 (slot A — lower mid)
+  // wins; market_p_a is the de-vigged market prob of the same.
+  const rows = recents.slice(0, 25).map(r => ({
+    date:    r.date,
+    rd:      '',
+    tour:    r.tour,
+    surface: r.surface,
+    score:   r.score,
+    loId:    r.p1_mid,
+    hiId:    r.p2_mid,
+    loName:  r.p1_name,
+    hiName:  r.p2_name,
+    modelLo: r.p_pred,
+    mktLo:   r.market_p_a,
+    delta:   r.p_pred - r.market_p_a,
+    loWon:   r.won_a === 1,
+  }));
 
   // User-selectable sort. Default = verdict (abs delta desc) — biggest
   // disagreements at top, matching the panel's diagnostic purpose.
@@ -2478,6 +2447,8 @@ function renderModelVsMarket() {
   if (MVM_SORT.dir === 'desc') byDelta.reverse();
 
   const fmtPct = v => `${Math.round(v * 100)}%`;
+  // Last-name shortener — surnames only for compact display
+  const shortName = (full) => (full || '').split(' ').slice(-1)[0];
   const tbl = byDelta.map(r => {
     const winnerSide = r.loWon ? 'lo' : 'hi';
     const loColor = winnerSide === 'lo' ? 'var(--accent-green)' : 'var(--ink)';
@@ -2486,12 +2457,14 @@ function renderModelVsMarket() {
     const deltaColor = deltaPts > 7 ? 'var(--accent-green)' :
                        deltaPts < -7 ? 'var(--accent-rose)' : 'var(--muted)';
     const deltaSign = deltaPts >= 0 ? '+' : '';
+    const loAb = shortName(r.loName);
+    const hiAb = shortName(r.hiName);
     const verdict = Math.abs(deltaPts) >= 10
-      ? (deltaPts > 0 ? `Model bullish on ${r.pLo.ab}` : `Model bullish on ${r.pHi.ab}`)
+      ? (deltaPts > 0 ? `Model bullish on ${loAb}` : `Model bullish on ${hiAb}`)
       : '';
     return `<tr>
       <td style="font-size:10px;color:var(--muted);white-space:nowrap">${r.date}</td>
-      <td style="font-size:11px;white-space:nowrap"><span style="color:${loColor};font-weight:600">${r.pLo.ab}</span> vs <span style="color:${hiColor};font-weight:600">${r.pHi.ab}</span></td>
+      <td style="font-size:11px;white-space:nowrap"><span style="color:${loColor};font-weight:600">${loAb}</span> vs <span style="color:${hiColor};font-weight:600">${hiAb}</span></td>
       <td style="font-size:10px;color:var(--muted)">${r.rd}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtPct(r.modelLo)}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${fmtPct(r.mktLo)}</td>
@@ -2515,17 +2488,17 @@ function renderModelVsMarket() {
 
   el.innerHTML = `
     <div style="font-weight:600;color:var(--ink);font-size:13px;margin-bottom:6px">
-      Model vs Market — active tournament${activeIds.size > 1 ? 's' : ''}
+      Model vs Market — prospective (pre-match calls only)
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.55">
-      <strong style="color:var(--ink)">Model</strong> = our predictor's win-prob from current player data (Elo, surface, form, composite, H2H).
+      <strong style="color:var(--ink)">Model</strong> = our predictor's win-prob from the prospective log — what we ACTUALLY said before the match, not a re-computation from today's data.
       <strong style="color:var(--ink)">Market</strong> = bookmakers' implied prob from decimal odds, de-vigged (1/odds normalized so both sides sum to 100%, removing the bookie's edge).
       <br>
-      Diagnostic, not a competition: the "favorite picked correctly" line below scores both side-by-side. The table surfaces where the two disagree.
+      Diagnostic, not a competition: the "favorite picked correctly" line below scores both side-by-side on the same matches. The table surfaces where the two disagree.
       <br>
-      <em>Caveat:</em> model uses current bio data — not a pre-match snapshot — so this isn't a forecast backtest. Treat it as "what would today's model have said about yesterday's match?"
+      <em>Why this beats a soft re-run:</em> a soft model fed today's bios on yesterday's match can "predict" the outcome it already knows about — that's hindsight bias. The prospective log captures pre-match snapshots so the comparison is honest.
       <br>
-      <em>Why no market column on upcoming matches?</em> Bookmakers post lines a few hours before each match starts, and only some books are exposed by our API feed. Past-match odds are stored in the match record at the time of play; future-match odds populate as lines drop.
+      <em>Why some matches don't appear:</em> bookmakers post lines a few hours before each match, and our feed only stores odds at fetch time. Past matches without recorded odds are excluded from this view.
     </div>
     <div style="display:flex;gap:18px;font-size:11px;color:var(--muted);margin-bottom:12px;flex-wrap:wrap">
       <div><strong style="color:var(--ink)">${rows.length}</strong> completed matches</div>
