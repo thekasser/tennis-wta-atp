@@ -29,6 +29,18 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 scripts/restore_db.py
 
+      # ── Re-seed bios + tournaments from the JS source files ───────────
+      # The snapshot restored above has the player set from when it was
+      # taken. If a manual bio addition (data/players_*.js) has landed
+      # since the last snapshot, those bios won't be in the players table
+      # without this step — so sync_matches won't fetch their data and
+      # the dashboard never sees them. seed_db is idempotent: existing
+      # rows are unchanged, new rows get inserted.
+      - name: Seed bios + tournaments
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/seed_db.py
+
       # ── Sync rankings (~4 API calls) ───────────────────────────────────
       - name: Sync rankings
         env:
