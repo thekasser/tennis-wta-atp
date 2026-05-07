@@ -1217,9 +1217,21 @@ def materialize_predictions(conn) -> bool:
             p.p1_mid, p.p2_mid, p.p1_name, p.p2_name,
             p.p_pred, p.predicted_at, p.model_version,
             p.tournament_id,
-            m.winner_id, m.raw, m.score
+            m.winner_id, m.raw, m.score,
+            -- Latest Kalshi snapshot for this match (any pre/post-match
+            -- since both have value). Keyed by p.p1_mid match because
+            -- kalshi_odds uses our slot convention (lower mid → A).
+            k.p1_yes_price AS kalshi_p1_yes,
+            k.p2_yes_price AS kalshi_p2_yes,
+            k.is_pre_match AS kalshi_pre_match
         FROM predictions p
         JOIN matches m ON CAST(p.match_id AS TEXT) = m.id
+        LEFT JOIN (
+          SELECT match_id, p1_yes_price, p2_yes_price, is_pre_match,
+                 ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY fetched_at DESC) AS rn
+          FROM kalshi_odds
+          WHERE p1_yes_price IS NOT NULL AND p2_yes_price IS NOT NULL
+        ) k ON k.match_id = p.match_id AND k.rn = 1
         WHERE m.winner_id IS NOT NULL
           AND p.predicted_at = (
             SELECT MIN(predicted_at) FROM predictions p2
@@ -1259,6 +1271,15 @@ def materialize_predictions(conn) -> bool:
                 market_p_a = _devigged_p1(odd1, odd2)
             except (json.JSONDecodeError, TypeError):
                 pass
+
+        # Kalshi de-vig: each side has its own YES price; sum to ~1.0 with
+        # small bid-ask spread. Normalize so the two sum to exactly 1.
+        kalshi_p_a = None
+        if r["kalshi_p1_yes"] is not None and r["kalshi_p2_yes"] is not None:
+            tot = r["kalshi_p1_yes"] + r["kalshi_p2_yes"]
+            if tot > 0:
+                kalshi_p_a = r["kalshi_p1_yes"] / tot
+
         enriched.append({
             "match_id":  r["match_id"],
             "date":      r["date"],
@@ -1269,7 +1290,9 @@ def materialize_predictions(conn) -> bool:
             "p2_name":   r["p2_name"],
             "p_pred":    round(r["p_pred"], 4),
             "won_a":     won_a,
-            "market_p_a": round(market_p_a, 4) if market_p_a is not None else None,
+            "market_p_a":        round(market_p_a, 4) if market_p_a is not None else None,
+            "kalshi_p_a":        round(kalshi_p_a, 4) if kalshi_p_a is not None else None,
+            "kalshi_pre_match":  bool(r["kalshi_pre_match"]) if r["kalshi_pre_match"] is not None else None,
             "score":     r["score"],
             "model_version": r["model_version"],
         })
@@ -1280,13 +1303,23 @@ def materialize_predictions(conn) -> bool:
         with_odds = [e for e in enriched if e["market_p_a"] is not None]
         if with_odds:
             brier_odds = sum((e["market_p_a"] - e["won_a"]) ** 2 for e in with_odds) / len(with_odds)
-            # Brier_us on the SAME subset (so comparison is apples-to-apples)
             brier_us_subset = sum((e["p_pred"] - e["won_a"]) ** 2 for e in with_odds) / len(with_odds)
         else:
             brier_odds = brier_us_subset = None
+
+        # Same comparison for Kalshi (separate subset; partial overlap with
+        # sportsbook odds — Kalshi covers more matches but not all).
+        with_kalshi = [e for e in enriched if e["kalshi_p_a"] is not None]
+        if with_kalshi:
+            brier_kalshi = sum((e["kalshi_p_a"] - e["won_a"]) ** 2 for e in with_kalshi) / len(with_kalshi)
+            brier_us_kalshi_subset = sum((e["p_pred"] - e["won_a"]) ** 2 for e in with_kalshi) / len(with_kalshi)
+        else:
+            brier_kalshi = brier_us_kalshi_subset = None
     else:
         brier_us = brier_odds = brier_us_subset = None
+        brier_kalshi = brier_us_kalshi_subset = None
         with_odds = []
+        with_kalshi = []
 
     # 10-bin calibration table
     bins: list[list] = [[] for _ in range(10)]
@@ -1307,13 +1340,23 @@ def materialize_predictions(conn) -> bool:
                             "actual": round(actual, 3)})
 
     payload = {
-        "recent": enriched[:30],
+        # Keep up to 500 most-recent resolved predictions in the dashboard
+        # blob. Rationale: a year of prospective predictions is ~700-1000;
+        # 500 covers the meaningful window without bloating the JSON. The
+        # dashboard's panels each slice as needed (Recent Calls takes 15,
+        # MvM takes 25), so this just sets the upstream pool size — and
+        # a too-small pool was crowding out earlier-tour predictions in
+        # WTA-heavy recent days.
+        "recent": enriched[:500],
         "stats": {
             "n":               n,
             "brier_us":        round(brier_us, 4) if brier_us is not None else None,
             "brier_odds":      round(brier_odds, 4) if brier_odds is not None else None,
             "brier_us_subset": round(brier_us_subset, 4) if brier_us_subset is not None else None,
             "n_with_odds":     len(with_odds),
+            "brier_kalshi":           round(brier_kalshi, 4) if brier_kalshi is not None else None,
+            "brier_us_kalshi_subset": round(brier_us_kalshi_subset, 4) if brier_us_kalshi_subset is not None else None,
+            "n_with_kalshi":          len(with_kalshi),
             "model_version":   enriched[0]["model_version"] if enriched else None,
         },
         "calibration": calibration,

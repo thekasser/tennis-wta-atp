@@ -156,5 +156,6 @@ const PLAYERS_WTA = [
   {id:151, mid:11449, name:"Ons Jabeur", ab:"Jabeur", nat:"TUN", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/4, last: 2025-06-20)
   {id:152, mid:11575, name:"Danielle Rose Collins", ab:"Collins", nat:"USA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // auto-added: 1 QF+ T12M run (rounds: 1/2, last: 2025-05-23)
   {id:153, mid:32633, name:"Lucrezia Stefanini", ab:"Stefanini", nat:"ITA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},   // manual add per user request
+  {id:154, mid:39226, name:"Bianca Vanessa Andreescu", ab:"Andreescu", nat:"CAN", surf:{H:.62,C:.55,G:.55},form:"",inj:false},  // manual add per user request — 2019 US Open champion
 
 ];

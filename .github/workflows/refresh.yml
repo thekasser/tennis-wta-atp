@@ -61,22 +61,35 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 scripts/sync_fixtures.py --tour both
 
+      # ── Sync Kalshi market prices (free, no auth) ──────────────────────
+      # Kalshi's free public API gives us a second market benchmark
+      # alongside the sportsbook odds in matches.raw. Coverage is
+      # near-100% on bio'd matches, including qualifying where
+      # sportsbooks typically don't post. Zero impact on Matchstat budget.
+      # --include-settled to capture post-match prices for backtest.
+      - name: Sync Kalshi odds
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/sync_kalshi.py --include-settled
+
+      # ── Log prospective predictions for upcoming/active matches ────────
+      # MUST run BEFORE materialize so today's new predictions land in
+      # data/predictions.js on the same cron run (instead of waiting for
+      # the next one). Uses match_prob from backtest.py — same Python
+      # port the PiT backtest trusts. After matches finish, JOIN
+      # predictions on matches.winner_id for clean prospective Brier
+      # (no PiT reconstruction). Zero API calls; pure DB compute.
+      - name: Log predictions
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/log_predictions.py
+
       # ── Materialize all data/*.js files from the DB ────────────────────
       # Hash-based change detection means files only rewrite if data changed.
       - name: Materialize data files
         run: |
           cd "$GITHUB_WORKSPACE"
           python3 scripts/materialize.py
-
-      # ── Log prospective predictions for upcoming/active matches ────────
-      # Uses match_prob from backtest.py — same Python port the PiT
-      # backtest trusts. After matches finish, JOIN predictions on
-      # matches.winner_id for clean prospective Brier (no PiT
-      # reconstruction). Zero API calls; pure DB read + Python compute.
-      - name: Log predictions
-        run: |
-          cd "$GITHUB_WORKSPACE"
-          python3 scripts/log_predictions.py
 
       # ── Update the committed DB snapshot ───────────────────────────────
       - name: Snapshot DB

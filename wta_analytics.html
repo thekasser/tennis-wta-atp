@@ -2561,21 +2561,21 @@ function renderTrackRecord() {
   const bss_us   = _bssVs(s.brier_us);
   const bss_odds = _bssVs(s.brier_odds);
 
-  // Comparison row: us vs odds on the SAME subset (where odds known).
-  // Brier is high-variance on small samples — a single 90%-confident wrong
-  // call adds ~0.08 to the per-match average. Show the comparison only
-  // when we have enough overlap to make the difference informative.
+  // Comparison vs Kalshi (more interesting since Kalshi typically has
+  // 100% coverage of bio'd-player matches — sportsbook coverage is
+  // qualifying-sparse). Brier is high-variance on small samples — a
+  // single 90%-confident wrong call adds ~0.08 to the per-match average.
+  // Suppress the verdict until we have enough overlap to be meaningful.
   const MIN_N_FOR_COMPARE = 20;
-  let subsetCompare;
-  if (s.brier_us_subset == null || s.brier_odds == null) {
-    subsetCompare = 'awaiting matches with both prediction + market odds';
-  } else if (s.n_with_odds < MIN_N_FOR_COMPARE) {
-    subsetCompare = `<span style="color:var(--muted)">need ${MIN_N_FOR_COMPARE - s.n_with_odds} more match${MIN_N_FOR_COMPARE - s.n_with_odds === 1 ? '' : 'es'}</span> with odds before comparison is meaningful (current n=${s.n_with_odds})`;
-  } else {
-    subsetCompare = (s.brier_us_subset < s.brier_odds
-      ? `<span style="color:var(--accent-green);font-weight:600">model beats market</span> by ${((s.brier_odds - s.brier_us_subset)*1000).toFixed(1)} Brier-pts (lower is better)`
-      : `<span style="color:var(--accent-rose);font-weight:600">market beats model</span> by ${((s.brier_us_subset - s.brier_odds)*1000).toFixed(1)} Brier-pts`);
-  }
+  const _verdict = (us, them, n, label) => {
+    if (us == null || them == null) return `awaiting ${label} matches`;
+    if (n < MIN_N_FOR_COMPARE) return `<span style="color:var(--muted)">need ${MIN_N_FOR_COMPARE - n} more</span> ${label} match${MIN_N_FOR_COMPARE - n === 1 ? '' : 'es'} (n=${n})`;
+    return us < them
+      ? `<span style="color:var(--accent-green);font-weight:600">model beats ${label}</span> by ${((them - us)*1000).toFixed(1)} Brier-pts`
+      : `<span style="color:var(--accent-rose);font-weight:600">${label} beats model</span> by ${((us - them)*1000).toFixed(1)} Brier-pts`;
+  };
+  const verdictKalshi = _verdict(s.brier_us_kalshi_subset, s.brier_kalshi, s.n_with_kalshi, 'Kalshi');
+  const verdictBooks  = _verdict(s.brier_us_subset, s.brier_odds, s.n_with_odds, 'sportsbook');
 
   // Calibration bin chart (text-based — keep it scannable on mobile)
   const bins = (PREDICTIONS_DATA.calibration || []).filter(b => b.n > 0);
@@ -2608,7 +2608,7 @@ function renderTrackRecord() {
       <span style="font-size:11px;color:var(--muted)" title="Predictions logged by scripts/log_predictions.py and scored against actual outcomes. No hindsight — this is the model's real-world performance.">prospective log · ${s.n} prediction${s.n===1?'':'s'} resolved</span>
       ${sampleNote}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px">
       <div class="stat-card">
         <div class="val" style="color:var(--tc)">${s.brier_us != null ? s.brier_us.toFixed(4) : '—'}</div>
         <div class="lbl" title="(p − y)² averaged across all predictions. 0.25 = random; lower = better.">Model Brier</div>
@@ -2618,12 +2618,22 @@ function renderTrackRecord() {
         <div class="lbl" title="Brier Skill Score: 1 − (Brier_model / 0.25). What fraction of available signal we captured beyond random.">Skill vs random</div>
       </div>
       <div class="stat-card">
-        <div class="val" style="color:var(--muted)">${s.brier_odds != null ? s.brier_odds.toFixed(4) : '—'}</div>
-        <div class="lbl" title="Market's Brier on the subset of matches where pre-match odds were available. De-vigged: implied probs normalized to remove bookmaker overround.">Market Brier${s.n_with_odds ? ` <span style="opacity:.6">(${s.n_with_odds})</span>` : ''}</div>
+        <div class="val" style="color:var(--muted)">${s.brier_kalshi != null ? s.brier_kalshi.toFixed(4) : '—'}</div>
+        <div class="lbl" title="Kalshi prediction-market Brier — CFTC-regulated event contracts. De-vigged YES prices. Tends to have ~100% coverage of bio'd-player matches.">Kalshi Brier${s.n_with_kalshi ? ` <span style="opacity:.6">(${s.n_with_kalshi})</span>` : ''}</div>
       </div>
       <div class="stat-card">
-        <div class="val" style="font-size:14px;color:var(--muted);font-weight:500">${subsetCompare}</div>
-        <div class="lbl">Head-to-head</div>
+        <div class="val" style="color:var(--muted)">${s.brier_odds != null ? s.brier_odds.toFixed(4) : '—'}</div>
+        <div class="lbl" title="Traditional sportsbook Brier (Matchstat raw odd1/odd2, de-vigged). Coverage is qualifying-sparse — books often skip thin markets.">Sportsbook Brier${s.n_with_odds ? ` <span style="opacity:.6">(${s.n_with_odds})</span>` : ''}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap;font-size:12px">
+      <div style="flex:1;min-width:200px;padding:8px 12px;background:var(--bg-elev);border-radius:8px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">vs Kalshi (prediction market)</div>
+        ${verdictKalshi}
+      </div>
+      <div style="flex:1;min-width:200px;padding:8px 12px;background:var(--bg-elev);border-radius:8px">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:4px">vs sportsbook</div>
+        ${verdictBooks}
       </div>
     </div>
     ${calRows ? `
