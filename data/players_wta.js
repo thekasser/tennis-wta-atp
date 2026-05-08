@@ -158,5 +158,8 @@ const PLAYERS_WTA = [
   {id:153, mid:32633, name:"Lucrezia Stefanini", ab:"Stefanini", nat:"ITA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},   // manual add per user request
   {id:154, mid:39226, name:"Bianca Vanessa Andreescu", ab:"Andreescu", nat:"CAN", surf:{H:.62,C:.55,G:.55},form:"",inj:false},  // manual add per user request — 2019 US Open champion
   {id:155, mid:44349, name:"Simona Waltert",            ab:"Waltert",       nat:"SUI", surf:{H:.55,C:.58,G:.55},form:"",inj:false},  // manual add per user request — Swiss player
+  {id:156, mid:11959, name:"Leolia Jeanjean",           ab:"Jeanjean",      nat:"FRA", surf:{H:.55,C:.60,G:.55},form:"",inj:false},  // Rome WTA fixture coverage
+  {id:157, mid:72132, name:"Noemi Basiletti",           ab:"Basiletti",     nat:"ITA", surf:{H:.55,C:.58,G:.55},form:"",inj:false},  // Rome WTA fixture coverage
+  {id:158, mid:84377, name:"Tyra Caterina Grant",       ab:"Grant",         nat:"ITA", surf:{H:.55,C:.55,G:.55},form:"",inj:false},  // Rome WTA fixture coverage
 
 ];
