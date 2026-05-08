@@ -8,22 +8,39 @@ Personal-use analytics dashboard tracking the men's and women's tours: live tour
 
 Four tabs in `wta_analytics.html`:
 
-- **Live Events** — active tournament with per-player status (alive / eliminated / withdrawn / champion), guaranteed pts, projected pts, defending pts, net change. Active-tournament status is server-derived from match data (no manual draw curation).
+- **Live Events** — active tournament with per-player status (alive / eliminated / withdrawn / champion), guaranteed pts, projected pts, defending pts, net change. Active-tournament status is server-derived from match data + fixtures (no manual draw curation). Sortable column headers.
 - **Rankings (T12M)** — sortable table with YTD race column, scatter chart, biggest movers, form bar + trend sparkline.
-- **Trapezoid Metrics** — scatter explorer across 9 metrics (serve/return/total pts won, BP saved, tiebreak %, deciding-set %, aces per service game, match win, composite z-score). Filters by year (CURR / T3M / T6M / T12M / 2024-2026), tour, surface, draw, and min-matches. Per-window 25th-percentile default for min-matches. **Tier-aware** — composite z-scores are computed only over WTA/ATP main-draw tour-level matches; W125 / Challenger / qualifying rounds are excluded so a circuit-grinder doesn't outrank Sabalenka.
-- **Matchup Predictor** — pairwise win probability with surface bias, real head-to-head from match data, form ratio.
+- **Trapezoid Metrics** — scatter explorer across 11 metrics (serve/return/total pts won, BP saved/won, service-games-won, return-games-won, tiebreak %, deciding-set %, aces/svGm, match win, composite z-score). Filters by year (CURR / T3M / T6M / T12M / 2024-2026), tour, surface, draw, and min-matches. Per-window 25th-percentile default. **Tier-aware** — composite z-scores are computed only over main-draw tour-level matches; W125 / Challenger / qualifying are excluded.
+- **Matchup Predictor** — pairwise win probability blending Elo (from T12M+YTD points), surface, recent form, composite z-score, and Bayesian-shrunk H2H. Below the predictor: Recent Calls (last 15 model picks vs outcomes), Model Track Record (Brier vs Kalshi vs sportsbook), Model-vs-Market table (prospective only), Upcoming Matches (with sortable Δ-vs-Kalshi column to surface biggest disagreements).
+
+### Measurement infrastructure
+
+The model carries a real measurement loop, not vibes:
+
+- **Prospective prediction log** (`predictions` table) — every cron records pre-match predictions for upcoming fixtures and recent active-tournament matches. Once a match completes, the JOIN on `matches.winner_id` gives clean prospective Brier with no hindsight contamination.
+- **Two market benchmarks** — Matchstat sportsbook odds (where available, mostly main-draw) + Kalshi prediction-market (free public API, ~100% coverage of bio'd-player matches including qualifying). Brier comparison surfaces "are we beating the market on the matches both have an opinion on."
+- **PiT backtest framework** (`scripts/backtest.py`) — reconstructs predictions from historical match data using PiT-correct inputs (synthetic ranking from accumulated tournament results, last-N form filtered by date, weekly-cached composite cohort). Modes: default PiT, `--soft` (today's bios for hindsight comparison), `--prospective` (read the live log), `--feature-attribution` (per-signal Brier + net helpful/harmful contribution), `--sweep-sharpen` (one-pass tuning sweep).
 
 Click any player name → drill-down modal: bio, all metrics across periods + surfaces, last-15 matches, top H2H records.
 
 ## Architecture
 
 ```
-GitHub Actions cron (every 4h)
+GitHub Actions cron (2×/day at 00:00 + 12:00 UTC)
     │
     ├── restore_db.py     ← unzip data/tennis.db.gz
+    ├── seed_db.py        ← players_*.js + tournaments.js → players/tournaments tables
+    │                       (idempotent — picks up new manual bios)
     ├── sync_rankings.py  ← Matchstat /ranking/singles + race
-    ├── sync_matches.py   ← Matchstat /past-matches (incremental;
-    │                       only fetches recently-active players)
+    ├── sync_matches.py   ← Matchstat /past-matches (decide_fetch heuristic;
+    │                       cold-starts get full backfill, active-window players
+    │                       get current year only, others skipped)
+    ├── sync_fixtures.py  ← Matchstat /fixtures/tournament/{id} + dedup pass
+    ├── sync_kalshi.py    ← Kalshi /events?series_ticker=KX{ATP|WTA}MATCH
+    │                       (free, no auth; fills market gaps where Matchstat is silent)
+    ├── log_predictions.py← run match_prob on fixtures + recent matches → predictions table
+    │                       (must run BEFORE materialize so today's predictions land
+    │                        in today's predictions.js)
     ├── materialize.py    ← SQLite → JSON blobs (data/*.js, local only)
     ├── snapshot_db.py    ← gzip → data/tennis.db.gz (committed)
     ├── validate.py       ← row-count + recency + tier-pass-through guards
@@ -41,13 +58,17 @@ Cloudflare Worker (tennis-wta-atp)
     ├── /api/h2h                → JSON
     ├── /api/tournament-history → JSON
     ├── /api/trapezoid          → JSON
+    ├── /api/upcoming           → JSON (fixtures + Kalshi prices)
+    ├── /api/predictions        → JSON (prospective log + Brier vs markets)
     ├── /api/health             → liveness probe
     └── /api/admin/sync (POST)  → bearer-auth'd D1 writer
 
 D1 (tennis)
     ├── players, tournaments, matches, rankings_snapshots,
-    │   api_fetch_log  (raw match-level data, mirrors local SQLite)
-    └── materialized   (chunked JSON blobs, what /api/* actually serves)
+    │   fixtures, predictions, kalshi_odds, api_fetch_log
+    │     (raw match + market data, mirrors local SQLite)
+    └── materialized
+          (chunked JSON blobs, what /api/* actually serves)
 ```
 
 The dashboard fetches from `/api/*` on load (parallel via `Promise.all`); the Worker reads chunked JSON blobs from D1's `materialized` table and reassembles them. Cache: 60s browser / 5min CF edge.
