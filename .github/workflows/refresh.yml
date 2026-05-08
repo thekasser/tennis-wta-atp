@@ -2,11 +2,19 @@ name: Tennis Dashboard Refresh
 
 on:
   schedule:
-    # 2× per day (00:00 + 12:00 UTC). The 6×/day schedule we ran 2026-05-01
-    # → 05-05 burned through the 10k/month Matchstat cap — see the API-cap
-    # post-mortem in scripts/sync_matches.py docstring. Manual
-    # workflow_dispatch is available for ad-hoc freshness during finals.
-    - cron: '0 0,12 * * *'
+    # 3× per day at user-requested PST times. UTC offsets assume PDT
+    # (UTC-7); during November-March (PST = UTC-8) the wall-clock times
+    # shift +1h locally — accept the drift since GitHub cron is fixed-UTC.
+    #
+    # All three runs are FULL pipeline. Budget note: ~270 calls per
+    # full run × 3/day = ~810/day during active weeks. With ~14 active
+    # days/month × 810 + ~16 quiet days × ~50 = ~12k/month potential —
+    # marginally over the 10k Matchstat cap on heavy active stretches.
+    # Acceptable risk per user; we'll watch api_fetch_log totals and
+    # tighten decide_fetch (per-player cooldown) if we trip the cap.
+    - cron: '0 7 * * *'    # 12am PDT
+    - cron: '0 17 * * *'   # 10am PDT
+    - cron: '0 23 * * *'   # 4pm  PDT
   workflow_dispatch:       # allow manual trigger from Actions tab
 
 jobs:
