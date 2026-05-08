@@ -778,6 +778,32 @@ function derivedForm(bioId, fallback, mode) {
     .join('');
 }
 
+// Format the lastUpdated UTC timestamp from season_*.js into the user's
+// browser-local timezone. Backwards-compatible with older date-only
+// values ("2026-05-07"): if the input has no time component, we render
+// the date as-is. Browsers infer timezone via Intl — no IP lookup, no
+// permissions, works offline. PST viewer sees "May 7, 2026, 12:30 PM
+// PDT"; EST viewer sees the same UTC instant rendered as 3:30 PM EDT.
+function formatLastUpdated(iso) {
+  if (!iso) return '—';
+  // No T → date-only string from a pre-fix older snapshot. Display as-is.
+  if (!iso.includes('T')) return iso;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  // Use locale defaults so the format matches the user's regional
+  // conventions (12h vs 24h, comma vs dot, etc). timeZoneName=short
+  // appends the timezone abbreviation (PDT, EST, etc) so it's
+  // unambiguous what zone they're seeing.
+  return d.toLocaleString(undefined, {
+    year:    'numeric',
+    month:   'short',
+    day:     'numeric',
+    hour:    'numeric',
+    minute:  '2-digit',
+    timeZoneName: 'short',
+  });
+}
+
 function players() {
   const bioArr = TOUR === 'WTA' ? PLAYERS_WTA : PLAYERS_ATP;
   const season = TOUR === 'WTA' ? SEASON_WTA  : SEASON_ATP;
@@ -1254,7 +1280,7 @@ function setTour(t) {
   const acts = activeTournaments();
   const actLabel = acts.length ? acts.map(a=>a.short).join(' · ') : 'No live events';
   document.getElementById('ctx-info').textContent=
-    `Active: ${actLabel} · ${players().length} players tracked · Last updated: ${seasonData().lastUpdated}`;
+    `Active: ${actLabel} · ${players().length} players tracked · Last updated: ${formatLastUpdated(seasonData().lastUpdated)}`;
   document.getElementById('live-label').textContent = acts.length ? `Live — ${actLabel}` : 'Season Tracker';
   Object.keys(CHARTS).forEach(destroyChart);
 
@@ -3757,7 +3783,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   Chart.defaults.font.family="Manrope, sans-serif";
 
   const sd = SEASON_WTA;
-  document.getElementById('data-ts').textContent = `· ${sd.lastUpdated}`;
+  document.getElementById('data-ts').textContent = `· ${formatLastUpdated(sd.lastUpdated)}`;
 
   // Back-fill active draw status from recent_matches.js
   enrichActiveTournaments();
