@@ -301,22 +301,30 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
         if not players_block:
             continue
 
-        # Post-process: if the tournament has progressed past a player's
-        # stage AND that player actually played a match (i.e. wasn't just
-        # added from fixtures), they were eliminated by an opponent outside
-        # our top-200 fetch set. Skip fixture-augmented bios — they have
-        # an upcoming match scheduled, so by definition they're alive.
-        # Without this skip, qualifying-Final completions made deepest_played
-        # = 7, then ALL ~80 main-draw players with scheduled_stage="R128"
-        # (depth 1) got cascade-marked eliminated. WTA Rome 2026-05-07:
-        # 82 total, only 3 alive (rest were fixture-augmented main-draw
-        # players incorrectly swept by the cascade).
+        # Post-process: if the tournament has progressed FAR past a player's
+        # stage AND that player actually played a match, they were
+        # eliminated by an opponent outside our top-200 fetch set.
+        #
+        # GAP THRESHOLD: only cascade-elim when the deepest-played round
+        # is ≥ 2 stages ahead of the player's status. A 1-stage gap can
+        # easily mean "their next match hasn't been synced yet" — Matchstat
+        # silent-throttle on WTA, or a 12h cron lag while R2 starts. Don't
+        # mark winners as losers prematurely.
+        #
+        # Example: tournament at R32 (depth 3), R1 winner at R64 (depth 2),
+        # gap=1 → don't cascade. Tournament at R16 (depth 4), R1 winner
+        # at R64 (depth 2), gap=2 → cascade-elim.
+        #
+        # Also skip fixture-augmented bios entirely — they have an upcoming
+        # match scheduled, so by definition they're alive.
+        ELIM_GAP_THRESHOLD = 2
         tournament_deepest = deepest_played
         for bio_id, status in players_block.items():
             if bio_id in fixture_augmented_bios:
                 continue
             cur = ROUND_DEPTH.get(status["r"], 0)
-            if cur < tournament_deepest and not status["elim"]:
+            gap = tournament_deepest - cur
+            if gap >= ELIM_GAP_THRESHOLD and not status["elim"]:
                 status["elim"] = True
 
         out.append({
