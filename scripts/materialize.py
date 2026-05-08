@@ -1233,7 +1233,8 @@ def materialize_trapezoid(conn) -> bool:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--only", choices=["season", "recent_matches", "tournament_history",
-                                      "h2h", "trapezoid", "upcoming", "predictions"],
+                                      "h2h", "trapezoid", "upcoming", "predictions",
+                                      "api_log"],
                    default=None)
     args = p.parse_args()
 
@@ -1258,6 +1259,8 @@ def main() -> int:
         if materialize_upcoming(conn): changed += 1
     if args.only in (None, "predictions"):
         if materialize_predictions(conn): changed += 1
+    if args.only in (None, "api_log"):
+        if materialize_api_log(conn): changed += 1
 
     print(f"\n{changed} file(s) changed.")
     return 0
@@ -1435,6 +1438,137 @@ def materialize_predictions(conn) -> bool:
         )
 
     return _write_if_changed(path, hash_input, render, label="predictions")
+
+
+def materialize_api_log(conn) -> bool:
+    """Read api_fetch_log → write data/api_log.js with API-usage stats for
+    the dashboard's Pipeline tab. Self-monitoring so we can see if we're
+    on track to blow the 10k/mo Matchstat cap, and which endpoints
+    dominate.
+
+    Source classification heuristic: cron runs are tight bursts (~3 min)
+    starting at fixed UTC hours. Calls in those windows are tagged with
+    the cron name; everything else is 'manual'. Misclassifies only if a
+    user manually triggers AT exactly a cron hour, which is rare.
+    """
+    today = date.today()
+    cutoff_30d = (today - timedelta(days=30)).isoformat()
+    month_prefix = today.strftime("%Y-%m")
+
+    # Daily totals, last 30 days
+    daily = []
+    for r in conn.execute("""
+        SELECT substr(fetched_at, 1, 10) AS d, COUNT(*) AS n
+        FROM api_fetch_log
+        WHERE substr(fetched_at, 1, 10) >= ?
+        GROUP BY d ORDER BY d
+    """, (cutoff_30d,)):
+        daily.append({"date": r["d"], "total": r["n"]})
+
+    # Month-to-date with on-pace projection
+    mtd = conn.execute("""
+        SELECT COUNT(*) AS n FROM api_fetch_log
+        WHERE substr(fetched_at, 1, 7) = ?
+    """, (month_prefix,)).fetchone()["n"]
+    days_elapsed = today.day
+    # Days in month — use first-of-next-month minus one day
+    if today.month == 12:
+        next_month = date(today.year + 1, 1, 1)
+    else:
+        next_month = date(today.year, today.month + 1, 1)
+    days_in_month = (next_month - timedelta(days=1)).day
+    on_pace = round(mtd / days_elapsed * days_in_month) if days_elapsed > 0 else 0
+
+    # Recent runs — group by UTC hour bucket so each cron's burst becomes
+    # one row. Source is inferred from hour:
+    #   07:xx UTC = 12am PDT cron
+    #   17:xx UTC = 10am PDT cron
+    #   23:xx UTC = 4pm  PDT cron
+    #   anything else = manual
+    runs_rows = list(conn.execute("""
+        SELECT
+          strftime('%Y-%m-%dT%H:00:00Z', fetched_at) AS hour_bucket,
+          CASE
+            WHEN strftime('%H', fetched_at) = '07' THEN 'cron-12am-pdt'
+            WHEN strftime('%H', fetched_at) = '17' THEN 'cron-10am-pdt'
+            WHEN strftime('%H', fetched_at) = '23' THEN 'cron-4pm-pdt'
+            ELSE 'manual'
+          END AS source,
+          COUNT(*) AS calls,
+          MIN(fetched_at) AS first_call,
+          MAX(fetched_at) AS last_call,
+          SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors
+        FROM api_fetch_log
+        WHERE fetched_at >= datetime('now', '-7 days')
+        GROUP BY hour_bucket, source
+        ORDER BY hour_bucket DESC LIMIT 25
+    """))
+    recent_runs = []
+    for r in runs_rows:
+        # Duration: last - first call within the bucket, in seconds.
+        # Crude but informative.
+        try:
+            t0 = datetime.fromisoformat(r["first_call"])
+            t1 = datetime.fromisoformat(r["last_call"])
+            duration_s = int((t1 - t0).total_seconds())
+        except (ValueError, TypeError):
+            duration_s = None
+        recent_runs.append({
+            "ts":       r["hour_bucket"],
+            "source":   r["source"],
+            "calls":    r["calls"],
+            "duration": duration_s,
+            "errors":   r["errors"] or 0,
+        })
+
+    # Today's endpoints — bucket past-matches per tour, rankings,
+    # kalshi, others. Helps spot a runaway endpoint.
+    today_iso = today.isoformat()
+    endpoints = []
+    for r in conn.execute("""
+        SELECT
+          CASE
+            WHEN endpoint LIKE 'wta/player/past-matches/%' THEN 'wta past-matches'
+            WHEN endpoint LIKE 'atp/player/past-matches/%' THEN 'atp past-matches'
+            WHEN endpoint LIKE '%ranking/singles'           THEN 'rankings'
+            WHEN endpoint LIKE 'kalshi/%'                    THEN 'kalshi'
+            WHEN endpoint LIKE '%fixtures/tournament/%'      THEN 'fixtures'
+            WHEN endpoint LIKE '%tournament/calendar/%'      THEN 'tournament catalog'
+            ELSE 'other'
+          END AS bucket,
+          COUNT(*) AS calls
+        FROM api_fetch_log
+        WHERE substr(fetched_at, 1, 10) = ?
+        GROUP BY bucket ORDER BY calls DESC
+    """, (today_iso,)):
+        endpoints.append({"endpoint": r["bucket"], "calls": r["calls"]})
+
+    payload = {
+        "lastUpdated": _now_utc(),
+        "monthToDate": {
+            "total":         mtd,
+            "cap":           10000,
+            "daysElapsed":   days_elapsed,
+            "daysInMonth":   days_in_month,
+            "projected":     on_pace,
+        },
+        "daily":        daily,
+        "recentRuns":   recent_runs,
+        "todayEndpoints": endpoints,
+    }
+    hash_input = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    path = DATA_DIR / "api_log.js"
+
+    def render(h: str) -> str:
+        return (
+            f"// api_log.js — AUTO-GENERATED by scripts/materialize.py\n"
+            f"// Self-monitoring: API-usage stats for the Pipeline tab.\n"
+            f"/* hash: {h} */\n"
+            f"\n"
+            f"const API_LOG_DATA = {json.dumps(payload, indent=2)};\n"
+        )
+
+    return _write_if_changed(path, hash_input, render, label="api_log")
 
 
 def materialize_upcoming(conn) -> bool:

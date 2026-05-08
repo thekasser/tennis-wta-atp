@@ -354,6 +354,7 @@ select:focus{outline:none;border-color:var(--tc)}
       <button class="tab-btn" onclick="setTab('rankings')">Rankings<span class="sub">T12M</span></button>
       <button class="tab-btn" onclick="setTab('trapezoid')">Trapezoid<span class="sub">Metrics</span></button>
       <button class="tab-btn" onclick="setTab('predict')">Matchup Predictor</button>
+      <button class="tab-btn" onclick="setTab('pipeline')">Pipeline<span class="sub">API</span></button>
     </div>
     <div class="tour-toggle">
       <button class="tour-btn active wta" id="btn-wta" onclick="setTour('WTA')">WTA</button>
@@ -554,6 +555,14 @@ select:focus{outline:none;border-color:var(--tc)}
     <div class="card" id="recent-calls-panel" style="margin-top:18px"></div>
     <div class="card" id="calibration-panel" style="margin-top:18px"></div>
   </div>
+
+  <!-- ── TAB 6: PIPELINE / API USAGE ── -->
+  <div class="tab-panel" id="tab-pipeline">
+    <div class="card" id="pipeline-mtd-card" style="margin-bottom:18px"></div>
+    <div class="chart-card" style="margin-bottom:18px"><h3>Daily API calls — last 30 days</h3><div class="chart-wrap" style="height:200px"><canvas id="chart-api-daily"></canvas></div></div>
+    <div class="card" id="pipeline-runs-card" style="margin-bottom:18px"></div>
+    <div class="card" id="pipeline-endpoints-card"></div>
+  </div>
 </div>
 
 <!-- Attribution footer — required by Matchstat ToS, Sackmann CC BY-NC-SA, and good practice. -->
@@ -583,6 +592,8 @@ let RECENT_MATCHES, TOURNAMENT_HISTORY, H2H, UPCOMING_MATCHES;
 // scored against matches.winner_id by scripts/materialize.py. Shape:
 //   { recent: [...], stats: {n, brier_us, brier_odds, ...}, calibration: [...] }
 let PREDICTIONS_DATA;
+// Self-monitoring stats from api_fetch_log — Pipeline tab.
+let API_LOG_DATA;
 
 // PTS table + getTournamentPts() helper used to live in data/tournaments.js
 // alongside the calendar data. They're stable lookup logic, not data, so
@@ -618,7 +629,7 @@ async function loadDashboardData() {
   });
   const [
     tournaments, playersWTA, playersATP, seasonWTA, seasonATP,
-    trapezoid, recentMatches, tournamentHistory, h2h, upcoming, predictions,
+    trapezoid, recentMatches, tournamentHistory, h2h, upcoming, predictions, apiLog,
   ] = await Promise.all([
     get('/api/tournaments'),
     get('/api/players/wta'),
@@ -631,6 +642,7 @@ async function loadDashboardData() {
     get('/api/h2h'),
     get('/api/upcoming').catch(() => ({atp: [], wta: []})),  // graceful: not all envs have it yet
     get('/api/predictions').catch(() => ({recent: [], stats: {n: 0}, calibration: []})), // empty until log accumulates
+    get('/api/api-log').catch(() => ({monthToDate: {total: 0, cap: 10000}, daily: [], recentRuns: [], todayEndpoints: []})),
   ]);
   TOURNAMENTS_DATA   = tournaments;
   PLAYERS_WTA        = playersWTA;
@@ -648,6 +660,7 @@ async function loadDashboardData() {
   H2H                = h2h;
   UPCOMING_MATCHES   = upcoming;
   PREDICTIONS_DATA   = predictions;
+  API_LOG_DATA       = apiLog;
 }
 
 
@@ -1350,6 +1363,7 @@ function renderCurrentTab() {
   if(CURRENT_TAB==='rankings')  renderRankings();
   if(CURRENT_TAB==='predict')   renderPredict();
   if(CURRENT_TAB==='trapezoid') renderTrapezoid();
+  if(CURRENT_TAB==='pipeline')  renderPipeline();
 }
 
 // Lazy-init the trapezoid app on first visit so the chart sizes against a
@@ -2773,6 +2787,146 @@ function renderTrackRecord() {
       Model version: <code>${s.model_version || '—'}</code>.
       Brier guide: 0.25 = random · 0.20–0.23 = decent · &lt;0.20 = strong.
     </div>`;
+}
+
+// ── Pipeline tab — API usage self-monitoring ─────────────────────────────
+// Pulls from API_LOG_DATA (materialized by scripts/materialize.materialize_api_log).
+// Four sections: month-to-date counter (pace vs 10k cap), 30-day daily-totals
+// chart, last 25 cron/manual runs, today's endpoint distribution.
+function renderPipeline() {
+  const root = document.getElementById('tab-pipeline');
+  if (!root || !API_LOG_DATA) return;
+  const data = API_LOG_DATA;
+
+  // ── Month-to-date counter card ──
+  const m = data.monthToDate || {};
+  const pct = m.cap ? Math.min(100, m.total / m.cap * 100) : 0;
+  const projOver = m.projected > m.cap;
+  const barColor = projOver ? 'var(--accent-rose)' : pct > 70 ? 'var(--accent-amber)' : 'var(--accent-green)';
+  const status = projOver
+    ? `<span style="color:var(--accent-rose);font-weight:700">⚠ on pace to exceed cap</span>`
+    : `<span style="color:var(--accent-green);font-weight:600">on pace to stay within cap</span>`;
+  const daysLeft = (m.daysInMonth || 0) - (m.daysElapsed || 0);
+  document.getElementById('pipeline-mtd-card').innerHTML = `
+    <h3 style="margin-top:0">Matchstat API budget · this month</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:12px 0">
+      <div class="stat-card">
+        <div class="val" style="color:var(--tc)">${(m.total || 0).toLocaleString()}</div>
+        <div class="lbl">Calls so far</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="color:var(--muted)">${(m.cap || 10000).toLocaleString()}</div>
+        <div class="lbl">Monthly cap</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="color:${projOver?'var(--accent-rose)':'var(--ink)'}">${(m.projected || 0).toLocaleString()}</div>
+        <div class="lbl">Projected (linear extrapolation)</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" style="color:var(--muted)">${m.daysElapsed || 0} / ${m.daysInMonth || 0}</div>
+        <div class="lbl">Days · ${daysLeft} left</div>
+      </div>
+    </div>
+    <div style="background:var(--bg-elev);border-radius:8px;height:14px;overflow:hidden;margin:8px 0">
+      <div style="background:${barColor};height:100%;width:${pct}%;transition:width .3s"></div>
+    </div>
+    <div style="font-size:12px;margin-top:8px">${status}. ${pct.toFixed(1)}% of cap consumed.</div>
+  `;
+
+  // ── Daily-totals bar chart (Chart.js) ──
+  const daily = data.daily || [];
+  const ctx = document.getElementById('chart-api-daily');
+  if (ctx && typeof Chart !== 'undefined') {
+    if (CHARTS['api-daily']) destroyChart('api-daily');
+    CHARTS['api-daily'] = new Chart(ctx.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: daily.map(d => d.date.slice(5)),  // MM-DD
+        datasets: [{
+          label: 'API calls',
+          data: daily.map(d => d.total),
+          backgroundColor: daily.map(d => d.total > 800 ? 'rgba(190,90,90,0.7)' : 'rgba(64,107,95,0.6)'),
+          borderRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { size: 10 } } },
+          y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+        },
+      },
+    });
+  }
+
+  // ── Recent runs table ──
+  const sourceLabel = {
+    'cron-12am-pdt': '12am PDT cron',
+    'cron-10am-pdt': '10am PDT cron',
+    'cron-4pm-pdt':  '4pm PDT cron',
+    'manual':        'manual',
+  };
+  const sourceColor = {
+    'cron-12am-pdt': 'var(--tc)',
+    'cron-10am-pdt': 'var(--tc)',
+    'cron-4pm-pdt':  'var(--tc)',
+    'manual':        'var(--accent-amber)',
+  };
+  const runs = data.recentRuns || [];
+  const runsHtml = runs.map(r => {
+    const t = new Date(r.ts).toLocaleString(undefined, {
+      month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    });
+    const dur = r.duration != null ? `${Math.floor(r.duration/60)}m ${r.duration%60}s` : '—';
+    const errMark = r.errors > 0 ? `<span style="color:var(--accent-rose)">${r.errors}</span>` : `<span style="color:var(--accent-green)">0</span>`;
+    return `<tr>
+      <td style="font-size:11px;color:var(--muted);white-space:nowrap">${t}</td>
+      <td style="font-size:11px;color:${sourceColor[r.source]||'var(--muted)'}">${sourceLabel[r.source]||r.source}</td>
+      <td style="font-size:11px;text-align:right;font-variant-numeric:tabular-nums">${r.calls.toLocaleString()}</td>
+      <td style="font-size:11px;text-align:right;color:var(--muted)">${dur}</td>
+      <td style="font-size:11px;text-align:right">${errMark}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('pipeline-runs-card').innerHTML = `
+    <h3 style="margin-top:0">Recent runs · last 7 days</h3>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Each row is one cron or manual workflow run, grouped by UTC hour.
+      Duration = time between first and last logged call. Cron times shown
+      below are inferred from the call timestamp; <em>manual</em> covers
+      <code>workflow_dispatch</code> + push-triggered runs.
+    </div>
+    <table class="tbl" style="font-size:11px">
+      <thead><tr>
+        <th>When</th><th>Source</th>
+        <th style="text-align:right">Calls</th>
+        <th style="text-align:right">Duration</th>
+        <th style="text-align:right">Errors</th>
+      </tr></thead>
+      <tbody>${runsHtml || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:8px">No runs in the last 7 days</td></tr>'}</tbody>
+    </table>
+  `;
+
+  // ── Today's endpoints ──
+  const eps = data.todayEndpoints || [];
+  const epsTotal = eps.reduce((s, e) => s + e.calls, 0);
+  const epsHtml = eps.map(e => {
+    const w = epsTotal ? (e.calls / epsTotal * 100) : 0;
+    return `<tr>
+      <td style="font-size:11px">${e.endpoint}</td>
+      <td style="font-size:11px;text-align:right;font-variant-numeric:tabular-nums">${e.calls}</td>
+      <td style="width:60%"><div style="background:var(--bg-elev);height:8px;border-radius:4px;overflow:hidden"><div style="background:var(--tc);height:100%;width:${w}%"></div></div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('pipeline-endpoints-card').innerHTML = `
+    <h3 style="margin-top:0">Today's calls by endpoint</h3>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">
+      Where today's API budget went. A runaway endpoint (one bucket way larger than the rest) is the first symptom of a sync bug.
+    </div>
+    ${epsHtml ? `<table class="tbl" style="font-size:11px"><thead><tr><th>Endpoint</th><th style="text-align:right">Calls</th><th></th></tr></thead><tbody>${epsHtml}</tbody></table>`
+              : `<div style="text-align:center;color:var(--muted);font-size:12px;padding:8px">No calls logged today (yet)</div>`}
+  `;
 }
 
 // ── Tier 1: Recent Calls strip ────────────────────────────────────────────

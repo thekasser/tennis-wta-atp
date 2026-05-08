@@ -72,3 +72,4 @@ node_modules/
 data/predictions.js
 data/backtest_*.csv
 data/backtest_*.gsheet
+data/api_log.js
