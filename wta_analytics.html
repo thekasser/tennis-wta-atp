@@ -3113,7 +3113,6 @@ function renderUpcomingMatches() {
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   const dateLabel = d => d === todayStr ? `Today` :
                         d === tomorrow ? `Tomorrow` : d;
-  const SURF_DOT = { H: '🔵', C: '🟤', G: '🟢' };
 
   const enriched = fixtures.map(f => {
     const p1 = f.p1, p2 = f.p2;
