@@ -1440,16 +1440,36 @@ def materialize_predictions(conn) -> bool:
 def materialize_upcoming(conn) -> bool:
     """Read fixtures table → write data/upcoming_matches.js. Each entry has
     everything the dashboard needs to render a fixture row + load the matchup
-    into the predictor (bio_id resolved when possible, raw name as fallback)."""
+    into the predictor (bio_id resolved when possible, raw name as fallback).
+
+    Joins kalshi_odds for every fixture where we have a Kalshi market.
+    Matchstat's fixture odds (odd1/odd2) are typically NULL until matches
+    complete, but Kalshi posts pre-match prices on most events — so the
+    dashboard's 'Upcoming' panel can show the model-vs-Kalshi comparison
+    on actually-upcoming matches."""
     today = date.today().isoformat()
     rows = list(conn.execute("""
         SELECT f.id, f.tour, f.tournament_id, f.tournament_api_id, f.date,
                f.round_id, f.p1_mid, f.p1_name, f.p1_country,
                f.p2_mid, f.p2_name, f.p2_country, f.odd1, f.odd2,
                t.name AS tn, t.short AS tn_short, t.surface AS surf,
-               t.draw_size AS draw_size, t.type AS tier
+               t.draw_size AS draw_size, t.type AS tier,
+               -- Latest Kalshi snapshot for this fixture. kalshi_odds.match_id
+               -- stores the fixture id (string). p1_yes_price corresponds to
+               -- kalshi_odds.p1_mid which uses lower-mid-as-A convention —
+               -- may not match this fixture's p1, so also pull the kalshi
+               -- p1_mid so we can re-align slots in Python.
+               k.p1_yes_price  AS kalshi_p_lo,
+               k.p2_yes_price  AS kalshi_p_hi,
+               k.p1_mid        AS kalshi_p1_mid
         FROM fixtures f
         LEFT JOIN tournaments t ON t.id = f.tournament_id
+        LEFT JOIN (
+          SELECT match_id, p1_mid, p1_yes_price, p2_yes_price,
+                 ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY fetched_at DESC) AS rn
+          FROM kalshi_odds
+          WHERE p1_yes_price IS NOT NULL AND p2_yes_price IS NOT NULL
+        ) k ON k.match_id = CAST(f.id AS TEXT) AND k.rn = 1
         WHERE f.date >= ?
         ORDER BY f.date ASC, f.id ASC
     """, (today,)))
@@ -1480,6 +1500,20 @@ def materialize_upcoming(conn) -> bool:
         }
         if r["odd1"] is not None: entry["o1"] = r["odd1"]
         if r["odd2"] is not None: entry["o2"] = r["odd2"]
+        # Kalshi de-vigged prob for fixture's p1 winning. Kalshi stores
+        # prices keyed by lower-mid-as-A, so if kalshi's p1_mid matches
+        # the fixture's p1_mid, kalshi_p_lo IS p1's price. Otherwise
+        # the slot is flipped — fixture's p1 is kalshi's p2 and we
+        # use kalshi_p_hi.
+        if r["kalshi_p_lo"] is not None and r["kalshi_p_hi"] is not None:
+            tot = r["kalshi_p_lo"] + r["kalshi_p_hi"]
+            if tot > 0:
+                if r["kalshi_p1_mid"] == r["p1_mid"]:
+                    p1_devigged = r["kalshi_p_lo"] / tot
+                else:
+                    p1_devigged = r["kalshi_p_hi"] / tot
+                entry["k1"] = round(p1_devigged, 4)        # p1's de-vigged Kalshi prob
+                entry["k2"] = round(1 - p1_devigged, 4)
         out[r["tour"]].append(entry)
 
     hash_input = json.dumps(out, sort_keys=True, separators=(",", ":"))

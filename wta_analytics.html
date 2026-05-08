@@ -664,6 +664,21 @@ let RANK_ASC  = true;
 let PRED_FILTER = 'all';
 let LIVE_FILTER = 'all';   // 'all' | 'alive' | 'defenders' — Live Events table filter
 let LIVE_SORT   = { col: 'rank', dir: 'asc' };   // sortable header state — column key matches liveSortAccessors keys
+let UPCOMING_SORT = { col: 'date', dir: 'asc' }; // Upcoming-matches table sort — date asc by default
+
+function setUpcomingSort(col) {
+  // Re-clicking the active column toggles direction; new column resets
+  // to a sensible default. delta/model/kalshi descend (biggest first
+  // matches "where do we and the market disagree most" intent); date
+  // and round ascend (chronological / early-rounds-first).
+  const numericDescDefault = new Set(['model', 'kalshi', 'delta']);
+  if (UPCOMING_SORT.col === col) {
+    UPCOMING_SORT.dir = UPCOMING_SORT.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    UPCOMING_SORT = { col, dir: numericDescDefault.has(col) ? 'desc' : 'asc' };
+  }
+  renderUpcomingMatches();
+}
 
 // Click handler for Live Events column headers. Re-clicking the active
 // column toggles direction; clicking a new column resets to a sensible
@@ -3090,81 +3105,136 @@ function renderUpcomingMatches() {
   };
   const SURF_DOT = { H: '🔵', C: '🟤', G: '🟢' };
 
-  // Group by date for display
-  const byDate = new Map();
-  fixtures.forEach(f => {
-    const d = (f.date || '').slice(0, 10);
-    if (!byDate.has(d)) byDate.set(d, []);
-    byDate.get(d).push(f);
-  });
-
-  // Today/tomorrow labels
+  // Pre-compute display fields per fixture so we can sort by anything.
+  // Each entry holds: date, time, event short, round depth + label,
+  // model favorite prob (slot-A POV), Kalshi favorite prob (same POV),
+  // delta (model − kalshi, signed), pA/pB bio refs for click handler.
   const todayStr = new Date().toISOString().slice(0, 10);
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  const dateLabel = d => d === todayStr ? `Today (${d})` :
-                        d === tomorrow ? `Tomorrow (${d})` : d;
+  const dateLabel = d => d === todayStr ? `Today` :
+                        d === tomorrow ? `Tomorrow` : d;
+  const SURF_DOT = { H: '🔵', C: '🟤', G: '🟢' };
 
-  const sections = [...byDate.entries()].map(([d, fs]) => {
-    const rows = fs.map(f => {
-      const p1 = f.p1, p2 = f.p2;
-      const pA = p1.bio ? psList.find(p => p.id === p1.bio) : null;
-      const pB = p2.bio ? psList.find(p => p.id === p2.bio) : null;
-      const surfLabel = f.surf === 'C' ? 'Clay' : f.surf === 'G' ? 'Grass' : 'Hard';
-      let modelStr = '—';
-      let clickHandler = '';
-      if (pA && pB) {
-        const prob = matchProb(pA, pB, surfLabel);
-        const favA = prob >= 0.5;
-        const favName = favA ? (pA.ab || p1.name) : (pB.ab || p2.name);
-        const favPct = Math.round((favA ? prob : 1 - prob) * 100);
-        modelStr = `<strong style="color:${favA ? TC : TC_B}">${favName} ${favPct}%</strong>`;
-        clickHandler = `onclick="loadFixtureIntoPredictor(${pA.id}, ${pB.id}, '${f.surf || 'H'}')" style="cursor:pointer"`;
-      } else if (pA && !pB) {
-        modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">${p2.name} not bio'd</span>`;
-      } else if (!pA && pB) {
-        modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">${p1.name} not bio'd</span>`;
-      } else {
-        modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">neither bio'd</span>`;
-      }
-      // Odds preview (Phase 3 hook — empty until bookmakers post lines)
-      let mktStr = '';
-      if (f.o1 && f.o2 && pA && pB) {
-        const inv1 = 1 / f.o1, inv2 = 1 / f.o2;
-        const mktA = inv1 / (inv1 + inv2);
-        const mktFavPct = Math.round(Math.max(mktA, 1 - mktA) * 100);
-        const mktFavA = mktA >= 0.5;
-        const mktFavName = mktFavA ? (pA.ab || p1.name) : (pB.ab || p2.name);
-        mktStr = `<span style="color:var(--muted)">mkt: ${mktFavName} ${mktFavPct}%</span>`;
-      }
-      const time = (f.date || '').slice(11, 16);
-      return `<tr ${clickHandler} class="upcoming-row">
-        <td style="font-size:10px;color:var(--muted);white-space:nowrap">${time}</td>
-        <td style="font-size:11px;white-space:nowrap">${SURF_DOT[f.surf]||'·'} ${f.short || f.tn}</td>
-        <td style="font-size:10px;color:var(--muted)">${ROUND_LABEL(f.rdId, f.drawSize)}</td>
-        <td style="font-size:11px">
-          <span style="${pA?'font-weight:600':''}">${pA ? (pA.ab || p1.name) : p1.name}</span>
-          <span style="color:var(--muted);margin:0 4px">vs</span>
-          <span style="${pB?'font-weight:600':''}">${pB ? (pB.ab || p2.name) : p2.name}</span>
-        </td>
-        <td style="font-size:11px">${modelStr}</td>
-        <td style="font-size:11px">${mktStr}</td>
-      </tr>`;
-    }).join('');
-    return `
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:14px 0 6px">${dateLabel(d)} — ${fs.length} match${fs.length===1?'':'es'}</div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="font-size:10px;color:var(--muted);text-align:left;border-bottom:1px solid var(--line)">
-          <th style="padding:4px">Time</th>
-          <th style="padding:4px">Event</th>
-          <th style="padding:4px">Round</th>
-          <th style="padding:4px">Match</th>
-          <th style="padding:4px">Model pick</th>
-          <th style="padding:4px">Market</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    `;
+  const enriched = fixtures.map(f => {
+    const p1 = f.p1, p2 = f.p2;
+    const pA = p1.bio ? psList.find(p => p.id === p1.bio) : null;
+    const pB = p2.bio ? psList.find(p => p.id === p2.bio) : null;
+    const surfLabel = f.surf === 'C' ? 'Clay' : f.surf === 'G' ? 'Grass' : 'Hard';
+    let modelP1 = null;     // model's prob that slot-1 wins
+    if (pA && pB) modelP1 = matchProb(pA, pB, surfLabel);
+    // Kalshi prob of slot-1 winning (de-vigged), if we have a market.
+    const kalshiP1 = (typeof f.k1 === 'number') ? f.k1 : null;
+    // Delta (model − kalshi) measured on slot-1 prob — positive means
+    // model is more bullish on slot 1 than the market is. Magnitude is
+    // what the user typically wants ("biggest disagreement at top").
+    const delta = (modelP1 != null && kalshiP1 != null) ? modelP1 - kalshiP1 : null;
+    return {
+      f, pA, pB, p1, p2,
+      date:    (f.date || '').slice(0, 10),
+      time:    (f.date || '').slice(11, 16),
+      modelP1, kalshiP1, delta,
+      roundDepth: f.rdId || 0,
+      surfLabel,
+    };
+  });
+
+  // Apply sort. Default = (date asc, time asc) — chronological.
+  const sortAccessors = {
+    date:    e => `${e.date}T${e.time}`,
+    round:   e => e.roundDepth,
+    model:   e => e.modelP1 == null ? -1 : Math.max(e.modelP1, 1 - e.modelP1),
+    kalshi:  e => e.kalshiP1 == null ? -1 : Math.max(e.kalshiP1, 1 - e.kalshiP1),
+    delta:   e => e.delta == null ? -1 : Math.abs(e.delta),
+  };
+  const acc = sortAccessors[UPCOMING_SORT.col] || sortAccessors.date;
+  enriched.sort((a, b) => {
+    const av = acc(a), bv = acc(b);
+    let cmp;
+    if (typeof av === 'string' && typeof bv === 'string') cmp = av.localeCompare(bv);
+    else cmp = (av || 0) - (bv || 0);
+    return UPCOMING_SORT.dir === 'desc' ? -cmp : cmp;
+  });
+
+  const rows = enriched.map(e => {
+    const { f, pA, pB, p1, p2, date, time, modelP1, kalshiP1, delta } = e;
+    let modelStr = '—';
+    let clickHandler = '';
+    if (modelP1 != null) {
+      const favA = modelP1 >= 0.5;
+      const favName = favA ? (pA.ab || p1.name) : (pB.ab || p2.name);
+      const favPct = Math.round((favA ? modelP1 : 1 - modelP1) * 100);
+      modelStr = `<strong style="color:${favA ? TC : TC_B}">${favName} ${favPct}%</strong>`;
+      clickHandler = `onclick="loadFixtureIntoPredictor(${pA.id}, ${pB.id}, '${f.surf || 'H'}')" style="cursor:pointer"`;
+    } else if (pA && !pB) {
+      modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">${p2.name} not bio'd</span>`;
+    } else if (!pA && pB) {
+      modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">${p1.name} not bio'd</span>`;
+    } else {
+      modelStr = `<span style="color:var(--muted);font-size:10px;font-style:italic">neither bio'd</span>`;
+    }
+
+    // Kalshi: show the Kalshi favorite + their de-vigged prob.
+    // If kalshi disagrees with model on which side is favored, flag in red.
+    let kalshiStr = '<span style="color:var(--muted);font-size:10px">—</span>';
+    if (kalshiP1 != null) {
+      const kFavA = kalshiP1 >= 0.5;
+      const kFavName = kFavA ? (pA?.ab || p1.name) : (pB?.ab || p2.name);
+      const kFavPct = Math.round((kFavA ? kalshiP1 : 1 - kalshiP1) * 100);
+      const disagree = (modelP1 != null) && (kFavA !== (modelP1 >= 0.5));
+      const color = disagree ? 'var(--accent-rose)' : 'var(--muted)';
+      kalshiStr = `<span style="color:${color}">${kFavName} ${kFavPct}%${disagree ? ' ⇆' : ''}</span>`;
+    }
+
+    // Delta column — signed Δ in pp (model − kalshi on slot-1 prob).
+    let deltaStr = '<span style="color:var(--muted)">—</span>';
+    if (delta != null) {
+      const dpp = Math.round(delta * 100);
+      const absD = Math.abs(dpp);
+      const dColor = absD >= 10 ? 'var(--accent-rose)' :
+                     absD >=  5 ? 'var(--accent-amber)' :
+                     'var(--muted)';
+      const sign = dpp > 0 ? '+' : '';
+      deltaStr = `<span style="color:${dColor};font-weight:${absD>=5?'700':'500'}">${sign}${dpp}</span>`;
+    }
+
+    return `<tr ${clickHandler} class="upcoming-row">
+      <td style="font-size:10px;color:var(--muted);white-space:nowrap">${dateLabel(date)} ${time}</td>
+      <td style="font-size:11px;white-space:nowrap">${SURF_DOT[f.surf]||'·'} ${f.short || f.tn}</td>
+      <td style="font-size:10px;color:var(--muted)">${ROUND_LABEL(f.rdId, f.drawSize)}</td>
+      <td style="font-size:11px">
+        <span style="${pA?'font-weight:600':''}">${pA ? (pA.ab || p1.name) : p1.name}</span>
+        <span style="color:var(--muted);margin:0 4px">vs</span>
+        <span style="${pB?'font-weight:600':''}">${pB ? (pB.ab || p2.name) : p2.name}</span>
+      </td>
+      <td style="font-size:11px">${modelStr}</td>
+      <td style="font-size:11px">${kalshiStr}</td>
+      <td style="font-size:11px;text-align:right;font-variant-numeric:tabular-nums">${deltaStr}</td>
+    </tr>`;
   }).join('');
+
+  // Sort header helper — clickable th with arrow on active column.
+  const upTh = (col, label, align = '') => {
+    const isActive = UPCOMING_SORT.col === col;
+    const arrow = isActive
+      ? `<span style="font-size:9px;margin-left:3px;color:var(--ink)">${UPCOMING_SORT.dir === 'desc' ? '▼' : '▲'}</span>`
+      : '';
+    return `<th onclick="setUpcomingSort('${col}')" style="padding:4px;cursor:pointer;user-select:none;${align}">${label}${arrow}</th>`;
+  };
+
+  const sections = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line)">
+        ${upTh('date',   'When')}
+        <th style="padding:4px">Event</th>
+        ${upTh('round',  'Round')}
+        <th style="padding:4px">Match</th>
+        ${upTh('model',  'Model pick')}
+        ${upTh('kalshi', 'Kalshi')}
+        ${upTh('delta',  'Δ pp', 'text-align:right')}
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 
   el.innerHTML = `
     <div style="font-weight:600;color:var(--ink);font-size:13px;margin-bottom:6px">
@@ -3172,7 +3242,9 @@ function renderUpcomingMatches() {
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
       Scheduled fixtures from active tournament(s). Click any row where both players are tracked to load the matchup into the predictor above.
-      Odds appear once bookmakers post lines (typically a few hours before match time).
+      <strong style="color:var(--ink)">Kalshi</strong> shows the de-vigged prediction-market favorite (rose color + ⇆ when Kalshi disagrees with the model on which side is favored).
+      <strong style="color:var(--ink)">Δ pp</strong> = signed model − Kalshi on slot-1's win prob. Sort by Δ to find biggest disagreements (potential edges or model weaknesses).
+      Click any column header to sort.
     </div>
     ${sections}
   `;
