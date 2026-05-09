@@ -3260,13 +3260,31 @@ function renderUpcomingMatches() {
   const SURF_DOT = { H: '🔵', C: '🟤', G: '🟢' };
 
   // Pre-compute display fields per fixture so we can sort by anything.
-  // Each entry holds: date, time, event short, round depth + label,
-  // model favorite prob (slot-A POV), Kalshi favorite prob (same POV),
-  // delta (model − kalshi, signed), pA/pB bio refs for click handler.
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  const dateLabel = d => d === todayStr ? `Today` :
-                        d === tomorrow ? `Tomorrow` : d;
+  // Match start times are stored as UTC ISO; we convert to the viewer's
+  // local timezone via toLocaleString. Today/Tomorrow comparison uses the
+  // local date so a match starting late tonight UTC but tomorrow morning
+  // local correctly shows "Tomorrow" for a PST viewer.
+  const _localDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA');  // YYYY-MM-DD in local TZ
+  };
+  const _localTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'});
+  };
+  const _localDateTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleString(undefined, {
+      month:'short', day:'numeric', hour:'numeric', minute:'2-digit',
+    });
+  };
+  const todayLocal    = _localDate(new Date().toISOString());
+  const tomorrowLocal = _localDate(new Date(Date.now() + 86400000).toISOString());
+  const dateLabel = d => d === todayLocal    ? `Today` :
+                        d === tomorrowLocal  ? `Tomorrow` : d;
 
   const enriched = fixtures.map(f => {
     const p1 = f.p1, p2 = f.p2;
@@ -3275,25 +3293,25 @@ function renderUpcomingMatches() {
     const surfLabel = f.surf === 'C' ? 'Clay' : f.surf === 'G' ? 'Grass' : 'Hard';
     let modelP1 = null;     // model's prob that slot-1 wins
     if (pA && pB) modelP1 = matchProb(pA, pB, surfLabel);
-    // Kalshi prob of slot-1 winning (de-vigged), if we have a market.
     const kalshiP1 = (typeof f.k1 === 'number') ? f.k1 : null;
-    // Delta (model − kalshi) measured on slot-1 prob — positive means
-    // model is more bullish on slot 1 than the market is. Magnitude is
-    // what the user typically wants ("biggest disagreement at top").
     const delta = (modelP1 != null && kalshiP1 != null) ? modelP1 - kalshiP1 : null;
     return {
       f, pA, pB, p1, p2,
-      date:    (f.date || '').slice(0, 10),
-      time:    (f.date || '').slice(11, 16),
+      // Local-timezone fields — derived from the UTC ISO string in f.date.
+      // localDate is YYYY-MM-DD in browser TZ; matchTimeIso is the original
+      // (sortable) string; localDisplay is what we render in the column.
+      localDate:    _localDate(f.date),
+      localDisplay: _localDateTime(f.date),
+      matchIso:     f.date,
       modelP1, kalshiP1, delta,
       roundDepth: f.rdId || 0,
       surfLabel,
     };
   });
 
-  // Apply sort. Default = (date asc, time asc) — chronological.
+  // Apply sort. Default = match start (chronological).
   const sortAccessors = {
-    date:    e => `${e.date}T${e.time}`,
+    date:    e => e.matchIso || '',
     round:   e => e.roundDepth,
     model:   e => e.modelP1 == null ? -1 : Math.max(e.modelP1, 1 - e.modelP1),
     kalshi:  e => e.kalshiP1 == null ? -1 : Math.max(e.kalshiP1, 1 - e.kalshiP1),
@@ -3308,8 +3326,14 @@ function renderUpcomingMatches() {
     return UPCOMING_SORT.dir === 'desc' ? -cmp : cmp;
   });
 
+  // Data freshness — single value, same for every row in this render
+  // (whole panel renders from the same upcoming_matches.js blob).
+  const dataAsOf = UPCOMING_MATCHES?.lastUpdated
+    ? formatLastUpdated(UPCOMING_MATCHES.lastUpdated)
+    : '—';
+
   const rows = enriched.map(e => {
-    const { f, pA, pB, p1, p2, date, time, modelP1, kalshiP1, delta } = e;
+    const { f, pA, pB, p1, p2, localDate, localDisplay, modelP1, kalshiP1, delta } = e;
     let modelStr = '—';
     let clickHandler = '';
     if (modelP1 != null) {
@@ -3350,8 +3374,19 @@ function renderUpcomingMatches() {
       deltaStr = `<span style="color:${dColor};font-weight:${absD>=5?'700':'500'}">${sign}${dpp}</span>`;
     }
 
+    // Match-start column: 'Today 4:30 PM' / 'Tomorrow 9:00 AM' / 'May 9, 11:00 AM'
+    // — all in the viewer's browser timezone.
+    let matchWhenStr;
+    if (localDate === todayLocal) {
+      matchWhenStr = `Today ${_localTime(e.matchIso)}`;
+    } else if (localDate === tomorrowLocal) {
+      matchWhenStr = `Tomorrow ${_localTime(e.matchIso)}`;
+    } else {
+      matchWhenStr = localDisplay;
+    }
+
     return `<tr ${clickHandler} class="upcoming-row">
-      <td style="font-size:10px;color:var(--muted);white-space:nowrap">${dateLabel(date)} ${time}</td>
+      <td style="font-size:10px;color:var(--muted);white-space:nowrap">${matchWhenStr}</td>
       <td style="font-size:11px;white-space:nowrap">${SURF_DOT[f.surf]||'·'} ${f.short || f.tn}</td>
       <td style="font-size:10px;color:var(--muted)">${ROUND_LABEL(f.rdId, f.drawSize)}</td>
       <td style="font-size:11px">
@@ -3362,6 +3397,7 @@ function renderUpcomingMatches() {
       <td style="font-size:11px">${modelStr}</td>
       <td style="font-size:11px">${kalshiStr}</td>
       <td style="font-size:11px;text-align:right;font-variant-numeric:tabular-nums">${deltaStr}</td>
+      <td style="font-size:10px;color:var(--muted);white-space:nowrap">${dataAsOf}</td>
     </tr>`;
   }).join('');
 
@@ -3377,13 +3413,14 @@ function renderUpcomingMatches() {
   const sections = `
     <table style="width:100%;border-collapse:collapse">
       <thead><tr style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--line)">
-        ${upTh('date',   'When')}
+        ${upTh('date',   'Match start <span style="text-transform:none;letter-spacing:0;font-weight:400;opacity:.6">(your time)</span>')}
         <th style="padding:4px">Event</th>
         ${upTh('round',  'Round')}
         <th style="padding:4px">Match</th>
         ${upTh('model',  'Model pick')}
         ${upTh('kalshi', 'Kalshi')}
         ${upTh('delta',  'Δ pp', 'text-align:right')}
+        <th style="padding:4px" title="When the data informing this prediction was last refreshed">Data as of</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -3395,9 +3432,10 @@ function renderUpcomingMatches() {
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">
       Scheduled fixtures from active tournament(s). Click any row where both players are tracked to load the matchup into the predictor above.
-      <strong style="color:var(--ink)">Kalshi</strong> shows the de-vigged prediction-market favorite (rose color + ⇆ when Kalshi disagrees with the model on which side is favored).
-      <strong style="color:var(--ink)">Δ pp</strong> = signed model − Kalshi on slot-1's win prob. Sort by Δ to find biggest disagreements (potential edges or model weaknesses).
-      Click any column header to sort.
+      <strong style="color:var(--ink)">Match start</strong> shown in your browser's local timezone (Today/Tomorrow short labels + clock time).
+      <strong style="color:var(--ink)">Kalshi</strong> shows the de-vigged prediction-market favorite (rose + ⇆ when Kalshi disagrees with the model).
+      <strong style="color:var(--ink)">Δ pp</strong> = signed model − Kalshi on slot-1's win prob. Sort by Δ to find biggest disagreements.
+      <strong style="color:var(--ink)">Data as of</strong> = when the inputs feeding these predictions (rankings, form, composite, fixtures) were last refreshed by the cron pipeline. Click any column header to sort.
     </div>
     ${sections}
   `;
