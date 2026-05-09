@@ -619,11 +619,30 @@ def materialize_recent_matches(conn) -> bool:
     for b in bios:
         mid = b["mid"]
         tour = b["tour"]
+        # Defense-in-depth dedup: even if sync_matches.gc_dup_matches missed
+        # a duplicate (e.g., a dupe was just inserted and gc hasn't run yet),
+        # we want the form bar to show each match once. Canonical key is
+        # (date_day, unordered player pair) — same heuristic sync_matches
+        # uses. Keep the row with most-populated fields, lowest id as
+        # tiebreak. Window over the player's own match set, then LIMIT 30.
         rows = list(conn.execute("""
             SELECT date, round, tournament_name, tournament_api_id,
                    p1_id, p2_id, winner_id, score, raw
-            FROM matches
-            WHERE p1_id = ? OR p2_id = ?
+            FROM (
+              SELECT date, round, tournament_name, tournament_api_id,
+                     p1_id, p2_id, winner_id, score, raw, id,
+                     ROW_NUMBER() OVER (
+                       PARTITION BY substr(date, 1, 10),
+                                    MIN(p1_id, p2_id), MAX(p1_id, p2_id)
+                       ORDER BY (winner_id IS NOT NULL) DESC,
+                                (score IS NOT NULL AND score != '') DESC,
+                                (stat_p1 IS NOT NULL) DESC,
+                                fetched_at ASC,
+                                CAST(id AS INTEGER) ASC
+                     ) AS rn
+              FROM matches
+              WHERE p1_id = ? OR p2_id = ?
+            ) WHERE rn = 1
             ORDER BY date DESC, round DESC
             LIMIT 30
         """, (mid, mid)))

@@ -1359,8 +1359,14 @@ function setTab(tab) {
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+tab).classList.add('active');
-  const tabIdx={live:0,rankings:1,trapezoid:2,predict:3}[tab];
-  document.querySelectorAll('.tab-btn')[tabIdx].classList.add('active');
+  // Position-in-DOM index of each tab's button for the active highlight.
+  // Must stay in sync with the tab-btn order in the markup. Missing entries
+  // here silently break setTab — the throw happens before renderCurrentTab,
+  // so the tab visually changes but doesn't render. Most recent omission:
+  // `pipeline` (added 2026-05-08) wasn't in the map, so the API tab only
+  // rendered after a separate render-trigger like the tour toggle.
+  const tabIdx={live:0,rankings:1,trapezoid:2,predict:3,pipeline:4}[tab];
+  if (tabIdx != null) document.querySelectorAll('.tab-btn')[tabIdx].classList.add('active');
   // Default to WTA when entering trapezoid if not already on a valid tour.
   // (TOUR is already set; just re-render so trapezoid picks up the current value.)
   renderCurrentTab();

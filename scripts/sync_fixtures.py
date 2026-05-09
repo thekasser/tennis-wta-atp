@@ -123,11 +123,39 @@ def upsert_fixture(conn, fix: dict, tour: str, api_id: int,
 
 
 def gc_stale(conn) -> int:
-    """Drop fixtures whose date is in the past — they should now be in the
-    `matches` table via sync_matches.py (or never played). Idempotent."""
-    today = date.today().isoformat()
-    cur = conn.execute("DELETE FROM fixtures WHERE date < ?", (today,))
-    return cur.rowcount
+    """Drop fixtures that are no longer relevant. Three triggers, in
+    order of confidence:
+
+      1. Fixture id matches a row in matches table → already completed,
+         drop. Matchstat reuses the same id across both tables, so this
+         is exact.
+      2. Fixture date is yesterday or earlier (substr-prefix compare on
+         the date portion only). The original gc only had this check but
+         used a buggy 'WHERE date < today_str' comparison: fixture.date
+         is full ISO ('2026-05-08T12:00:00.000Z') and today_str is just
+         '2026-05-08' — string compare keeps fixtures dated TODAY in
+         place even after they played, until midnight UTC.
+      3. Fixture date is more than 6 hours in the past (tennis matches
+         rarely run >5h; a 6h-stale fixture without a matches row is
+         most likely "match played but sync_matches hasn't caught up
+         yet"). Cleans up today's already-played-but-not-yet-synced
+         events instead of leaving them as 'upcoming' on the dashboard.
+
+    Returns total rows deleted across all three.
+    """
+    today_iso = date.today().isoformat()
+    cutoff_6h = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+
+    n_matched = conn.execute(
+        "DELETE FROM fixtures WHERE CAST(id AS TEXT) IN (SELECT id FROM matches)"
+    ).rowcount
+    n_yesterday = conn.execute(
+        "DELETE FROM fixtures WHERE substr(date, 1, 10) < ?", (today_iso,)
+    ).rowcount
+    n_played_today = conn.execute(
+        "DELETE FROM fixtures WHERE date < ?", (cutoff_6h,)
+    ).rowcount
+    return n_matched + n_yesterday + n_played_today
 
 
 def gc_dups(conn) -> int:

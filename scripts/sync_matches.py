@@ -372,6 +372,43 @@ def sync_tour(client: MatchstatClient, conn, tour: str, override_years: list[int
     }
 
 
+def gc_dup_matches(conn) -> int:
+    """Dedupe matches by (date_day, MIN(p1,p2), MAX(p1,p2)). Matchstat
+    occasionally issues different match IDs for the SAME match across pulls
+    (e.g., schedule revisions or repeat fetches produce a new id but the old
+    row is also present). Without this pass, the same match shows twice in
+    form-bar tooltips, twice in recent_matches, and skews aggregates that
+    don't dedup at read time. Tennis players don't play each other twice in
+    a single day, so (day, unordered-pair) is a sound canonical key.
+
+    Tiebreak (which row to KEEP per group):
+      1. winner_id IS NOT NULL  (completed match data)
+      2. score is non-empty
+      3. stat_p1 IS NOT NULL    (per-side stats)
+      4. earliest fetched_at    (closest to original ingest)
+      5. lowest id              (older Matchstat ID, more likely referenced
+                                 by kalshi_odds / predictions / h2h)
+    Returns rows deleted."""
+    cur = conn.execute("""
+        DELETE FROM matches
+        WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (
+              PARTITION BY substr(date, 1, 10),
+                           MIN(p1_id, p2_id), MAX(p1_id, p2_id)
+              ORDER BY (winner_id IS NOT NULL) DESC,
+                       (score IS NOT NULL AND score != '') DESC,
+                       (stat_p1 IS NOT NULL) DESC,
+                       fetched_at ASC,
+                       CAST(id AS INTEGER) ASC
+            ) AS rn
+            FROM matches
+          ) WHERE rn > 1
+        )
+    """)
+    return cur.rowcount
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--tour", choices=["atp", "wta", "both"], default="both")
@@ -384,16 +421,30 @@ def main() -> int:
                    help="hard cap on candidate players per tour (debug)")
     p.add_argument("--force", action="store_true",
                    help="ignore decide_fetch heuristic; fetch every candidate")
+    p.add_argument("--gc-only", action="store_true",
+                   help="just run the duplicate-match GC pass, no API calls")
     args = p.parse_args()
 
     init_db()
     conn = connect()
+
+    if args.gc_only:
+        n = gc_dup_matches(conn)
+        conn.commit()
+        print(f"[gc] deleted {n} duplicate match rows")
+        return 0
+
     client = MatchstatClient()
 
     tours = ["atp", "wta"] if args.tour == "both" else [args.tour]
     summary = {}
     for t in tours:
         summary[t] = sync_tour(client, conn, t, args.years, args.top_n, args.limit, args.force)
+
+    n_dup = gc_dup_matches(conn)
+    conn.commit()
+    if n_dup:
+        print(f"\n[gc] deleted {n_dup} duplicate match rows")
 
     print("\n=== summary ===")
     for t, s in summary.items():
