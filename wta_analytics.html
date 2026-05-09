@@ -944,8 +944,16 @@ function formBarHTML(str, bioId=null, n=10, mode) {
   const tourKey = (typeof TOUR === 'string' ? TOUR : '').toLowerCase();
   const rawArr = (typeof RECENT_MATCHES !== 'undefined' && RECENT_MATCHES
                   && RECENT_MATCHES[tourKey] && RECENT_MATCHES[tourKey][bioId]) || [];
-  const filtered = m === 'tour' ? rawArr.filter(_isTourMatch) : rawArr;
-  const recOldestFirst = filtered.slice(0, n).reverse();        // align with form chars
+  // Mirror derivedForm exactly: tour filter THEN drop unknown-winner
+  // matches (W/O, RET — null winner_id). Without the second filter,
+  // a null-winner match is in the matches array but NOT in chars
+  // (derivedForm drops it via the .filter(c=>c!=='?')), so the
+  // offset is off-by-one and adjacent form boxes can show the same
+  // match in their hover tooltips. User-visible symptom: the same
+  // match appears 2× when hovering across the form bar.
+  const tourFiltered  = m === 'tour' ? rawArr.filter(_isTourMatch) : rawArr.slice();
+  const knownOutcomes = tourFiltered.filter(r => r.won === true || r.won === false);
+  const recOldestFirst = knownOutcomes.slice(0, n).reverse();   // align with form chars
   const offset = chars.length - recOldestFirst.length;
   const boxes = chars.map((c, i) => {
     const rec    = (i >= offset) ? recOldestFirst[i - offset] : null;
