@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-10T07:47:21.270360+00:00
+# Generated: 2026-05-10T17:28:19.461113+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   133
-  matches                    12,258
+  matches                    12,269
   rankings_snapshots          2,046
-  api_fetch_log               8,261
+  api_fetch_log               8,476
 
 ## Latest rankings snapshot: 2026-05-10
 
 ## Active tournaments
-  rome26         Internazionali BNL d'Italia      matches=193  latest=2026-05-09
+  rome26         Internazionali BNL d'Italia      matches=204  latest=2026-05-10
 
 ## 5 most recent matches anywhere in DB
-  2026-05-09  Third     p1=54663 p2=61881 winner=54663  (Internazionali BNL d'Italia - Rome)
-  2026-05-09  Third     p1=13351 p2=14362 winner=13351  (Internazionali BNL d'Italia - Rome)
-  2026-05-09  Third     p1=66597 p2=51696 winner=66597  (Internazionali BNL d'Italia - Rome)
-  2026-05-09  Third     p1=16628 p2=53128 winner=16628  (Internazionali BNL d'Italia - Rome)
-  2026-05-09  Third     p1=6019 p2=18455 winner=6019  (Internazionali BNL d'Italia - Rome)
+  2026-05-10  Third     p1=24008 p2=88766 winner=24008  (Internazionali BNL d'Italia - Rome)
+  2026-05-10  Third     p1=63572 p2=52279 winner=63572  (Internazionali BNL d'Italia - Rome)
+  2026-05-10  Third     p1=33648 p2=61838 winner=33648  (Internazionali BNL d'Italia - Rome)
+  2026-05-10  Third     p1=85899 p2=38911 winner=85899  (Internazionali BNL d'Italia - Rome)
+  2026-05-10  Third     p1=25543 p2=24249 winner=25543  (Internazionali BNL d'Italia - Rome)
