@@ -1,19 +1,19 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-09T23:25:29.862742+00:00
+# Generated: 2026-05-10T07:47:21.270360+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   133
-  matches                    12,257
-  rankings_snapshots          1,780
-  api_fetch_log               8,047
+  matches                    12,258
+  rankings_snapshots          2,046
+  api_fetch_log               8,261
 
-## Latest rankings snapshot: 2026-05-09
+## Latest rankings snapshot: 2026-05-10
 
 ## Active tournaments
-  rome26         Internazionali BNL d'Italia      matches=192  latest=2026-05-09
+  rome26         Internazionali BNL d'Italia      matches=193  latest=2026-05-09
 
 ## 5 most recent matches anywhere in DB
   2026-05-09  Third     p1=54663 p2=61881 winner=54663  (Internazionali BNL d'Italia - Rome)
