@@ -1640,6 +1640,13 @@ def materialize_upcoming(conn) -> bool:
           WHERE p1_yes_price IS NOT NULL AND p2_yes_price IS NOT NULL
         ) k ON k.match_id = CAST(f.id AS TEXT) AND k.rn = 1
         WHERE f.date >= ?
+          -- Singles only. Matchstat encodes doubles as combined names
+          -- like "Bhambri/Venus"; we never want them in the matchup
+          -- predictor. sync_fixtures filters at the source AND gc's
+          -- doubles rows, but this query-level guard prevents any
+          -- straggler from reaching the dashboard.
+          AND (f.p1_name IS NULL OR f.p1_name NOT LIKE '%/%')
+          AND (f.p2_name IS NULL OR f.p2_name NOT LIKE '%/%')
         ORDER BY f.date ASC, f.id ASC
     """, (today,)))
     # Build mid → bio_id maps (per-tour; mids overlap across tours rarely)

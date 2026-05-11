@@ -66,7 +66,10 @@ def matches_to_predict(conn) -> list[dict]:
     today = date.today().isoformat()
     rows: list[dict] = []
 
-    # Fixtures (upcoming matches)
+    # Fixtures (upcoming matches). Singles only — doubles never get a
+    # singles-player bio match, so predict_one would skip them anyway,
+    # but the filter keeps the candidate count honest in logs and is
+    # cheap defense in depth.
     for r in conn.execute("""
         SELECT id AS match_id, tour, tournament_id,
                substr(date, 1, 10) AS date,
@@ -75,6 +78,8 @@ def matches_to_predict(conn) -> list[dict]:
         FROM fixtures
         WHERE p1_mid IS NOT NULL AND p2_mid IS NOT NULL
           AND substr(date, 1, 10) >= ?
+          AND (p1_name IS NULL OR p1_name NOT LIKE '%/%')
+          AND (p2_name IS NULL OR p2_name NOT LIKE '%/%')
     """, (today,)):
         d = dict(r)
         # Surface comes from the tournament — pull it

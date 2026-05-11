@@ -171,6 +171,13 @@ def _to_match_row(m: dict, tour: str, tournament_id_by_api_id: dict[int, str]
     p2id = m.get("player2Id") or m.get("p2Id")
     if not p1id or not p2id:
         return None
+    # Defensive: drop doubles. Matchstat returns combined names like
+    # "Bhambri/Venus" for teams; past-matches is per-singles-player so
+    # this is normally a no-op, but the check is cheap insurance.
+    p1n = ((m.get("player1") or {}).get("name") or "")
+    p2n = ((m.get("player2") or {}).get("name") or "")
+    if "/" in p1n or "/" in p2n:
+        return None
     raw_date = m.get("date") or m.get("matchDate") or ""
     if len(raw_date) < 10:
         return None
