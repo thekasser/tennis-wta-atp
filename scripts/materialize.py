@@ -912,6 +912,23 @@ def _aggregate_year(matches: list[dict], mid: int,
     opp_svpt = opp_first_won = opp_second_won = 0
     tb_played = tb_won = dec_played = dec_won = 0
     used = 0
+    # Rally-aggression counters — opponent-adjusted. Matchstat only populates
+    # `winners` / `unforcedErrors` for Grand Slams (1556/11758 matches across
+    # the DB; 0% non-slam). The one-sided W:UE ratio is misleading without
+    # opp-strength normalization — see the design conversation at
+    # ~/.claude/plans/wild-gliding-kernighan.md. We pair own + opp blobs per
+    # match so the year-aggregate captures both YOUR aggression and how the
+    # OPP fared — the only way to credibly answer "did they win because they
+    # were good vs because opp was bad".
+    #
+    # `wu_seen_matches` is incremented ONLY when ALL FOUR fields are present
+    # (own W, own UE, opp W, opp UE). Single-sided rows would corrupt the
+    # delta — better to drop them.
+    own_winners_tot = own_ue_tot = 0
+    opp_winners_tot = opp_ue_tot = 0
+    wu_seen_matches = 0
+    # Min sample to emit the metric. Sub-5 slam appearances = too noisy.
+    WU_MIN_MATCHES = 5
     for m in real:
         we_p1 = (m["p1_id"] == mid)
         won_match = (m["winner_id"] == mid) if m["winner_id"] else False
@@ -981,6 +998,24 @@ def _aggregate_year(matches: list[dict], mid: int,
                 opp_svpt        += _i(opp, "firstServeOf","totalServePointsAttempted","svpt")
                 opp_first_won   += _i(opp, "winningOnFirstServe","firstServeWon","1stWon")
                 opp_second_won  += _i(opp, "winningOnSecondServe","secondServeWon","2ndWon")
+                # Rally aggression — paired read. Require ALL FOUR fields
+                # (own W, own UE, opp W, opp UE) to be non-null; otherwise
+                # the per-match deltas are corrupt. Matchstat populates
+                # symmetrically (both sides or neither) at slams, so this
+                # filter is essentially "is this a slam match with stats."
+                w_keys  = ("winners","winnersCount")
+                ue_keys = ("unforcedErrors","unforcedErrorsCount","unforced")
+                def _has(blob, keys):
+                    return blob and any(
+                        k in blob and blob[k] not in (None, "", "NA") for k in keys
+                    )
+                if (_has(own, w_keys) and _has(own, ue_keys)
+                        and _has(opp, w_keys) and _has(opp, ue_keys)):
+                    own_winners_tot += _i(own, *w_keys)
+                    own_ue_tot      += _i(own, *ue_keys)
+                    opp_winners_tot += _i(opp, *w_keys)
+                    opp_ue_tot      += _i(opp, *ue_keys)
+                    wu_seen_matches += 1
                 used += 1
             except (TypeError, ValueError):
                 pass
@@ -1031,6 +1066,28 @@ def _aggregate_year(matches: list[dict], mid: int,
         "returnGamesWonPct":    _safe_pct(bp_won, opp_sv_gms),
         "tbWinPct":             _safe_pct(tb_won, tb_played) if tb_played >= min_tb else None,
         "decSetWinPct":         _safe_pct(dec_won, dec_played) if dec_played >= min_dec else None,
+        # Opp-adjusted rally aggression (Slams only — see WU_MIN_MATCHES floor
+        # comment above). Three views:
+        #   rallyDominance      — overall rally win rate, fully opp-adjusted.
+        #     Numerator   = your winners + opp's UE  (rallies YOU won)
+        #     Denominator = opp's winners + your UE  (rallies OPP won)
+        #     Above 1.0 = net winning rallies. The headline metric.
+        #   netWinnersPerMatch  — shotmaking edge (your W − opp W per match)
+        #   netUEPerMatch       — consistency edge (opp UE − your UE per match)
+        # Emit only when ≥ WU_MIN_MATCHES slam matches in window. Below that
+        # the sample is too noisy to surface alongside year-aggregated metrics.
+        "rallyDominance":       round(
+                                    (own_winners_tot + opp_ue_tot) /
+                                    max(opp_winners_tot + own_ue_tot, 1), 2)
+                                  if wu_seen_matches >= WU_MIN_MATCHES else None,
+        "netWinnersPerMatch":   round(
+                                    (own_winners_tot - opp_winners_tot)
+                                    / wu_seen_matches, 1)
+                                  if wu_seen_matches >= WU_MIN_MATCHES else None,
+        "netUEPerMatch":        round(
+                                    (opp_ue_tot - own_ue_tot)
+                                    / wu_seen_matches, 1)
+                                  if wu_seen_matches >= WU_MIN_MATCHES else None,
     }
 
 
@@ -1201,6 +1258,11 @@ def materialize_trapezoid(conn) -> bool:
         "bpSavedPct", "bpWonPct",
         "serviceGamesWonPct", "returnGamesWonPct",
         "matchWinPct",
+        # Opp-adjusted rally aggression (Slams-only — Matchstat doesn't
+        # populate winners/UE outside the 4 majors). Headline + 2 components.
+        # NOT in composite — opp-adjusted at per-match level but year-aggregated
+        # over ≤25 slam matches; too narrow a window for the predictor.
+        "rallyDominance", "netWinnersPerMatch", "netUEPerMatch",
     ]
     labels = {
         "matches":              "Matches Played",
@@ -1215,6 +1277,9 @@ def materialize_trapezoid(conn) -> bool:
         "serviceGamesWonPct":   "Service Games Won %",
         "returnGamesWonPct":    "Return Games Won %",
         "matchWinPct":          "Match Win %",
+        "rallyDominance":       "Rally Dominance (Slams)",
+        "netWinnersPerMatch":   "Net Winners / Match (Slams)",
+        "netUEPerMatch":        "Net UE / Match (Slams)",
     }
 
     # Per-window min-matches default = 25th percentile of match counts
