@@ -216,11 +216,15 @@ def find_match_id(conn, mid_a: int, mid_b: int, kalshi_event: str
         return row["id"], "match"
 
     # Fall back to fixtures for genuinely upcoming events that haven't
-    # been played yet.
+    # been played yet. Exclude doubles rows ("/" in player name) so a
+    # singles Kalshi event can't accidentally bind to a doubles fixture
+    # that reuses an id from a previously-gc'd singles row.
     row = conn.execute("""
         SELECT id FROM fixtures
         WHERE substr(date, 1, 10) BETWEEN ? AND ?
           AND ((p1_mid = ? AND p2_mid = ?) OR (p1_mid = ? AND p2_mid = ?))
+          AND (p1_name IS NULL OR p1_name NOT LIKE '%/%')
+          AND (p2_name IS NULL OR p2_name NOT LIKE '%/%')
         LIMIT 1
     """, (date_min, date_max, mid_a, mid_b, mid_b, mid_a)).fetchone()
     if row:

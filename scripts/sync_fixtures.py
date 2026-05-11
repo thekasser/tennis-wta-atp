@@ -61,14 +61,17 @@ def active_tournaments(conn, tour: str) -> list[dict]:
 def fetch_tournament_fixtures(client: MatchstatClient, tour: str,
                               api_id: int) -> list[dict]:
     """Paginate getTournamentFixtures for one tournament. Returns list of
-    raw fixture dicts."""
+    raw fixture dicts. SINGLES ONLY — `PlayerGroup:singles;` excludes
+    doubles, which Matchstat encodes with combined names like
+    "Bhambri/Venus" and team-only mids that don't resolve to our singles
+    bio set."""
     all_items: list[dict] = []
     seen: set[int] = set()
     for page in range(1, 11):
         try:
             data, _ = client.get(tour, f"fixtures/tournament/{api_id}",
                                  params={"pageSize": 100, "pageNo": page,
-                                         "filter": "PlayerGroup:both;"})
+                                         "filter": "PlayerGroup:singles;"})
         except Exception as e:
             print(f"  [{tour} t{api_id} p{page}] error: {str(e)[:120]}",
                   file=sys.stderr)
@@ -92,9 +95,18 @@ def fetch_tournament_fixtures(client: MatchstatClient, tour: str,
 def upsert_fixture(conn, fix: dict, tour: str, api_id: int,
                    tournament_catalog_id: str | None) -> None:
     """Idempotent insert/update — overwrites everything except 'id'. Re-run
-    safely; if odds publish later, they'll appear on the next sync."""
+    safely; if odds publish later, they'll appear on the next sync.
+
+    Defensive: skip doubles. Matchstat encodes doubles with combined
+    player names like "Bhambri/Venus" — a "/" in either name is a
+    reliable signal. We already pass `PlayerGroup:singles;` to the API,
+    so this should be a no-op; it's belt-and-suspenders in case the API
+    filter is ever bypassed or relaxed.
+    """
     p1 = fix.get("player1") or {}
     p2 = fix.get("player2") or {}
+    if "/" in (p1.get("name") or "") or "/" in (p2.get("name") or ""):
+        return
     conn.execute("""
         INSERT INTO fixtures (id, tour, tournament_id, tournament_api_id,
                               date, round_id,
@@ -158,6 +170,36 @@ def gc_stale(conn) -> int:
     return n_matched + n_yesterday + n_played_today
 
 
+def gc_doubles(conn) -> tuple[int, int, int]:
+    """Remove any doubles rows that snuck into fixtures (and their orphan
+    kalshi_odds + predictions rows). Cheap defensive sweep — runs on every
+    sync so a one-off API filter slip doesn't pollute the matchup predictor.
+
+    A "/" in either player name is the doubles signal (Matchstat encodes
+    teams as "Partner1/Partner2"). Cascade through dependent tables that
+    join on fixture id so they don't leave dangling references.
+
+    Returns (fixtures, kalshi_odds, predictions) row counts deleted.
+    """
+    doubles_ids = [r[0] for r in conn.execute(
+        "SELECT id FROM fixtures WHERE p1_name LIKE '%/%' OR p2_name LIKE '%/%'"
+    )]
+    if not doubles_ids:
+        return 0, 0, 0
+    placeholders = ",".join("?" * len(doubles_ids))
+    str_ids = [str(i) for i in doubles_ids]
+    n_kalshi = conn.execute(
+        f"DELETE FROM kalshi_odds WHERE match_id IN ({placeholders})", str_ids
+    ).rowcount
+    n_preds = conn.execute(
+        f"DELETE FROM predictions WHERE match_id IN ({placeholders})", str_ids
+    ).rowcount
+    n_fixtures = conn.execute(
+        f"DELETE FROM fixtures WHERE id IN ({placeholders})", doubles_ids
+    ).rowcount
+    return n_fixtures, n_kalshi, n_preds
+
+
 def gc_dups(conn) -> int:
     """Dedupe fixtures by (tournament_id, date_day, p1_mid, p2_mid).
     Matchstat occasionally issues different fixture IDs for the SAME
@@ -194,8 +236,10 @@ def main() -> int:
     if args.gc_only:
         n = gc_stale(conn)
         n_dup = gc_dups(conn)
+        n_dbl, n_dbl_k, n_dbl_p = gc_doubles(conn)
         conn.commit()
-        print(f"[gc] deleted {n} past fixtures, {n_dup} duplicates")
+        print(f"[gc] deleted {n} past fixtures, {n_dup} duplicates, "
+              f"{n_dbl} doubles (+{n_dbl_k} kalshi, +{n_dbl_p} predictions)")
         return 0
 
     api_key = os.environ.get("MATCHSTAT_API_KEY")
@@ -222,8 +266,11 @@ def main() -> int:
 
     n_gc = gc_stale(conn)
     n_dup = gc_dups(conn)
+    n_dbl, n_dbl_k, n_dbl_p = gc_doubles(conn)
     conn.commit()
-    print(f"\n[gc] cleaned {n_gc} past fixtures, {n_dup} duplicate fixtures")
+    print(f"\n[gc] cleaned {n_gc} past fixtures, {n_dup} duplicate fixtures, "
+          f"{n_dbl} doubles fixtures (+{n_dbl_k} orphan kalshi rows, "
+          f"+{n_dbl_p} orphan predictions)")
     print(f"[summary] upserted {total_inserted} fixtures total")
     return 0
 

@@ -171,6 +171,13 @@ def _to_match_row(m: dict, tour: str, tournament_id_by_api_id: dict[int, str]
     p2id = m.get("player2Id") or m.get("p2Id")
     if not p1id or not p2id:
         return None
+    # Defensive: drop doubles. Matchstat returns combined names like
+    # "Bhambri/Venus" for teams; past-matches is per-singles-player so
+    # this is normally a no-op, but the check is cheap insurance.
+    p1n = ((m.get("player1") or {}).get("name") or "")
+    p2n = ((m.get("player2") or {}).get("name") or "")
+    if "/" in p1n or "/" in p2n:
+        return None
     raw_date = m.get("date") or m.get("matchDate") or ""
     if len(raw_date) < 10:
         return None
@@ -372,6 +379,27 @@ def sync_tour(client: MatchstatClient, conn, tour: str, override_years: list[int
     }
 
 
+def reconcile_surface_with_catalog(conn) -> int:
+    """Align matches.surface with tournaments.surface for any resolved
+    tournament. Matchstat's per-match `tournament.courtId` is venue-keyed
+    rather than surface-keyed (e.g. courtId=2 appears at Madrid/Rome
+    clay AND at Stuttgart hard), so the SURFACE_MAP fallback used at
+    ingest mistags ~2,000 clay matches as hard. The tournament catalog
+    is authoritative — qualifiers and main draw share the venue surface
+    for every tour event we track.
+
+    Idempotent. Cheap (single UPDATE). Returns rows updated.
+    """
+    cur = conn.execute("""
+        UPDATE matches
+        SET surface = (SELECT surface FROM tournaments WHERE id = matches.tournament_id)
+        WHERE tournament_id IS NOT NULL
+          AND (SELECT surface FROM tournaments WHERE id = matches.tournament_id) IS NOT NULL
+          AND surface IS NOT (SELECT surface FROM tournaments WHERE id = matches.tournament_id)
+    """)
+    return cur.rowcount
+
+
 def gc_dup_matches(conn) -> int:
     """Dedupe matches by (date_day, MIN(p1,p2), MAX(p1,p2)). Matchstat
     occasionally issues different match IDs for the SAME match across pulls
@@ -430,8 +458,10 @@ def main() -> int:
 
     if args.gc_only:
         n = gc_dup_matches(conn)
+        n_surf = reconcile_surface_with_catalog(conn)
         conn.commit()
-        print(f"[gc] deleted {n} duplicate match rows")
+        print(f"[gc] deleted {n} duplicate match rows, "
+              f"aligned {n_surf} surface mismatches")
         return 0
 
     client = MatchstatClient()
@@ -442,9 +472,12 @@ def main() -> int:
         summary[t] = sync_tour(client, conn, t, args.years, args.top_n, args.limit, args.force)
 
     n_dup = gc_dup_matches(conn)
+    n_surf = reconcile_surface_with_catalog(conn)
     conn.commit()
     if n_dup:
         print(f"\n[gc] deleted {n_dup} duplicate match rows")
+    if n_surf:
+        print(f"[surface] aligned {n_surf} matches.surface to tournaments.surface")
 
     print("\n=== summary ===")
     for t, s in summary.items():

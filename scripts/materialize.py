@@ -287,6 +287,19 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
             # round so all "scheduled-but-not-yet-played" players cluster
             # at the same stage label (avoids round-label confusion in
             # the UI).
+            #
+            # WITHDRAWAL DETECTION: once any "Third" match exists, R2 is
+            # fully resolved — every byed seed who actually played should
+            # now be in players_block via the matches loop, and anyone
+            # still unplayed-but-scheduled is in players_block via the
+            # fixture augmentation above. A top-32 bio that's STILL
+            # missing here didn't play their R2 match and has no upcoming
+            # fixture: late withdrawal (e.g. Anisimova & Mboko @ Rome '26).
+            # Mark them WD/elim=True instead of falsely showing alive.
+            byes_consumed = any(
+                RD_NAME_DEPTH.get(m["round"], 0) >= RD_NAME_DEPTH["Third"]
+                for m in matches
+            )
             top_seeds = list(conn.execute("""
                 SELECT bio_id, mid FROM players
                 WHERE tour = ? AND bio_id <= 32
@@ -295,7 +308,10 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
                 bid = s["bio_id"]
                 if bid in players_block:
                     continue
-                players_block[bid] = {"r": scheduled_stage, "elim": False}
+                if byes_consumed:
+                    players_block[bid] = {"r": "WD", "elim": True}
+                else:
+                    players_block[bid] = {"r": scheduled_stage, "elim": False}
                 fixture_augmented_bios.add(bid)
 
         if not players_block:
@@ -1073,14 +1089,22 @@ def _trapezoid_rows(conn, tour: str, all_year_matches: dict[int, list[dict]],
                     "ioc": b["country"] or "", "year": tag, "tour": tour.upper(),
                     "surf": "All", **agg,
                 })
-            # Per-surface variants — tier already applied
+            # Per-surface variants — tier already applied.
+            # Threshold mirrors the UI's smallest min-matches dropdown
+            # option (2 — see DROPDOWN_OPTS below). The dashboard's slider
+            # is the source of truth above that floor; pre-filtering at 5
+            # here used to hide clay rows even when users moved the slider
+            # to 2+ (Rome/Madrid '26 surfaced the regression: WTA T3M clay
+            # was empty at every slider position because few players had
+            # 5+ tour-level clay matches in 90 days).
             by_surf: dict[str, list] = defaultdict(list)
             for m in window_tour:
                 by_surf[m["surface"] or "H"].append(m)
             for surf, surf_ms in by_surf.items():
-                if len(surf_ms) < 5:
+                if len(surf_ms) < 2:
                     continue
-                surf_agg = _aggregate_year(surf_ms, mid, tour_only=False)
+                surf_agg = _aggregate_year(surf_ms, mid, min_matches=2,
+                                           tour_only=False)
                 if not surf_agg:
                     continue
                 rows_by[f"{tag}_{surf}"].append({
@@ -1624,6 +1648,13 @@ def materialize_upcoming(conn) -> bool:
           WHERE p1_yes_price IS NOT NULL AND p2_yes_price IS NOT NULL
         ) k ON k.match_id = CAST(f.id AS TEXT) AND k.rn = 1
         WHERE f.date >= ?
+          -- Singles only. Matchstat encodes doubles as combined names
+          -- like "Bhambri/Venus"; we never want them in the matchup
+          -- predictor. sync_fixtures filters at the source AND gc's
+          -- doubles rows, but this query-level guard prevents any
+          -- straggler from reaching the dashboard.
+          AND (f.p1_name IS NULL OR f.p1_name NOT LIKE '%/%')
+          AND (f.p2_name IS NULL OR f.p2_name NOT LIKE '%/%')
         ORDER BY f.date ASC, f.id ASC
     """, (today,)))
     # Build mid → bio_id maps (per-tour; mids overlap across tours rarely)
