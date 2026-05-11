@@ -887,7 +887,7 @@ function formTooltipText(m) {
   if (!m) return '';
   const date  = m.date || '';
   const tn    = m.tn ? ` · ${m.tn}` : '';
-  const rd    = m.rd ? ` · ${m.rd}` : '';
+  const rd    = m.rd ? ` · ${rdShort(m.rd)}` : '';
   const opp   = m.opp ? ` · vs ${m.opp}${m.oppC ? ' ('+m.oppC+')' : ''}` : '';
   const wl    = m.won === true ? 'W' : (m.won === false ? 'L' : '');
   const score = m.score ? ` · ${wl ? wl+' ' : ''}${m.score}` : (wl ? ` · ${wl}` : '');
@@ -2619,7 +2619,7 @@ function renderModelVsMarket() {
     return `<tr>
       <td style="font-size:10px;color:var(--muted);white-space:nowrap">${r.date}</td>
       <td style="font-size:11px;white-space:nowrap"><span style="color:${loColor};font-weight:600">${loAb}</span> vs <span style="color:${hiColor};font-weight:600">${hiAb}</span></td>
-      <td style="font-size:10px;color:var(--muted)">${r.rd}</td>
+      <td style="font-size:10px;color:var(--muted)">${rdShort(r.rd)}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtPct(r.modelLo)}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${fmtPct(r.mktLo)}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:${deltaColor}">${deltaSign}${deltaPts}</td>
@@ -4701,7 +4701,7 @@ function openPlayerModal(bioId, tour) {
             <td>${m.date || '—'}</td>
             <td style="color:${wlColor};font-weight:700">${wlStr}</td>
             <td style="font-size:11px">${m.tn || '—'}</td>
-            <td><span class="round-badge" style="font-size:10px">${m.rd || '—'}</span></td>
+            <td><span class="round-badge" style="font-size:10px">${rdShort(m.rd) || '—'}</span></td>
             <td>${m.opp || '—'}</td>
             <td style="font-size:11px">${m.score || '—'}</td>
           </tr>`;
@@ -4829,11 +4829,24 @@ function _resolveTournFromEntry(entry, tour) {
 function _displayRound(round, won) {
   if (round === 'Final' && won) return { label: 'Champion', badge: 'champion' };
   if (round === 'Final')        return { label: 'Final',    badge: 'final' };
+  return { label: rdShort(round) || '—', badge: 'normal' };
+}
+
+// Shorthand normalizer — returns just the display string (no badge metadata).
+// Use anywhere a raw Matchstat round value (e.g. '1/4', 'Third') would be
+// concatenated into a user-facing label: form-bar tooltips, Model-vs-Market
+// rows, H2H drill-down. Falls back to the raw value so unrecognized inputs
+// (Robin, Q1, Qual) still appear instead of an em-dash. _displayRound is
+// the wrapper used where the caller needs badge style + Champion variant.
+function rdShort(rd) {
+  if (!rd) return '';
+  if (rd === 'Final') return 'Final';
   const MAP = {
     '1/2': 'SF', '1/4': 'QF', '1/8': 'R16',
+    '1/16': 'R32', '1/32': 'R64',
     Fourth: 'R16', Third: 'R32', Second: 'R64', First: 'R128',
   };
-  return { label: MAP[round] || round || '—', badge: 'normal' };
+  return MAP[rd] || rd;
 }
 
 // Convert one TOURNAMENT_HISTORY entry → pts breakdown row.
