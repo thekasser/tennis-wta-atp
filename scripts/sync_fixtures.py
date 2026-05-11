@@ -170,6 +170,54 @@ def gc_stale(conn) -> int:
     return n_matched + n_yesterday + n_played_today
 
 
+def gc_unrefreshed(conn) -> int:
+    """Drop fixtures the most recent sync of the same tournament didn't
+    refresh. Two failure modes this catches:
+
+      1. Withdrawals/early losses that strand undated fixtures. A R32
+         fixture fetched on day-N stays in the table forever if the
+         player withdraws and Matchstat just stops returning that
+         fixture id. date=None means gc_stale's date comparisons skip
+         it. The stale row leaks into _compute_active_tournaments'
+         fixture-augmentation block and falsely marks the bio as
+         "alive in the draw" (caught Shelton @ Rome '26 — fixture
+         id=1234 from 2026-05-07 kept him alive in the active tournament
+         even after his R32 didn't materialize).
+
+      2. Matchup-id churn. Matchstat sometimes assigns a new fixture
+         id to the same matchup across days (Sinner/Popyrin appeared
+         as id=1289 with no date on 5/09, then re-appeared as id=1288
+         WITH a date on 5/10). gc_dups partitions by date_day so it
+         doesn't dedupe across NULL/non-NULL date pairs.
+
+    Heuristic: per-(tour, tournament_id), find max(fetched_at). Anything
+    older than that by 30+ minutes is stale — the latest sync didn't
+    return it, so the API has dropped it. 30 min comfortably covers
+    intra-sync timestamp drift while catching anything from a prior cron.
+
+    Returns rows deleted.
+    """
+    cur = conn.execute("""
+        DELETE FROM fixtures
+        WHERE id IN (
+          SELECT f.id FROM fixtures f
+          JOIN (
+            SELECT tour, tournament_id, MAX(fetched_at) AS last_sync
+            FROM fixtures
+            WHERE tournament_id IS NOT NULL
+            GROUP BY tour, tournament_id
+          ) latest ON latest.tour = f.tour
+                 AND latest.tournament_id = f.tournament_id
+          -- Wrap both sides in datetime() — fetched_at is ISO with a 'T'
+          -- separator, but datetime(..., '-30 minutes') normalizes to a
+          -- space separator. Without the wrap, raw string compare puts
+          -- 'T17:28' > ' 22:56' (ASCII 'T' > ' ') and the filter no-ops.
+          WHERE datetime(f.fetched_at) < datetime(latest.last_sync, '-30 minutes')
+        )
+    """)
+    return cur.rowcount
+
+
 def gc_doubles(conn) -> tuple[int, int, int]:
     """Remove any doubles rows that snuck into fixtures (and their orphan
     kalshi_odds + predictions rows). Cheap defensive sweep — runs on every
@@ -236,9 +284,11 @@ def main() -> int:
     if args.gc_only:
         n = gc_stale(conn)
         n_dup = gc_dups(conn)
+        n_unref = gc_unrefreshed(conn)
         n_dbl, n_dbl_k, n_dbl_p = gc_doubles(conn)
         conn.commit()
         print(f"[gc] deleted {n} past fixtures, {n_dup} duplicates, "
+              f"{n_unref} unrefreshed, "
               f"{n_dbl} doubles (+{n_dbl_k} kalshi, +{n_dbl_p} predictions)")
         return 0
 
@@ -266,9 +316,11 @@ def main() -> int:
 
     n_gc = gc_stale(conn)
     n_dup = gc_dups(conn)
+    n_unref = gc_unrefreshed(conn)
     n_dbl, n_dbl_k, n_dbl_p = gc_doubles(conn)
     conn.commit()
     print(f"\n[gc] cleaned {n_gc} past fixtures, {n_dup} duplicate fixtures, "
+          f"{n_unref} unrefreshed (stale), "
           f"{n_dbl} doubles fixtures (+{n_dbl_k} orphan kalshi rows, "
           f"+{n_dbl_p} orphan predictions)")
     print(f"[summary] upserted {total_inserted} fixtures total")
