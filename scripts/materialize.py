@@ -1089,14 +1089,22 @@ def _trapezoid_rows(conn, tour: str, all_year_matches: dict[int, list[dict]],
                     "ioc": b["country"] or "", "year": tag, "tour": tour.upper(),
                     "surf": "All", **agg,
                 })
-            # Per-surface variants — tier already applied
+            # Per-surface variants — tier already applied.
+            # Threshold mirrors the UI's smallest min-matches dropdown
+            # option (2 — see DROPDOWN_OPTS below). The dashboard's slider
+            # is the source of truth above that floor; pre-filtering at 5
+            # here used to hide clay rows even when users moved the slider
+            # to 2+ (Rome/Madrid '26 surfaced the regression: WTA T3M clay
+            # was empty at every slider position because few players had
+            # 5+ tour-level clay matches in 90 days).
             by_surf: dict[str, list] = defaultdict(list)
             for m in window_tour:
                 by_surf[m["surface"] or "H"].append(m)
             for surf, surf_ms in by_surf.items():
-                if len(surf_ms) < 5:
+                if len(surf_ms) < 2:
                     continue
-                surf_agg = _aggregate_year(surf_ms, mid, tour_only=False)
+                surf_agg = _aggregate_year(surf_ms, mid, min_matches=2,
+                                           tour_only=False)
                 if not surf_agg:
                     continue
                 rows_by[f"{tag}_{surf}"].append({
