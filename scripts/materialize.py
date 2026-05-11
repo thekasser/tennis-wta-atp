@@ -287,6 +287,19 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
             # round so all "scheduled-but-not-yet-played" players cluster
             # at the same stage label (avoids round-label confusion in
             # the UI).
+            #
+            # WITHDRAWAL DETECTION: once any "Third" match exists, R2 is
+            # fully resolved — every byed seed who actually played should
+            # now be in players_block via the matches loop, and anyone
+            # still unplayed-but-scheduled is in players_block via the
+            # fixture augmentation above. A top-32 bio that's STILL
+            # missing here didn't play their R2 match and has no upcoming
+            # fixture: late withdrawal (e.g. Anisimova & Mboko @ Rome '26).
+            # Mark them WD/elim=True instead of falsely showing alive.
+            byes_consumed = any(
+                RD_NAME_DEPTH.get(m["round"], 0) >= RD_NAME_DEPTH["Third"]
+                for m in matches
+            )
             top_seeds = list(conn.execute("""
                 SELECT bio_id, mid FROM players
                 WHERE tour = ? AND bio_id <= 32
@@ -295,7 +308,10 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
                 bid = s["bio_id"]
                 if bid in players_block:
                     continue
-                players_block[bid] = {"r": scheduled_stage, "elim": False}
+                if byes_consumed:
+                    players_block[bid] = {"r": "WD", "elim": True}
+                else:
+                    players_block[bid] = {"r": scheduled_stage, "elim": False}
                 fixture_augmented_bios.add(bid)
 
         if not players_block:
