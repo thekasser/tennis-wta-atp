@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-13T08:04:39.087907+00:00
+# Generated: 2026-05-13T17:50:02.435807+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   133
-  matches                    12,345
+  matches                    12,372
   rankings_snapshots          2,844
-  api_fetch_log              10,627
+  api_fetch_log              10,843
 
 ## Latest rankings snapshot: 2026-05-13
 
 ## Active tournaments
-  rome26         Internazionali BNL d'Italia      matches=235  latest=2026-05-12
+  rome26         Internazionali BNL d'Italia      matches=236  latest=2026-05-13
 
 ## 5 most recent matches anywhere in DB
-  2026-05-12  Q3        p1=72574 p2=26218 winner=72574  (Bordeaux Challenger)
-  2026-05-12  Q3        p1=104215 p2=50504 winner=104215  (Valencia Challenger)
-  2026-05-12  Fourth    p1=47275 p2=29457 winner=47275  (Internazionali BNL d'Italia - Rome)
-  2026-05-12  Fourth    p1=76127 p2=24008 winner=76127  (Internazionali BNL d'Italia - Rome)
-  2026-05-12  Fourth    p1=33648 p2=63572 winner=33648  (Internazionali BNL d'Italia - Rome)
+  2026-05-13  Second    p1=56197 p2=92649 winner=56197  (Oeiras 4 Challenger)
+  2026-05-13  Second    p1=93848 p2=79088 winner=93848  (Oeiras 4 Challenger)
+  2026-05-13  Second    p1=83795 p2=30743 winner=83795  (Oeiras 4 Challenger)
+  2026-05-13  Second    p1=95698 p2=97369 winner=95698  (Tunis Challenger)
+  2026-05-13  Second    p1=52660 p2=14175 winner=52660  (Trophee Clarins - Paris)
