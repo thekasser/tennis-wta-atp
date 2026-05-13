@@ -1,19 +1,19 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-13T17:50:02.435807+00:00
+# Generated: 2026-05-13T23:33:24.421107+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   133
-  matches                    12,372
+  matches                    12,378
   rankings_snapshots          2,844
-  api_fetch_log              10,843
+  api_fetch_log              11,059
 
 ## Latest rankings snapshot: 2026-05-13
 
 ## Active tournaments
-  rome26         Internazionali BNL d'Italia      matches=236  latest=2026-05-13
+  rome26         Internazionali BNL d'Italia      matches=238  latest=2026-05-13
 
 ## 5 most recent matches anywhere in DB
   2026-05-13  Second    p1=56197 p2=92649 winner=56197  (Oeiras 4 Challenger)
