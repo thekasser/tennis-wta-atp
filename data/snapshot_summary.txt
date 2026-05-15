@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-15T08:06:40.262233+00:00
+# Generated: 2026-05-15T17:39:54.752908+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   133
-  matches                    12,409
+  matches                    12,425
   rankings_snapshots          3,376
-  api_fetch_log              11,923
+  api_fetch_log              12,139
 
 ## Latest rankings snapshot: 2026-05-15
 
 ## Active tournaments
-  rome26         Internazionali BNL d'Italia      matches=243  latest=2026-05-14
+  rome26         Internazionali BNL d'Italia      matches=244  latest=2026-05-15
 
 ## 5 most recent matches anywhere in DB
-  2026-05-14  Second    p1=42229 p2=29812 winner=42229  (Valencia Challenger)
-  2026-05-14  Second    p1=34337 p2=79064 winner=34337  (Valencia Challenger)
-  2026-05-14  Second    p1=31358 p2=13447 winner=31358  (Valencia Challenger)
-  2026-05-14  Second    p1=12190 p2=29732 winner=12190  (Valencia Challenger)
-  2026-05-14  Second    p1=33860 p2=28899 winner=33860  (Bordeaux Challenger)
+  2026-05-15  Second    p1=72574 p2=28170 winner=72574  (Bordeaux Challenger)
+  2026-05-15  1/4       p1=34337 p2=42229 winner=34337  (Valencia Challenger)
+  2026-05-15  1/4       p1=33860 p2=34539 winner=33860  (Bordeaux Challenger)
+  2026-05-15  1/4       p1=30087 p2=12190 winner=30087  (Valencia Challenger)
+  2026-05-15  1/4       p1=52934 p2=72574 winner=52934  (Bordeaux Challenger)
