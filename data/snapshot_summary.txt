@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-16T07:41:14.159582+00:00
+# Generated: 2026-05-16T17:29:19.972471+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   133
-  matches                    12,426
+  matches                    12,453
   rankings_snapshots          3,642
-  api_fetch_log              12,571
+  api_fetch_log              12,787
 
 ## Latest rankings snapshot: 2026-05-16
 
 ## Active tournaments
-  rome26         Internazionali BNL d'Italia      matches=244  latest=2026-05-15
+  rome26         Internazionali BNL d'Italia      matches=245  latest=2026-05-16
 
 ## 5 most recent matches anywhere in DB
-  2026-05-15  Second    p1=72574 p2=28170 winner=72574  (Bordeaux Challenger)
-  2026-05-15  1/4       p1=34337 p2=42229 winner=34337  (Valencia Challenger)
-  2026-05-15  1/4       p1=33860 p2=34539 winner=33860  (Bordeaux Challenger)
-  2026-05-15  1/4       p1=30087 p2=12190 winner=30087  (Valencia Challenger)
-  2026-05-15  1/4       p1=52934 p2=72574 winner=52934  (Bordeaux Challenger)
+  2026-05-16  Q1        p1=95311 p2=82371 winner=95311  (Hamburg Open - Hamburg)
+  2026-05-16  Q1        p1=39152 p2=26140 winner=39152  (Hamburg Open - Hamburg)
+  2026-05-16  Q1        p1=58149 p2=20648 winner=58149  (Hamburg Open - Hamburg)
+  2026-05-16  Q1        p1=74153 p2=73620 winner=74153  (Gonet Geneva Open - Geneva)
+  2026-05-16  Q1        p1=46747 p2=84561 winner=46747  (Hamburg Open - Hamburg)
