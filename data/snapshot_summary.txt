@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-18T08:27:33.450366+00:00
+# Generated: 2026-05-18T17:48:47.623636+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   133
-  matches                    12,477
+  matches                    12,507
   rankings_snapshots          4,172
-  api_fetch_log              13,867
+  api_fetch_log              14,083
 
 ## Latest rankings snapshot: 2026-05-18
 
@@ -17,8 +17,8 @@
   rome26         Internazionali BNL d'Italia      matches=247  latest=2026-05-17
 
 ## 5 most recent matches anywhere in DB
-  2026-05-17  Q3        p1=87277 p2=39152 winner=87277  (Hamburg Open - Hamburg)
-  2026-05-17  Q3        p1=58149 p2=48013 winner=58149  (Hamburg Open - Hamburg)
-  2026-05-17  Q3        p1=79113 p2=46747 winner=79113  (Hamburg Open - Hamburg)
-  2026-05-17  Q3        p1=95311 p2=18736 winner=95311  (Hamburg Open - Hamburg)
-  2026-05-17  Q3        p1=17503 p2=52660 winner=17503  (Internationaux de Strasbourg - Strasbourg)
+  2026-05-18  Q1        p1=89131 p2=18094 winner=89131  (French Open - Paris)
+  2026-05-18  Q1        p1=64741 p2=24721 winner=64741  (French Open - Paris)
+  2026-05-18  Q1        p1=47387 p2=55252 winner=47387  (French Open - Paris)
+  2026-05-18  Q1        p1=59166 p2=34537 winner=59166  (French Open - Paris)
+  2026-05-18  Q1        p1=79068 p2=72574 winner=79068  (French Open - Paris)
