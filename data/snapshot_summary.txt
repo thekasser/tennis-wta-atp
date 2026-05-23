@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-23T07:53:29.601988+00:00
+# Generated: 2026-05-23T17:31:03.624825+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   133
-  matches                    12,705
+  matches                    12,710
   rankings_snapshots          5,492
-  api_fetch_log              15,499
+  api_fetch_log              15,781
 
 ## Latest rankings snapshot: 2026-05-23
 
@@ -16,8 +16,8 @@
   rg26           Roland Garros                    matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-05-22  Q3        p1=56197 p2=27358 winner=56197  (French Open - Paris)
-  2026-05-22  Q3        p1=18477 p2=21506 winner=18477  (French Open - Paris)
-  2026-05-22  Q3        p1=28900 p2=86351 winner=28900  (French Open - Paris)
-  2026-05-22  Q3        p1=64896 p2=79088 winner=64896  (French Open - Paris)
-  2026-05-22  Q3        p1=65904 p2=73608 winner=65904  (French Open - Paris)
+  2026-05-23  Final     p1=79113 p2=29935 winner=79113  (Hamburg Open - Hamburg)
+  2026-05-23  Final     p1=93452 p2=66828 winner=93452  (Gonet Geneva Open - Geneva)
+  2026-05-23  Final     p1=42098 p2=74280 winner=42098  (Internationaux de Strasbourg - Strasbourg)
+  2026-05-23  Final     p1=73203 p2=16043 winner=73203  (Grand Prix De SAR La Princesse Lalla Meryem - Rabat)
+  2026-05-23  Final     p1=84377 p2=14740 winner=84377  (W75 Kosice)
