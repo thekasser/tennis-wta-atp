@@ -343,9 +343,14 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
             if gap >= ELIM_GAP_THRESHOLD and not status["elim"]:
                 status["elim"] = True
 
+        # Stage fallback chain: deepest round actually played > the round
+        # players are scheduled into (e.g. "R128" for a 128-draw GS that just
+        # started) > "?" as last resort. Without this, RG showed "?" on the
+        # Live Events card all of day 1 because no main-draw match had
+        # completed yet.
         out.append({
             "id":      t["id"],
-            "stage":   deepest_round_name or "?",
+            "stage":   deepest_round_name or scheduled_stage or "?",
             "players": players_block,
         })
     return out
