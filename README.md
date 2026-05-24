@@ -26,9 +26,10 @@ Click any player name → drill-down modal: bio, all metrics across periods + su
 ## Architecture
 
 ```
-GitHub Actions cron (2×/day at 00:00 + 12:00 UTC)
+GitHub Actions cron (3×/day at 07:00 + 17:00 + 23:00 UTC)
     │
-    ├── restore_db.py     ← unzip data/tennis.db.gz
+    ├── pip install boto3 ← only non-stdlib runtime dep
+    ├── restore_db.py     ← R2 (private) → data/tennis.db.gz → data/tennis.db
     ├── seed_db.py        ← players_*.js + tournaments.js → players/tournaments tables
     │                       (idempotent — picks up new manual bios)
     ├── sync_rankings.py  ← Matchstat /ranking/singles + race
@@ -37,15 +38,22 @@ GitHub Actions cron (2×/day at 00:00 + 12:00 UTC)
     │                       get current year only, others skipped)
     ├── sync_fixtures.py  ← Matchstat /fixtures/tournament/{id} + dedup pass
     ├── sync_kalshi.py    ← Kalshi /events?series_ticker=KX{ATP|WTA}MATCH
-    │                       (free, no auth; fills market gaps where Matchstat is silent)
+    │                       (free, no auth; pre-match snapshots only;
+    │                        consolidate_match_ids() rewrites stale fixture-id
+    │                        rows to canonical matches.id at end of every sync)
     ├── log_predictions.py← run match_prob on fixtures + recent matches → predictions table
     │                       (must run BEFORE materialize so today's predictions land
     │                        in today's predictions.js)
-    ├── materialize.py    ← SQLite → JSON blobs (data/*.js, local only)
-    ├── snapshot_db.py    ← gzip → data/tennis.db.gz (committed)
-    ├── validate.py       ← row-count + recency + tier-pass-through guards
+    ├── materialize.py    ← SQLite → JSON blobs (data/*.js, local only).
+    │                       Kalshi join filters is_pre_match=1; computes edge_a +
+    │                       edge_calibration buckets in the predictions blob.
+    ├── snapshot_db.py    ← gzip data/tennis.db → data/tennis.db.gz + UPLOAD to R2
+    │                       (.gz is GITIGNORED — R2 is the canonical store)
+    ├── validate.py       ← row-count, recency, tier-pass-through, resolution-rate,
+    │                       unmapped-tour-event, date-drift, Kalshi-Brier-floor guards
+    ├── audit_tournaments.py ← informational; surfaces unresolved api_ids
     ├── upload_to_worker.py ← POST /api/admin/sync (bearer-auth'd)
-    └── git commit data/tennis.db.gz + snapshot_summary.txt
+    └── git commit data/snapshot_summary.txt + any curated-input edits
 
 Cloudflare Worker (tennis-wta-atp)
     │
@@ -75,25 +83,42 @@ The dashboard fetches from `/api/*` on load (parallel via `Promise.all`); the Wo
 
 ## Repo
 
-This is a **public** repo. All match data and pipeline code is open. Secrets live only in `.env` (gitignored), GitHub Actions repo secrets, and Workers Secrets — never committed. The D1 `database_id` in `wrangler.toml` is committed but is not a secret on its own (useless without Cloudflare account auth).
+This is a **public** repo so the pipeline, model, and curated inputs can be shown — that's the "show the work" part. **Raw Matchstat API payloads are NOT public.** RapidAPI/Matchstat ToS prohibits redistributing raw API responses, so since 2026-05-24 the SQLite snapshot (`data/tennis.db.gz`, which contains `matches.raw` + per-player stat JSON for every match) is gitignored and lives in a private Cloudflare R2 bucket. The cron pulls it from R2 on every run via `scripts/restore_db.py`. The dashboard reads only aggregated/derived blobs from D1's `materialized` table (composite z-scores, rankings, projections) — never raw rows — so the public `/api/*` endpoints are ToS-compatible.
+
+What's in the public repo:
+- All code (scripts, Worker, dashboard HTML)
+- Curated inputs (`data/tournaments.js`, `data/players_*.js`, rank baselines)
+- `data/snapshot_summary.txt` — row counts + active tournaments, PR-diffable manifest
+
+Secrets live only in `.env` (gitignored), GitHub Actions repo secrets, and Workers Secrets — never committed. That includes `MATCHSTAT_API_KEY`, `ADMIN_SYNC_TOKEN`, and the four R2 variables (`R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`). The D1 `database_id` in `wrangler.toml` is committed but is not a secret on its own (useless without Cloudflare account auth).
 
 ## Local setup
 
 ```bash
-# Python (no virtualenv required; only stdlib + sqlite3)
-python3 scripts/db.py init        # apply migrations to data/tennis.db
-python3 scripts/restore_db.py     # rehydrate from data/tennis.db.gz snapshot
+# Python deps: stdlib + sqlite3 + boto3 (R2 access for the snapshot)
+pip3 install boto3
 
-# Optional — to run the pipeline locally
-echo 'MATCHSTAT_API_KEY=your_rapidapi_key' > .env
+# Set up .env (gitignored). Copy from .env.example and fill in:
+#   MATCHSTAT_API_KEY      (RapidAPI subscription key)
+#   ADMIN_SYNC_TOKEN       (matches the Workers Secret, for D1 sync)
+#   R2_ACCOUNT_ID          (32-hex from Cloudflare dashboard URL)
+#   R2_BUCKET=tennis-snapshots
+#   R2_ACCESS_KEY_ID       (from R2 Manage API Tokens)
+#   R2_SECRET_ACCESS_KEY   (from R2 Manage API Tokens, shown once)
+cp .env.example .env && $EDITOR .env
+
+# Bootstrap the DB
+python3 scripts/db.py init        # apply migrations to data/tennis.db
+python3 scripts/restore_db.py     # download snapshot from R2 and rehydrate
+
+# Optional — run the pipeline locally (re-uses your Matchstat budget)
 python3 scripts/sync_rankings.py --tour both
 python3 scripts/sync_matches.py  --tour both --years 2025 2026
 python3 scripts/materialize.py
-python3 scripts/snapshot_db.py
+python3 scripts/snapshot_db.py    # writes .gz AND uploads to R2
 python3 scripts/validate.py
 
 # Optional — push to D1 (requires ADMIN_SYNC_TOKEN)
-export ADMIN_SYNC_TOKEN='...'
 python3 scripts/upload_to_worker.py
 ```
 
@@ -127,38 +152,54 @@ Workers Secrets needed (set via `wrangler secret put`):
 │   ├── seed_db.py           # bootstrap players + tournaments from JS files
 │   ├── sync_rankings.py     # pull T12M + race rankings → SQLite
 │   ├── sync_matches.py      # pull past-matches → SQLite (smart incremental)
+│   ├── sync_fixtures.py     # pull upcoming-match schedule + dedup pass
+│   ├── sync_kalshi.py       # pull pre-match Kalshi prices + consolidate_match_ids()
+│   ├── sync_catalog.py      # auto-discover Matchstat tournament IDs → apiId fields
+│   ├── log_predictions.py   # log prospective predictions → predictions table
 │   ├── materialize.py       # SQLite → all data/*.js (hash-based change detect)
-│   ├── snapshot_db.py       # gzip → data/tennis.db.gz
-│   ├── restore_db.py        # gunzip → data/tennis.db
-│   ├── validate.py          # pre-commit data sanity guards
+│   ├── backtest.py          # PiT backtest framework (default / soft / prospective /
+│   │                        # feature-attribution / sweep-sharpen modes)
+│   ├── snapshot_db.py       # gzip → data/tennis.db.gz + upload to R2 (canonical)
+│   ├── restore_db.py        # download from R2 → gunzip → data/tennis.db
+│   ├── r2.py                # boto3 wrapper for the R2 (S3-compat) snapshot store
+│   ├── validate.py          # pre-commit data sanity guards (incl. unmapped-tour-event,
+│   │                        # date-drift, Kalshi-Brier-floor detectors)
+│   ├── audit_tournaments.py # list unresolved tournament_api_ids for catalog updates
 │   ├── upload_to_worker.py  # POST data/*.js blobs to /api/admin/sync
 │   ├── push_to_d1.py        # generate D1 INSERT SQL (alternative to upload)
 │   ├── export_for_d1.py     # generate D1 INSERT SQL for raw rows (initial seed)
-│   ├── audit_tournaments.py # list unresolved tournaments for catalog updates
-│   ├── link_bios_to_api.py     # match new player bios → Matchstat IDs
+│   ├── link_bios_to_api.py      # match new player bios → Matchstat IDs
 │   ├── link_bios_to_sackmann.py # match new player bios → Sackmann IDs
 │   └── migrations/
 │       ├── 001_initial.sql           # base schema
-│       └── 002_add_materialized.sql  # D1 read cache table
+│       ├── 002_add_materialized.sql  # D1 read cache table
+│       ├── 003_add_fixtures.sql      # upcoming match schedule
+│       ├── 004_add_predictions.sql   # prospective prediction log
+│       └── 005_add_kalshi_odds.sql   # Kalshi market prices
 ├── data/
-│   ├── tennis.db.gz         # committed SQLite snapshot (rehydrated by CI)
-│   ├── snapshot_summary.txt # human-readable manifest
+│   ├── tennis.db.gz         # GITIGNORED — private (raw Matchstat payloads). Canonical
+│   │                        # store is private R2 bucket `tennis-snapshots`.
+│   ├── snapshot_summary.txt # committed; PR-diffable row counts + active tournaments
 │   ├── players_atp.js       # curated bio list
 │   ├── players_wta.js       # curated bio list
 │   └── tournaments.js       # curated calendar
-├── .github/workflows/refresh.yml  # GitHub Actions cron
+├── .env.example             # template for required environment variables
+├── .github/workflows/refresh.yml  # GitHub Actions cron (3×/day)
 ├── CLAUDE.md                # project notes for AI-assisted work
 └── CREDITS.md               # attribution
 ```
 
 ## Data licensing & sources
 
-| Data | Source | License |
-|------|--------|---------|
-| Live rankings + match-level stats (2025+) | Matchstat Tennis API via RapidAPI (jjrm365) | Commercial; $10/mo Pro tier |
-| Match-level stats (2024 only, frozen) | Jeff Sackmann's tennis_atp / tennis_wta CSVs | CC BY-NC-SA 4.0 |
-| Tournament calendar | Manual entry | n/a |
-| Player bios | Manual curation | n/a |
+| Data | Source | License | Public? |
+|------|--------|---------|---------|
+| Live rankings + match-level stats (2025+) | Matchstat Tennis API via RapidAPI (jjrm365) | Commercial; $10/mo Pro tier, redistribution prohibited | **No** — raw payloads kept in private R2 |
+| Match-level stats (2024 only, frozen) | Jeff Sackmann's tennis_atp / tennis_wta CSVs | CC BY-NC-SA 4.0 | Yes (CC license permits) |
+| Kalshi market prices | api.elections.kalshi.com (free, no auth) | Public API | Yes |
+| Tournament calendar | Manual entry | n/a | Yes |
+| Player bios | Manual curation | n/a | Yes |
+
+The Matchstat ToS prohibits redistributing raw API responses publicly. The dashboard exposes only aggregated/derived metrics (composite z-scores, rankings, projections) via D1's `materialized` table — the public `/api/*` endpoints never serve raw match rows. Raw payloads live in a private Cloudflare R2 bucket; only the cron pipeline has read access.
 
 This dashboard inherits **CC BY-NC-SA 4.0** from the Sackmann data layer used for 2024. Personal-use and family/friends sharing is explicitly permitted; commercial use is not.
 
