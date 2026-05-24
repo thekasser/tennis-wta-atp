@@ -121,8 +121,12 @@ scripts/
 │                          # render the same match twice.
 ├── sync_kalshi.py         # Pull Kalshi prediction-market prices (free, no auth).
 │                          # Second market benchmark alongside sportsbook odds; ~100% on
-│                          # bio'd-player matches inc. qualifying. --include-settled grabs
-│                          # post-match for backtest backfill.
+│                          # bio'd-player matches inc. qualifying. Cron runs WITHOUT
+│                          # --include-settled since 2026-05-23 — settlement-time prices
+│                          # saturate at 0.99/0.01 and destroy Brier scoring (see gotchas).
+│                          # consolidate_match_ids() runs at end of every sync, rewriting
+│                          # stale fixture-id-keyed rows to canonical matches.id (fixtures
+│                          # gets gc'd, severing joins otherwise).
 ├── log_predictions.py     # Run match_prob on every fixture + recent active-tournament
 │                          # match; write to predictions table with model_version stamp.
 │                          # MUST run before materialize so today's new predictions land
@@ -130,7 +134,10 @@ scripts/
 ├── materialize.py         # Read DB → write all data/*.js (hash-based change detection).
 │                          # Includes synthetic_ranking fallback for players missing from
 │                          # the API race response. Joins kalshi_odds into upcoming + into
-│                          # the predictions blob.
+│                          # the predictions blob. Kalshi join filters is_pre_match=1.
+│                          # Computes edge_a (model − Kalshi) per match + edge_calibration
+│                          # buckets in the predictions blob (powers the Edge column +
+│                          # calibration block in the dashboard).
 ├── backtest.py            # PiT backtest framework. Modes:
 │                          #   (default)             reconstruct PiT from history
 │                          #   --soft                today's bios on past (= hindsight)
@@ -140,7 +147,15 @@ scripts/
 ├── snapshot_db.py         # data/tennis.db → data/tennis.db.gz + UPLOAD to R2
 ├── restore_db.py          # DOWNLOAD from R2 → data/tennis.db.gz → data/tennis.db
 ├── r2.py                  # Thin boto3 wrapper for the R2 (S3-compat) snapshot store
-├── validate.py            # Pre-commit sanity gate (row counts, recency, dup-mid checks)
+├── audit_tournaments.py   # Find tournament_api_ids in matches that don't resolve to a
+│                          # tournaments.js row. Cron runs continue-on-error after validate
+│                          # for visibility. Use --min-matches to filter low-volume.
+├── validate.py            # Pre-commit sanity gate. Row counts + recency + dup-mid +
+│                          # resolution-rate + T6M tier-pass-through. New guards added
+│                          # 2026-05-24: unmapped-tour-event detector (≥28 matches, 60d
+│                          # window, name not Challenger/125/Cup), date-drift detector
+│                          # (catalog start_date drifting >14d from actual match dates),
+│                          # Kalshi Brier floor (<0.10 on n≥50 = post-settlement bug).
 ├── link_bios_to_api.py    # One-time: match new bio names → Matchstat ids
 ├── link_bios_to_sackmann.py  # One-time: match new bio names → Sackmann ids (2024)
 └── migrations/            # 001 initial · 002 materialized · 003 fixtures
@@ -170,7 +185,7 @@ scripts/
 | Tournament calendar | Manual entry | N/A |
 | Player bios | Manual curation | N/A |
 
-**Budget:** Matchstat Pro = $10/mo, 10k calls/mo cap. Cron runs **2×/day** (00:00 + 12:00 UTC). `sync_matches.py` decide_fetch heuristic: cold-start players get full backfill, players in date-windowed-active tournaments get current year, everyone else skipped. WTA endpoint silently throttles bursts → matchstat.py uses 0.75s `_min_interval` (vs 0.25s for ATP-only loads) + retries on `{"data": null}` empty responses. Steady-state: ~250-500 calls per cron during active week, ~5-15 quiet. Monthly: ~5-9k.
+**Budget:** Matchstat Pro = $10/mo, 10k calls/mo cap. Cron runs **3×/day** (07:00 + 17:00 + 23:00 UTC = midnight + 10am + 4pm PDT). `sync_matches.py` decide_fetch heuristic: cold-start players get full backfill, players in date-windowed-active tournaments get current year, everyone else skipped. WTA endpoint silently throttles bursts → matchstat.py uses 0.75s `_min_interval` (vs 0.25s for ATP-only loads) + retries on `{"data": null}` empty responses. Steady-state: ~250-500 calls per cron during active week, ~5-15 quiet. Monthly target ~5-9k; 3×/day pushes us closer to the 10k cap during heavy active stretches.
 
 **Kalshi is free, no API key.** sync_kalshi.py fills market-odds gaps where Matchstat is silent (qualifying mostly). Counts toward zero on the Matchstat budget.
 
@@ -181,19 +196,21 @@ scripts/
 ## Refresh pipeline
 
 ### Scheduled (auto)
-`.github/workflows/refresh.yml` runs **2×/day** (00:00 + 12:00 UTC = 5pm + 5am PDT) via GitHub Actions. Each run, in order:
-1. Restore `data/tennis.db` from R2 (`scripts/restore_db.py` downloads `tennis.db.gz` from the private bucket, then `sqlite3 .read`s it back).
-2. Seed bios + tournaments (`seed_db.py`) — picks up any manual bio additions in players_*.js since the last snapshot.
-3. Sync rankings (`sync_rankings.py`).
-4. Sync matches (`sync_matches.py` with decide_fetch heuristic).
-5. Sync fixtures (`sync_fixtures.py` — upcoming matches + dedup pass).
-6. Sync Kalshi odds (`sync_kalshi.py --include-settled` — free, no API budget).
-7. Log predictions (`log_predictions.py` — must run BEFORE materialize so new predictions land in today's predictions.js).
-8. Materialize all `data/*.js` from the DB.
-9. Update the snapshot.
-10. Validate row counts and recency.
-11. Push fresh blobs to D1 via `/api/admin/sync`.
-12. Commit + push if any committed file changed.
+`.github/workflows/refresh.yml` runs **3×/day** (07:00 + 17:00 + 23:00 UTC = midnight + 10am + 4pm PDT) via GitHub Actions. Each run, in order:
+1. `pip install boto3` (~5s; only non-stdlib runtime dep, used by `scripts/r2.py`).
+2. Restore `data/tennis.db` from R2 (`scripts/restore_db.py` downloads `tennis.db.gz` from the private bucket, then `sqlite3 .read`s it back).
+3. Seed bios + tournaments (`seed_db.py`) — picks up any manual bio additions in players_*.js since the last snapshot.
+4. Sync rankings (`sync_rankings.py`).
+5. Sync matches (`sync_matches.py` with decide_fetch heuristic).
+6. Sync fixtures (`sync_fixtures.py` — upcoming matches + dedup pass).
+7. Sync Kalshi odds (`sync_kalshi.py` — free, no API budget). Pre-match snapshots only; `--include-settled` was dropped in the cron 2026-05-23 to stop polluting the table with saturated settlement prices.
+8. Log predictions (`log_predictions.py` — must run BEFORE materialize so new predictions land in today's predictions.js).
+9. Materialize all `data/*.js` from the DB.
+10. Update the snapshot (`snapshot_db.py` writes the local .gz AND uploads to R2; local .gz is gitignored — R2 is the canonical store).
+11. Validate row counts, recency, resolution-rate, T6M tier-pass-through, unmapped-tour-events, date-drift, Kalshi Brier floor.
+12. Audit unresolved tournaments (informational, continue-on-error).
+13. Push fresh blobs to D1 via `/api/admin/sync`.
+14. Commit + push `data/snapshot_summary.txt` + any curated-input changes (tournaments.js / players_*.js). The .gz is gitignored — R2 has it.
 
 Cloudflare Workers picks up on push and serves the static dashboard from `[assets]`.
 
@@ -201,8 +218,8 @@ Cloudflare Workers picks up on push and serves the static dashboard from `[asset
 ```bash
 cd "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard"
 
-# (Optional) restore the latest committed snapshot. Skip if your local
-# data/tennis.db is already current.
+# (Optional) restore latest snapshot from R2. Skip if your local data/tennis.db
+# is already current. Requires R2_* env vars in .env (auto-loaded by r2.py).
 python3 scripts/restore_db.py --force
 
 # Sync rankings + matches (Matchstat budget)
@@ -212,8 +229,10 @@ python3 scripts/sync_matches.py  --tour both       # decide_fetch picks years pe
 # Sync fixtures (upcoming matches; cheap, ~2-4 calls per active tournament)
 python3 scripts/sync_fixtures.py --tour both
 
-# Sync Kalshi (free, no auth required)
-python3 scripts/sync_kalshi.py --include-settled
+# Sync Kalshi (free, no auth required). Pre-match snapshots only — DO NOT pass
+# --include-settled in routine runs; it pollutes the table with saturated
+# settlement prices and breaks Kalshi Brier scoring.
+python3 scripts/sync_kalshi.py
 
 # Log prospective predictions BEFORE materialize so they land in today's predictions.js
 python3 scripts/log_predictions.py
@@ -221,13 +240,15 @@ python3 scripts/log_predictions.py
 # Materialize all data/*.js (no API calls)
 python3 scripts/materialize.py
 
-# Update the committed DB snapshot
+# Snapshot DB + upload to R2 (canonical store)
 python3 scripts/snapshot_db.py
 
 # Pre-commit gate
 python3 scripts/validate.py
 
-# Commit + push → triggers Cloudflare Pages auto-deploy
+# Commit + push → triggers Worker redeploy (HTML/assets) but NOT D1 refresh.
+# D1 only updates when the cron runs upload_to_worker.py. To push fresh blobs
+# to D1 manually: export ADMIN_SYNC_TOKEN=... ; python3 scripts/upload_to_worker.py
 # (pull --rebase first to absorb any cron-pushed data refresh)
 git pull --rebase
 git add data/
@@ -326,10 +347,13 @@ rm -f "/Users/connorkasser/Documents/Claude/Projects/ATP/WTA Tennis Dashboard/.g
 - **Cascade-elim gap threshold:** A R1 winner with no R2 match in DB used to get cascade-marked eliminated as soon as ANY R2 match completed (1-stage gap). Now requires ≥2-stage gap before the cascade fires — handles 12h cron lag between rounds.
 - **Fixture dups:** Matchstat issues different fixture IDs for the same matchup across pulls. `sync_fixtures.gc_dups()` dedupes by canonical `(tournament, date, sorted-mid-pair)` after every sync.
 - **Kalshi date drift:** Kalshi event tickers use a YYMMMDD date that doesn't always match our match.date (timezone, listing-day vs play-day). `sync_kalshi` uses ±1-day fuzzy match on player IDs.
-- **predictions.match_id uses matches.id when both exist:** If a fixture has migrated to matches (post-completion), `kalshi_odds.match_id` and `predictions.match_id` should both prefer matches.id so the JOIN works. sync_kalshi's `find_match_id` checks matches first.
+- **predictions.match_id uses matches.id when both exist:** If a fixture has migrated to matches (post-completion), `kalshi_odds.match_id` and `predictions.match_id` should both prefer matches.id so the JOIN works. sync_kalshi's `find_match_id` checks matches first. **`consolidate_match_ids()` in sync_kalshi.py runs at end of every sync** to rewrite stale fixture-id-keyed rows to canonical matches.id — fixtures gets gc'd, severing the join otherwise. One-shot retro pass on 2026-05-23 rewrote 691 rows.
+- **Kalshi Brier requires pre-match snapshots ONLY.** materialize.py's Kalshi JOIN filters `is_pre_match = 1`. Without that filter, the latest snapshot per match is settlement-time (saturated 0.99/0.01) → Brier collapses near 0, looking like the model "beats the market" by miles. validate.py hard-fails if `brier_kalshi < 0.10` on n ≥ 50. Cron's `sync_kalshi.py` no longer passes `--include-settled` (use that flag only for one-off backtest backfills, then revert).
+- **Edge framework:** `edge_a = p_pred − kalshi_p_a` per match, plus `edge_abs` buckets in `data/predictions.js → stats.edge_calibration`. Powers the Edge column in Recent Calls + Edge calibration block in the dashboard. Big edges (|edge| ≥ 0.10) should NOT calibrate higher than small ones — if they do, model is over-confident on the disagreements and needs sharpening pulled back.
+- **Live Events filters are date-driven** as of 2026-05-24. The dashboard's `completed`/`upcoming` buckets compare `endDate < today` / `startDate > today` instead of reading the manual `complete:` / `active:` flags from tournaments.js (which were chronically stale — Madrid stayed `active:true` 3 weeks after its Final). The server's `activeTournaments[]` from `materialize._compute_active_tournaments` remains authoritative for "currently playing." Manual flags in tournaments.js are now cosmetic.
 - **Trapezoid 2024 data is preserved from the existing file**, not in the DB. Sackmann CSVs were the source for 2024; the rebuild keeps those rows untouched.
-- **`.env` is gitignored:** `MATCHSTAT_API_KEY` and `ADMIN_SYNC_TOKEN` live only on Connor's Mac and in GitHub Actions secrets. Never commit either.
-- **`data/tennis.db` is gitignored** — only the `.gz` snapshot is committed. Restore first to inspect: `python3 scripts/restore_db.py --force`.
+- **`.env` is gitignored:** `MATCHSTAT_API_KEY`, `ADMIN_SYNC_TOKEN`, and the four R2 vars (`R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) live only on Connor's Mac and in GitHub Actions secrets. Never commit any of them.
+- **`data/tennis.db` AND `data/tennis.db.gz` are both gitignored** since 2026-05-24. The .gz contains raw Matchstat API payloads (matches.raw, stat_p1, stat_p2) that ToS doesn't permit redistributing publicly. Canonical store: private R2 bucket `tennis-snapshots`. Restore first to inspect: `python3 scripts/restore_db.py --force` (needs R2 env vars in .env). **Historical `tennis.db.gz` is still in git log** from pre-2026-05-24 commits — pending one-time `git filter-repo` scrub + force-push to main + all branches.
 - **wta_analytics.html JS edits:** validate with `node --check` on the extracted main `<script>` before commit. Duplicate `const` declarations or other parse-time syntax errors blank the dashboard silently. See `~/.claude/projects/.../memory/workflow_nodecheck_html.md`.
 
 ---
