@@ -49,6 +49,30 @@ MIN_RESOLUTION_RATE_PCT = 55.0   # warn floor; matches at W125/Challenger/ITF st
 # tier filter probably broke (today's regression: this dropped to 1).
 MIN_T6M_TOUR_PLAYERS_PER_TOUR = 15
 
+# Tour-level miss detector: any tournament_api_id with ≥N matches in the
+# last 60d that doesn't resolve to a tournaments row, AND whose name lacks
+# the lower-tier markers, is almost certainly a 250+ event we forgot to
+# add. Caught Geneva/Strasbourg/Rabat in the 2026-05-24 audit. Real W250+
+# events with qualifying typically run ≥28 matches; W125s top out at ~25,
+# so 28 gives a clean signal/noise tradeoff. A W250 with no qualifying
+# could be missed at this threshold, but the lookback window will catch
+# it on a subsequent cron when more matches accumulate.
+TOUR_LEVEL_MISS_MIN_MATCHES = 28
+TOUR_LEVEL_MISS_LOOKBACK_DAYS = 60
+# Name fragments that mark non-tour-level events we intentionally skip.
+LOWER_TIER_NAME_MARKERS = (
+    "Challenger", "ITF", "W75", "W50", "W35", "W15",
+    "125",                          # WTA 125
+    "Cup, Group", "BJK Cup",        # team events
+    "Davis Cup", "Laver Cup", "United Cup",  # team / exhibition
+)
+
+# Date-drift detector: catalog start_date should be within 14d of the
+# tournament's actual match dates. Wider drift means the catalog row has
+# stale dates (Hamburg 2026: catalog Jul, actual May → 58d drift, never
+# detected as active despite playing the Final yesterday).
+DATE_DRIFT_MAX_DAYS = 14
+
 
 def _check(label: str, ok: bool, msg: str) -> tuple[bool, str]:
     icon = "✓" if ok else "✗"
@@ -185,6 +209,68 @@ def main() -> int:
              cnt >= MIN_T6M_TOUR_PLAYERS_PER_TOUR,
              f"{cnt:>3} bios with ≥10 tour-level main-draw matches "
              f"(warn <{MIN_T6M_TOUR_PLAYERS_PER_TOUR})")
+
+    # 9. Tour-level miss detector — recent unresolved events that look
+    # tour-level by match count + name. Catches the bug class where
+    # Matchstat returns matches at an event whose row isn't in
+    # tournaments.js yet (Geneva/Strasbourg/Rabat 2026-05-24).
+    not_like = " AND ".join(
+        [f"m.tournament_name NOT LIKE '%{frag}%'" for frag in LOWER_TIER_NAME_MARKERS]
+    )
+    misses = list(conn.execute(f"""
+        SELECT m.tour, m.tournament_api_id AS api_id,
+               MAX(m.tournament_name) AS name,
+               COUNT(*) AS n, MIN(m.date) AS d1, MAX(m.date) AS d2
+        FROM matches m
+        LEFT JOIN tournaments t
+          ON (m.tour='atp' AND t.api_id_atp = m.tournament_api_id)
+          OR (m.tour='wta' AND t.api_id_wta = m.tournament_api_id)
+        WHERE m.tournament_api_id IS NOT NULL
+          AND t.id IS NULL
+          AND m.date >= date('now', '-{TOUR_LEVEL_MISS_LOOKBACK_DAYS} days')
+          AND {not_like}
+        GROUP BY m.tour, m.tournament_api_id
+        HAVING n >= ?
+        ORDER BY n DESC
+    """, (TOUR_LEVEL_MISS_MIN_MATCHES,)))
+    if misses:
+        warn(f"unmapped tour events ({TOUR_LEVEL_MISS_LOOKBACK_DAYS}d)", False,
+             f"{len(misses)} likely-tour-level events with no tournaments row")
+        for m in misses[:5]:
+            print(f"      → {m['tour'].upper()} api={m['api_id']} "
+                  f"{m['n']:>3}m {m['d1']}→{m['d2']}  {m['name']}")
+        if len(misses) > 5:
+            print(f"      … and {len(misses)-5} more — run scripts/audit_tournaments.py")
+    else:
+        warn(f"unmapped tour events ({TOUR_LEVEL_MISS_LOOKBACK_DAYS}d)", True,
+             "no tour-level misses")
+
+    # 10. Date-drift detector — catalog start_date diverges from actual
+    # match dates by >14d. Catches stale rows where dates were copied
+    # from a prior year that's since rescheduled (Hamburg 2026: catalog
+    # Jul 13, actual May 17 → 58d drift, never showed as active).
+    drifts = list(conn.execute(f"""
+        SELECT t.id, t.tour, t.start_date AS catalog_start,
+               MIN(m.date) AS actual_start, COUNT(*) AS n,
+               CAST(julianday(t.start_date) - julianday(MIN(m.date)) AS INTEGER) AS drift
+        FROM tournaments t
+        JOIN matches m ON m.tournament_id = t.id
+        WHERE t.start_date IS NOT NULL
+        GROUP BY t.id
+        HAVING ABS(drift) > {DATE_DRIFT_MAX_DAYS}
+        ORDER BY ABS(drift) DESC
+    """))
+    if drifts:
+        warn(f"tournament date drift (>{DATE_DRIFT_MAX_DAYS}d)", False,
+             f"{len(drifts)} row(s) with catalog dates far from actual matches")
+        for d in drifts[:5]:
+            print(f"      → {d['id']:<25} catalog {d['catalog_start']} "
+                  f"vs actual {d['actual_start']}  ({d['drift']:+d}d, {d['n']} matches)")
+        if len(drifts) > 5:
+            print(f"      … and {len(drifts)-5} more")
+    else:
+        warn(f"tournament date drift (>{DATE_DRIFT_MAX_DAYS}d)", True,
+             "all catalog dates within tolerance")
 
     print()
     if failures:

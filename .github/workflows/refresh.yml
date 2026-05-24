@@ -123,6 +123,18 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 scripts/validate.py
 
+      # ── Unresolved-tournament audit (informational) ────────────────────
+      # Prints any tournament_api_id seen in recent matches that doesn't
+      # resolve to a tournaments.js row. Most are legitimately excluded
+      # (Challengers, W125s, BJK Cup) but a real tour-level miss surfaces
+      # here before it shows up as missing Live Events cards. continue-on-
+      # error: never blocks the cron — visibility only.
+      - name: Audit unresolved tournaments
+        continue-on-error: true
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/audit_tournaments.py --min-matches 15 | head -40
+
       # ── Push fresh blobs to D1 via the Worker's /api/admin/sync ────────
       # Phase 2: dashboard reads from D1, not from committed data/*.js files.
       # This is what actually makes the cron run "live" for users.
