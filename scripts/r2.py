@@ -28,6 +28,24 @@ DEFAULT_BUCKET = "tennis-snapshots"
 DEFAULT_KEY    = "tennis.db.gz"
 
 
+# Auto-load .env at import time so callers don't have to remember to
+# `source .env` in their shell. Mirrors the pattern in sync_catalog.py.
+# Only sets vars that aren't already in the environment — explicit
+# shell exports win.
+def _load_dotenv() -> None:
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+_load_dotenv()
+
+
 def is_configured() -> bool:
     """True iff every R2 env var needed for an upload/download is set."""
     return all(os.environ.get(k) for k in
