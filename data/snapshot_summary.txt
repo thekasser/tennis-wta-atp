@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-24T04:37:02.341413+00:00
+# Generated: 2026-05-24T05:09:25.426713+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   163
   matches                    12,710
-  rankings_snapshots          5,756
-  api_fetch_log              16,347
+  rankings_snapshots          5,492
+  api_fetch_log              16,063
 
-## Latest rankings snapshot: 2026-05-24
+## Latest rankings snapshot: 2026-05-23
 
 ## Active tournaments
   geneva26       Gonet Geneva Open - Geneva       matches= 32  latest=2026-05-23

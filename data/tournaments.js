@@ -24,10 +24,10 @@ const TOURNAMENTS_DATA = [
   { id:"houston26",  name:"Houston Open",       short:"Houston",  tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true, apiId:{atp:21320} },
   { id:"marrakech26",name:"Grand Prix Hassan II",short:"Marrakech",tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:13, month:4,  startDate:"2026-03-30", endDate:"2026-04-06", active:false, complete:true, apiId:{atp:21321} },
 
-  { id:"madrid26",   name:"Mutua Madrid Open",  short:"Madrid",   tour:"BOTH", type:"M1000", surf:"C", draw:96,  wk:16, month:4,  startDate:"2026-04-22", endDate:"2026-05-03", active:true,  complete:false, wtaId:"madrid-open", wtaSlug:"", apiId:{atp:21325, wta:16721} },
+  { id:"madrid26",   name:"Mutua Madrid Open",  short:"Madrid",   tour:"BOTH", type:"M1000", surf:"C", draw:96,  wk:16, month:4,  startDate:"2026-04-22", endDate:"2026-05-03", active:false, complete:true,  wtaId:"madrid-open", wtaSlug:"", apiId:{atp:21325, wta:16721} },
 
   // ── MAY ───────────────────────────────────────────────────────────────────
-  { id:"rome26",     name:"Internazionali BNL d'Italia", short:"Rome", tour:"BOTH", type:"M1000", surf:"C", draw:96, wk:18, month:5, startDate:"2026-05-06", endDate:"2026-05-17", active:false, complete:false, apiId:{atp:21326, wta:16722} },
+  { id:"rome26",     name:"Internazionali BNL d'Italia", short:"Rome", tour:"BOTH", type:"M1000", surf:"C", draw:96, wk:18, month:5, startDate:"2026-05-06", endDate:"2026-05-17", active:false, complete:true,  apiId:{atp:21326, wta:16722} },
   { id:"rg26",       name:"Roland Garros",      short:"RG",       tour:"BOTH", type:"GS",    surf:"C", draw:128, wk:21, month:5,  startDate:"2026-05-24", endDate:"2026-06-07", active:false, complete:false, apiId:{atp:21329, wta:16725} },
 
   // ── JUNE ──────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ const TOURNAMENTS_DATA = [
   { id:"wimbledon26",name:"Wimbledon",          short:"Wimbledon",tour:"BOTH", type:"GS",    surf:"G", draw:128, wk:26, month:6,  startDate:"2026-06-29", endDate:"2026-07-12", active:false, complete:false, apiId:{atp:21337, wta:16733} },
 
   // ── JULY ──────────────────────────────────────────────────────────────────
-  { id:"hamburg26",  name:"Hamburg Open",       short:"Hamburg",  tour:"ATP", type:"M500",  surf:"C", draw:32,  wk:20, month:5,  startDate:"2026-05-17", endDate:"2026-05-24", active:false, complete:false, apiId:{atp:21327} },
+  { id:"hamburg26",  name:"Hamburg Open",       short:"Hamburg",  tour:"ATP", type:"M500",  surf:"C", draw:32,  wk:20, month:5,  startDate:"2026-05-17", endDate:"2026-05-24", active:false, complete:true,  apiId:{atp:21327} },
   { id:"bastad26",   name:"Nordea Open",        short:"Båstad",   tour:"ATP", type:"M250",  surf:"C", draw:28,  wk:28, month:7,  startDate:"2026-07-13", endDate:"2026-07-19", active:false, complete:false, apiId:{atp:21339} },
   { id:"palermo26",  name:"Palermo Open",       short:"Palermo",  tour:"WTA", type:"W250",  surf:"C", draw:32,  wk:28, month:7,  startDate:"2026-07-13", endDate:"2026-07-19", active:false, complete:false },
 

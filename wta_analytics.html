@@ -372,7 +372,21 @@ select:focus{outline:none;border-color:var(--tc)}
   <div class="tab-panel" id="tab-rankings">
     <div class="stat-row" id="rank-stats"></div>
     <div class="chart-card" id="scatter-card">
-      <h3 id="scatter-title">YTD Race Points vs T12M Ranking Points</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+        <h3 id="scatter-title" style="margin-bottom:0">YTD Race Points vs T12M Ranking Points</h3>
+        <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)" title="Cap each axis to zoom in on the mid-pack when 1-2 outliers compress the chart. Leave blank for auto-scale. Per-tour, persisted in this browser.">
+          <span>Max X:</span>
+          <input id="scatter-max-x" type="number" min="0" step="100" placeholder="auto"
+                 style="width:70px;padding:2px 6px;font-size:11px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elev);color:var(--ink)"
+                 onchange="setScatterAxisMax('x', this.value)">
+          <span style="margin-left:6px">Max Y:</span>
+          <input id="scatter-max-y" type="number" min="0" step="500" placeholder="auto"
+                 style="width:80px;padding:2px 6px;font-size:11px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elev);color:var(--ink)"
+                 onchange="setScatterAxisMax('y', this.value)">
+          <button onclick="resetScatterAxisMax()" title="Reset both axes to auto-scale"
+                  style="padding:2px 8px;font-size:11px;border:1px solid var(--line);border-radius:4px;background:var(--bg-elev);color:var(--muted);cursor:pointer">↺</button>
+        </div>
+      </div>
       <div class="chart-wrap" style="height:280px">
         <canvas id="chart-scatter"></canvas>
       </div>
@@ -380,7 +394,7 @@ select:focus{outline:none;border-color:var(--tc)}
     <div class="tbl-wrap">
       <div class="filter-row" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span class="filter-label">Show:</span>
-        <button class="flt-btn active" id="rflt-all"   onclick="setRankFilter('all')">All 100</button>
+        <button class="flt-btn active" id="rflt-all"   onclick="setRankFilter('all')">All</button>
         <button class="flt-btn"        id="rflt-top20" onclick="setRankFilter('top20')">Top 20</button>
         <button class="flt-btn"        id="rflt-movers"onclick="setRankFilter('movers')">Movers</button>
         <span class="filter-label" style="margin-left:18px">Form:</span>
@@ -493,7 +507,7 @@ select:focus{outline:none;border-color:var(--tc)}
   <div class="tab-panel" id="tab-predict">
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
       <span style="font-size:11px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;font-weight:700">Filter players:</span>
-      <button class="flt-btn active" id="pflt-all"    onclick="setPredFilter('all')">All 100</button>
+      <button class="flt-btn active" id="pflt-all"    onclick="setPredFilter('all')">All</button>
       <button class="flt-btn"        id="pflt-active" onclick="setPredFilter('active')" title="Anyone who played in the active draw — alive or eliminated">Active in event</button>
       <button class="flt-btn"        id="pflt-alive"  onclick="setPredFilter('alive')"  title="Only players still in the active draw">Alive only</button>
       <select id="pred-surf" onchange="renderPredict()" style="margin-left:auto">
@@ -1403,9 +1417,14 @@ function renderLive() {
   const el   = document.getElementById('live-content');
 
   if (!acts.length) {
-    // No active events — show next upcoming + recent completed
-    const completed = TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR) && t.complete);
-    const upcoming  = TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR) && !t.complete && !t.active).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||''));
+    // No active events — show next upcoming + recent completed. Date-driven
+    // (NOT the manual complete/active flags in tournaments.js, which were
+    // chronically stale — Madrid stayed active:true 3 weeks after its Final).
+    // Server's activeTournaments[] is authoritative for "currently playing";
+    // here we use dates to bucket the rest.
+    const today = new Date().toISOString().slice(0, 10);
+    const completed = TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR) && (t.endDate||'') < today);
+    const upcoming  = TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR) && (t.startDate||'') > today).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||''));
     const next      = upcoming[0];
     el.innerHTML = `
       ${blufLive()}
@@ -1603,7 +1622,9 @@ function renderLive() {
 
     <div style="margin-top:16px">
       <h2 style="margin-bottom:12px;font-size:18px;color:var(--ink)">Upcoming Events</h2>
-      ${renderUpcoming(TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR)&&!t.complete&&!t.active).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||'')))}
+      ${(() => { const today = new Date().toISOString().slice(0, 10);
+        return renderUpcoming(TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR)&&(t.startDate||'')>today).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||'')));
+      })()}
     </div>
   `;
 }
@@ -1894,7 +1915,29 @@ function renderRankings() {
   renderRankingsTable();
 }
 
+function setScatterAxisMax(axis, value) {
+  const key = `scatterMax${axis.toUpperCase()}_${TOUR}`;
+  if (value === '' || value == null) localStorage.removeItem(key);
+  else localStorage.setItem(key, String(value));
+  renderScatter();
+}
+
+function resetScatterAxisMax() {
+  localStorage.removeItem(`scatterMaxX_${TOUR}`);
+  localStorage.removeItem(`scatterMaxY_${TOUR}`);
+  document.getElementById('scatter-max-x').value = '';
+  document.getElementById('scatter-max-y').value = '';
+  renderScatter();
+}
+
 function renderScatter() {
+  // Sync axis-max inputs with persisted per-tour values on every render
+  // (handles tour-toggle: ATP and WTA can have independent caps).
+  const xInput = document.getElementById('scatter-max-x');
+  const yInput = document.getElementById('scatter-max-y');
+  if (xInput) xInput.value = localStorage.getItem(`scatterMaxX_${TOUR}`) || '';
+  if (yInput) yInput.value = localStorage.getItem(`scatterMaxY_${TOUR}`) || '';
+
   // Update chart card title to reflect projected mode
   const scatterTitle = document.getElementById('scatter-title');
   if (scatterTitle) scatterTitle.textContent = USE_PROJ_RANKINGS
@@ -1956,6 +1999,12 @@ function renderScatter() {
   destroyChart('chart-scatter');
   const ctx = document.getElementById('chart-scatter').getContext('2d');
 
+  // User-customizable axis caps (per-tour, persisted in localStorage). Empty
+  // value → Chart.js auto-scales. Useful when 1-2 outliers (Sinner, Alcaraz)
+  // compress the mid-pack and you want to zoom in.
+  const xMaxUser = parseFloat(localStorage.getItem(`scatterMaxX_${TOUR}`) || '');
+  const yMaxUser = parseFloat(localStorage.getItem(`scatterMaxY_${TOUR}`) || '');
+
   CHARTS['chart-scatter'] = new Chart(ctx, {
     type: 'bubble',
     data: {
@@ -1967,8 +2016,6 @@ function renderScatter() {
         borderWidth: 1,
         pointRadius: data.map(d => d.r),
         hoverRadius: data.map(d => d.r + 3),
-        // bubble chart requires r field
-        parsing: false,
       }]
     },
     options: {
@@ -2005,12 +2052,14 @@ function renderScatter() {
           grid:  { color: 'rgba(57,67,64,0.08)' },
           ticks: { color: '#5f6a68', font: { size: 10 },
                    callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v },
+          ...(isFinite(xMaxUser) && xMaxUser > 0 ? { max: xMaxUser } : {}),
         },
         y: {
           title: { display: true, text: USE_PROJ_RANKINGS ? 'Projected T12M Pts (after active draw)' : 'T12M Ranking Points', color: '#5f6a68', font: { size: 11 } },
           grid:  { color: 'rgba(57,67,64,0.08)' },
           ticks: { color: '#5f6a68', font: { size: 10 },
                    callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v },
+          ...(isFinite(yMaxUser) && yMaxUser > 0 ? { max: yMaxUser } : {}),
         }
       }
     }
