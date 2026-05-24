@@ -11,23 +11,25 @@ Single-file HTML dashboard (`wta_analytics.html`) deployed as a static site on C
 **Live URL:** `https://tennis-wta-atp.kasserconnor.workers.dev/wta_analytics`
 **Repo:** **public** GitHub at `github.com/thekasser/tennis-wta-atp`. Cloudflare Workers builds + deploys on push to `main`.
 
-> **Public-repo posture:** All match/ranking data and pipeline code is public — fine, it's all derived from a paid Matchstat API + Sackmann's CC-licensed CSVs. Secrets stay out of the repo: `MATCHSTAT_API_KEY` and `ADMIN_SYNC_TOKEN` live only in (a) `.env` on Connor's Mac (gitignored), (b) GitHub Actions repo secrets, (c) `wrangler secret put` for the Worker. The D1 `database_id` in `wrangler.toml` is committed but is not a secret — it's useless without Cloudflare account auth, similar to a Postgres database name. The `/api/*` read endpoints are intentionally public (Cloudflare Access bypass policy on `/api/*`); the dashboard at `/wta_analytics*` stays gated by email allowlist for ~10 family/friends. `/api/admin/*` requires a bearer token.
+> **Public-repo posture:** Code, pipeline, curated inputs (players, tournaments), and the snapshot summary are public — that's the "show the work" part. **Raw Matchstat API payloads are NOT public** — RapidAPI/Matchstat ToS prohibits redistributing raw API data. As of 2026-05-24, `data/tennis.db.gz` is gitignored and lives in a private Cloudflare R2 bucket; the cron pulls from R2 on each run via `scripts/restore_db.py`. The dashboard reads aggregated/derived blobs from D1's `materialized` table (composite z-scores, rankings, projections) — never raw match rows, never stat blocks — so the public `/api/*` endpoints are ToS-compatible. Secrets stay out of the repo: `MATCHSTAT_API_KEY`, `ADMIN_SYNC_TOKEN`, and the R2 token (`R2_ACCOUNT_ID` + `R2_ACCESS_KEY_ID` + `R2_SECRET_ACCESS_KEY`) live only in (a) `.env` on Connor's Mac (gitignored), (b) GitHub Actions repo secrets, (c) `wrangler secret put` for the Worker where applicable. The D1 `database_id` in `wrangler.toml` is committed but is not a secret — it's useless without Cloudflare account auth, similar to a Postgres database name. The `/api/*` read endpoints are intentionally public (Cloudflare Access bypass policy on `/api/*`); the dashboard at `/wta_analytics*` stays gated by email allowlist for ~10 family/friends. `/api/admin/*` requires a bearer token.
 
 ---
 
 ## Architecture (Phase 2 — D1 + Workers, live)
 
 ```
-Python pipeline (cron) ───▶ SQLite (data/tennis.db) ───▶ materialize.py ───▶ data/*.js
-       │                                                                       │
-       │                                                                       ▼
-       └─────────▶ scripts/upload_to_worker.py ──▶ POST /api/admin/sync ──▶ D1.materialized
-                                                          │
-                                                          ▼
-                  Dashboard ◀── fetch('/api/*') ◀── Worker (workers/src/index.ts) ◀── D1
+                ┌─── (cron start)
+                ▼
+   R2 (private) ─▶ restore_db.py ─▶ SQLite (data/tennis.db) ─▶ sync_* + materialize.py ─▶ data/*.js
+        ▲                                       │                                            │
+        │                                       ▼                                            ▼
+   snapshot_db.py ◀──────────────── (cron end) ──┘             upload_to_worker.py ──▶ /api/admin/sync ──▶ D1.materialized
+                                                                                                              │
+                                                                                                              ▼
+                                                                Dashboard ◀── fetch('/api/*') ◀── Worker ◀── D1
 ```
 
-**Source of truth:** local `data/tennis.db` (driven by Matchstat). It rehydrates from `data/tennis.db.gz` at the start of every CI cron, then incrementally syncs from Matchstat, then materializes derived JSON, then pushes to D1 over HTTP.
+**Source of truth:** local `data/tennis.db` (driven by Matchstat). It rehydrates from `data/tennis.db.gz` at the start of every CI cron (downloaded fresh from private R2 — the .gz is gitignored), then incrementally syncs from Matchstat, then materializes derived JSON, then pushes to D1 over HTTP, then re-uploads the new snapshot to R2.
 
 **Serving:** Cloudflare Worker (`tennis-wta-atp`) serves the static dashboard from `[assets]` AND `/api/*` JSON endpoints backed by D1's `materialized` table (chunked because D1 caps statements at ~100KB; reassembled on read). Edge cache: 60s browser / 5min CF.
 
@@ -72,11 +74,13 @@ data/
 └── players_wta.js          # WTA bios
 ```
 
-**The DB (durable state, committed as compressed snapshot):**
+**The DB (durable state, private R2 bucket + gitignored local cache):**
 ```
 data/
-├── tennis.db.gz            # gzipped SQLite dump — rehydrated by restore_db.py
-├── snapshot_summary.txt    # human-readable manifest (PR-diffable)
+├── tennis.db.gz            # gzipped SQLite dump — GITIGNORED (raw Matchstat
+│                           # payloads inside). Lives in private R2 bucket
+│                           # `tennis-snapshots`; downloaded by restore_db.py.
+├── snapshot_summary.txt    # human-readable manifest (committed, PR-diffable)
 └── tennis.db               # working DB — gitignored; built by restore_db.py
 ```
 
@@ -133,8 +137,9 @@ scripts/
 │                          #   --prospective         score the predictions log
 │                          #   --feature-attribution per-signal Brier + net contribution
 │                          #   --sweep-sharpen "..."  one-pass tuning sweep
-├── snapshot_db.py         # data/tennis.db → data/tennis.db.gz (+ snapshot_summary.txt)
-├── restore_db.py          # data/tennis.db.gz → data/tennis.db (CI rehydration)
+├── snapshot_db.py         # data/tennis.db → data/tennis.db.gz + UPLOAD to R2
+├── restore_db.py          # DOWNLOAD from R2 → data/tennis.db.gz → data/tennis.db
+├── r2.py                  # Thin boto3 wrapper for the R2 (S3-compat) snapshot store
 ├── validate.py            # Pre-commit sanity gate (row counts, recency, dup-mid checks)
 ├── link_bios_to_api.py    # One-time: match new bio names → Matchstat ids
 ├── link_bios_to_sackmann.py  # One-time: match new bio names → Sackmann ids (2024)
@@ -177,7 +182,7 @@ scripts/
 
 ### Scheduled (auto)
 `.github/workflows/refresh.yml` runs **2×/day** (00:00 + 12:00 UTC = 5pm + 5am PDT) via GitHub Actions. Each run, in order:
-1. Restore `data/tennis.db` from `data/tennis.db.gz`.
+1. Restore `data/tennis.db` from R2 (`scripts/restore_db.py` downloads `tennis.db.gz` from the private bucket, then `sqlite3 .read`s it back).
 2. Seed bios + tournaments (`seed_db.py`) — picks up any manual bio additions in players_*.js since the last snapshot.
 3. Sync rankings (`sync_rankings.py`).
 4. Sync matches (`sync_matches.py` with decide_fetch heuristic).
@@ -252,7 +257,7 @@ python3 scripts/snapshot_db.py
 
 **Modify dashboard UI:** Edit `wta_analytics.html` directly — it is the compiled output. `wta_analytics_dashboard.jsx` is a JSX reference source only; it is not used in deployment. The `enrichActiveTournaments()` function is now a no-op stub — server is authoritative for activeTournaments[].
 
-**Before modifying any pipeline script:** All data flows through `data/tennis.db`. The DB is the authority. `data/*.js` files are projections via `scripts/materialize.py` and get overwritten on every pipeline run — never edit them by hand. The committed snapshot (`tennis.db.gz`) is regenerated by `snapshot_db.py`.
+**Before modifying any pipeline script:** All data flows through `data/tennis.db`. The DB is the authority. `data/*.js` files are projections via `scripts/materialize.py` and get overwritten on every pipeline run — never edit them by hand. The snapshot (`tennis.db.gz`) is regenerated by `snapshot_db.py` and lives in private R2 — see `scripts/r2.py`.
 
 ---
 

@@ -46,8 +46,12 @@ data/trapezoid_data.js
 !data/players_wta.js
 !data/tournaments.js
 
-# SQLite working DB — committed snapshot is data/tennis.db.gz only
+# SQLite working DB and snapshot — both gitignored since 2026-05-24.
+# tennis.db.gz contains raw Matchstat API payloads (matches.raw, stat_p1,
+# stat_p2) that the RapidAPI ToS prohibits redistributing publicly.
+# Canonical store: private R2 bucket. See scripts/r2.py and CLAUDE.md.
 data/tennis.db
+data/tennis.db.gz
 data/tennis.db-journal
 data/tennis.db-wal
 data/tennis.db-shm

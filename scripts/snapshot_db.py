@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """
-snapshot_db.py — Compress data/tennis.db into a git-committable snapshot.
+snapshot_db.py — Compress data/tennis.db into a snapshot file + upload to R2.
 
 Outputs:
-    data/tennis.db.gz       gzipped sqlite3 .dump (binary-friendly)
-    data/snapshot_summary.txt human-readable manifest (so PR diffs are useful)
+    data/tennis.db.gz         gzipped sqlite3 .dump (gitignored — private)
+    data/snapshot_summary.txt human-readable manifest (committed; row counts only)
+    s3://<R2_BUCKET>/tennis.db.gz   canonical store (private R2 bucket)
+
+The .gz file is GITIGNORED since 2026-05-24: it contains raw Matchstat API
+payloads (matches.raw, stat_p1, stat_p2) that the RapidAPI ToS prohibits
+redistributing publicly. The R2 bucket is the canonical store; restore_db.py
+downloads from R2 when the local file is absent (e.g. a fresh GHA checkout).
 
 USAGE
 -----
-    python3 scripts/snapshot_db.py            # write both files
+    python3 scripts/snapshot_db.py            # write + upload to R2
     python3 scripts/snapshot_db.py --dry-run  # print what would be written
+    python3 scripts/snapshot_db.py --no-upload  # write locally only
 
-Used by the daily CI job after sync_matches + materialize. The committed
-.gz file is what `restore_db.py` rehydrates on the next run.
+Used by the daily CI job after sync_matches + materialize.
 """
 from __future__ import annotations
 import argparse
@@ -24,6 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from db import DEFAULT_DB_PATH, REPO_ROOT, connect
+import r2
 
 
 SNAPSHOT_GZ = REPO_ROOT / "data" / "tennis.db.gz"
@@ -114,6 +121,8 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--no-upload", action="store_true",
+                   help="Write the local .gz but skip the R2 upload.")
     args = p.parse_args()
 
     if not args.db.exists():
@@ -138,6 +147,20 @@ def main() -> int:
 
     write_summary(args.db, SNAPSHOT_GZ, SUMMARY_TXT)
     print(f"[snapshot] wrote {SUMMARY_TXT.relative_to(REPO_ROOT)}")
+
+    # Upload the .gz to R2 (canonical private store). The local file is
+    # gitignored — if we don't push to R2, restore_db on the next cron has
+    # nothing to pull and the pipeline cold-starts. Fail loudly when R2 is
+    # configured but the upload errors; skip silently in local-dev where
+    # R2_* env vars aren't set.
+    if args.no_upload:
+        print("[snapshot] --no-upload: skipping R2 push")
+    elif r2.is_configured():
+        r2.upload(SNAPSHOT_GZ)
+    else:
+        print("[snapshot] R2 env vars not set — skipping upload "
+              "(local-only snapshot; set R2_ACCOUNT_ID + R2_ACCESS_KEY_ID + "
+              "R2_SECRET_ACCESS_KEY to push)")
     return 0
 
 
