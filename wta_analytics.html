@@ -2845,6 +2845,58 @@ function renderTrackRecord() {
         </tr></thead>
         <tbody>${calRows}</tbody>
       </table>` : ''}
+    ${(() => {
+      // Edge-calibration block: bucket matches by |model - Kalshi| and
+      // see who's right when we disagree by how much. Headline question:
+      // "is our model finding inefficiency, or just being miscalibrated?"
+      const ec = (PREDICTIONS_DATA.edge_calibration || []).filter(b => b.n > 0);
+      if (!ec.length) return '';
+      const ecRows = ec.map(b => {
+        const diff = (b.brier_us != null && b.brier_kalshi != null)
+                     ? (b.brier_us - b.brier_kalshi) : null;
+        const diffColor = diff == null ? 'var(--muted)'
+                        : diff < -0.005 ? 'var(--accent-green)'
+                        : diff >  0.005 ? 'var(--accent-rose)'
+                        : 'var(--muted)';
+        const diffStr = diff == null ? '—' : `${diff>0?'+':''}${(diff*1000).toFixed(1)}`;
+        const rateStr = b.won_a_rate_when_we_lean_p1 != null
+                        ? `${(b.won_a_rate_when_we_lean_p1*100).toFixed(0)}%`
+                        : '—';
+        const loPct = (b.lo*100).toFixed(0);
+        const hiPct = b.hi >= 1.0 ? '∞' : (b.hi*100).toFixed(0);
+        return `<tr>
+          <td style="font-family:monospace;font-size:11px">${loPct}–${hiPct}pp</td>
+          <td style="text-align:right">${b.n}</td>
+          <td style="text-align:right;font-family:monospace">${b.brier_us != null ? b.brier_us.toFixed(3) : '—'}</td>
+          <td style="text-align:right;font-family:monospace">${b.brier_kalshi != null ? b.brier_kalshi.toFixed(3) : '—'}</td>
+          <td style="text-align:right;font-family:monospace;color:${diffColor};font-weight:600">${diffStr}</td>
+          <td style="text-align:right;font-family:monospace" title="When the model favors p1 over Kalshi in this bucket, this is how often p1 actually won (${b.n_lean_p1 || 0} matches).">${rateStr}<span style="opacity:.5"> (${b.n_lean_p1 || 0})</span></td>
+        </tr>`;
+      }).join('');
+      const bdk = s.brier_diff_kalshi;
+      const headline = (bdk == null)
+        ? ''
+        : (bdk < 0
+            ? `<span style="color:var(--accent-green);font-weight:600">model wins overlap by ${(-bdk*1000).toFixed(1)} Brier-pts</span>`
+            : `<span style="color:var(--accent-rose);font-weight:600">Kalshi wins overlap by ${(bdk*1000).toFixed(1)} Brier-pts</span>`);
+      return `
+        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-top:18px;margin-bottom:8px">
+          Edge calibration · model vs Kalshi by disagreement size
+          <span style="text-transform:none;letter-spacing:0;font-weight:500;margin-left:6px;opacity:.7">— Δ negative = model wins that bucket</span>
+        </div>
+        ${headline ? `<div style="font-size:12px;margin-bottom:8px">${headline}</div>` : ''}
+        <table class="tbl" style="font-size:12px">
+          <thead><tr>
+            <th style="text-align:left" title="|model_p1 − kalshi_p1|">|Edge|</th>
+            <th style="text-align:right">n</th>
+            <th style="text-align:right">Our Brier</th>
+            <th style="text-align:right">Kalshi Brier</th>
+            <th style="text-align:right">Δ × 1000</th>
+            <th style="text-align:right" title="When we lean p1 in this bucket, p1 actually won X% of the time. Tells you whether our 'edge' direction is real.">p1 hit % (lean→p1)</th>
+          </tr></thead>
+          <tbody>${ecRows}</tbody>
+        </table>`;
+    })()}
     <div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.6">
       Model version: <code>${s.model_version || '—'}</code>.
       Brier guide: 0.25 = random · 0.20–0.23 = decent · &lt;0.20 = strong.
@@ -3030,6 +3082,21 @@ function renderRecentCalls() {
         : `<span style="color:var(--accent-rose);font-size:11px" title="Market disagreed: picked ${marketPick} at ${(Math.max(r.market_p_a, 1-r.market_p_a)*100).toFixed(0)}%">market ⇆</span>`;
     }
 
+    // Edge vs Kalshi, oriented to the model's pick. Positive = we're
+    // more confident on our pick than Kalshi was; negative = Kalshi
+    // was more confident on our pick than we were (or they picked the
+    // other side). Big positive = candidate investment area (we know
+    // something the market doesn't, IF our model is well-calibrated).
+    let edgeStr = '';
+    if (r.kalshi_p_a != null && r.edge_a != null) {
+      const edgePicked = modelPickedA ? r.edge_a : -r.edge_a;
+      const edgePp = edgePicked * 100;
+      const color = Math.abs(edgePp) < 3 ? 'var(--muted)'
+                  : edgePp >  0          ? 'var(--accent-green)'
+                  :                        'var(--accent-rose)';
+      edgeStr = `<span style="color:${color};font-size:11px;font-family:monospace" title="Model − Kalshi on the picked side: ${(modelConf*100).toFixed(0)}% vs ${((modelPickedA ? r.kalshi_p_a : 1-r.kalshi_p_a)*100).toFixed(0)}% Kalshi. Positive = we're more bullish than the market on our pick.">${edgePp>0?'+':''}${edgePp.toFixed(0)}pp</span>`;
+    }
+
     return `
       <tr>
         <td style="font-size:11px;color:var(--muted);white-space:nowrap">${r.date}</td>
@@ -3042,6 +3109,7 @@ function renderRecentCalls() {
           <div style="font-size:13px;font-weight:600">${(modelConf*100).toFixed(0)}% ${modelPicked.split(' ').slice(-1)[0]}</div>
           ${marketStr ? `<div style="margin-top:2px">${marketStr}</div>` : ''}
         </td>
+        <td style="text-align:right;white-space:nowrap">${edgeStr}</td>
         <td style="text-align:center;white-space:nowrap">
           <span style="font-size:18px;font-weight:700;color:${hit ? 'var(--accent-green)' : 'var(--accent-rose)'}">
             ${hit ? '✓' : '✗'}
@@ -3068,6 +3136,7 @@ function renderRecentCalls() {
           <th style="text-align:left">Surf</th>
           <th style="text-align:left">Matchup</th>
           <th style="text-align:right">Model pick</th>
+          <th style="text-align:right" title="Model − Kalshi on the picked side. Positive = our model more bullish than the market.">Edge</th>
           <th style="text-align:center">Result</th>
         </tr></thead>
         <tbody>${rowHtml}</tbody>

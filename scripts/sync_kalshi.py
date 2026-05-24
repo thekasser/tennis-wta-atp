@@ -357,6 +357,80 @@ def upsert_kalshi_odds(conn, mid_idx: dict, event: dict, tour: str
     return True, f"ok ({kind})"
 
 
+def consolidate_match_ids(conn) -> tuple[int, int]:
+    """Rewrite fixture-keyed kalshi_odds.match_id values to the canonical
+    matches.id once a fixture has migrated to matches.
+
+    Problem this fixes: when a Kalshi sync runs BEFORE a match exists in
+    the matches table, find_match_id falls back to fixtures.id (small
+    integer, e.g. 1289). After the match completes and gets a matches
+    row (with the 9-digit Matchstat id), no one rewrites the old
+    kalshi_odds rows — they stay orphaned. The materialize JOIN against
+    predictions.match_id (which uses matches.id) silently drops them.
+    Worse: the fixtures table gets gc'd by sync_fixtures, so by the time
+    we look for the fixture row to resolve dates+players, it's gone.
+    Hence we resolve using kalshi_odds's own (p1_mid, p2_mid) + the date
+    encoded in kalshi_event.
+
+    Strategy: for each distinct fixture-keyed kalshi_odds row, parse the
+    event date from kalshi_event and look up matches by (date ±1 day,
+    p1_mid, p2_mid). If found, rewrite all rows for that old match_id
+    to the canonical matches.id. fetched_at conflicts (already a row at
+    the same fetched_at on the canonical id) are dropped explicitly.
+
+    Returns (rows_rewritten, rows_dropped_as_dup).
+    """
+    rewritten = dropped = 0
+    # Find distinct fixture-keyed kalshi_odds rows that don't already map
+    # to a matches.id. Use kalshi_odds's own columns (p1_mid, p2_mid,
+    # kalshi_event) — the fixtures row may be gone.
+    candidates = list(conn.execute("""
+        SELECT k.match_id AS old_mid,
+               k.kalshi_event,
+               k.p1_mid, k.p2_mid
+        FROM kalshi_odds k
+        LEFT JOIN matches m_via_id ON m_via_id.id = k.match_id
+        WHERE m_via_id.id IS NULL                    -- not already a matches.id
+          AND k.p1_mid IS NOT NULL
+          AND k.p2_mid IS NOT NULL
+        GROUP BY k.match_id
+    """))
+    for c in candidates:
+        date_str = parse_event_date(c["kalshi_event"] or "")
+        if not date_str:
+            continue
+        target = conn.execute("""
+            SELECT id FROM matches
+            WHERE date BETWEEN date(?, '-1 day') AND date(?, '+1 day')
+              AND ((p1_id = ? AND p2_id = ?) OR (p1_id = ? AND p2_id = ?))
+            LIMIT 1
+        """, (date_str, date_str,
+              c["p1_mid"], c["p2_mid"], c["p2_mid"], c["p1_mid"])).fetchone()
+        if not target:
+            continue
+        new_mid = target["id"]
+        # Drop dups first so the UPDATE doesn't violate the
+        # (match_id, fetched_at) PK.
+        dup_set = {r["fetched_at"] for r in conn.execute(
+            "SELECT fetched_at FROM kalshi_odds WHERE match_id = ?",
+            (new_mid,)
+        ).fetchall()}
+        if dup_set:
+            placeholders = ",".join("?" * len(dup_set))
+            n_drop = conn.execute(
+                f"DELETE FROM kalshi_odds WHERE match_id = ? AND fetched_at IN ({placeholders})",
+                (c["old_mid"], *dup_set)
+            ).rowcount
+            dropped += n_drop
+        n_up = conn.execute(
+            "UPDATE kalshi_odds SET match_id = ? WHERE match_id = ?",
+            (new_mid, c["old_mid"])
+        ).rowcount
+        rewritten += n_up
+    conn.commit()
+    return rewritten, dropped
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     p.add_argument("--tour", choices=("atp", "wta", "both"), default="both")
@@ -403,6 +477,15 @@ def main() -> int:
     print(f"\n[summary] {grand_inserted} prices upserted, "
           f"{grand_skipped_name} skipped on name, "
           f"{grand_skipped_match} skipped (no local match)")
+
+    # Consolidation pass: rewrite any kalshi_odds rows still keyed by a
+    # fixtures.id whose match has since resolved into the matches table.
+    # Without this, pre-match snapshots stay orphaned and never join to
+    # predictions. Cheap (only touches stale-keyed rows).
+    rewritten, dropped = consolidate_match_ids(conn)
+    if rewritten or dropped:
+        print(f"[consolidate] rewrote {rewritten} fixture-keyed match_id "
+              f"references to matches.id ({dropped} dropped as dup)")
     return 0
 
 

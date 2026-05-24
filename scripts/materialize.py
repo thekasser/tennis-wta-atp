@@ -1395,9 +1395,15 @@ def materialize_predictions(conn) -> bool:
             p.p_pred, p.predicted_at, p.model_version,
             p.tournament_id,
             m.winner_id, m.raw, m.score,
-            -- Latest Kalshi snapshot for this match (any pre/post-match
-            -- since both have value). Keyed by p.p1_mid match because
-            -- kalshi_odds uses our slot convention (lower mid → A).
+            -- Latest PRE-match Kalshi snapshot. Post-match snapshots
+            -- saturate at 0.99/0.01 once the contract settles, which
+            -- makes "Kalshi Brier" look like ~0.0001 (an artifact of
+            -- scoring against settlement prices, not a real market
+            -- prediction). is_pre_match=1 iff fetched while the match
+            -- was still in the fixtures table (i.e. before tip-off);
+            -- see sync_kalshi.py:298. Latest such snapshot = closest
+            -- to tip-off = market's best pre-game consensus = what
+            -- we'd actually trade against.
             k.p1_yes_price AS kalshi_p1_yes,
             k.p2_yes_price AS kalshi_p2_yes,
             k.is_pre_match AS kalshi_pre_match
@@ -1407,7 +1413,9 @@ def materialize_predictions(conn) -> bool:
           SELECT match_id, p1_yes_price, p2_yes_price, is_pre_match,
                  ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY fetched_at DESC) AS rn
           FROM kalshi_odds
-          WHERE p1_yes_price IS NOT NULL AND p2_yes_price IS NOT NULL
+          WHERE p1_yes_price IS NOT NULL
+            AND p2_yes_price IS NOT NULL
+            AND is_pre_match = 1
         ) k ON k.match_id = p.match_id AND k.rn = 1
         WHERE m.winner_id IS NOT NULL
           AND p.predicted_at = (
@@ -1457,6 +1465,12 @@ def materialize_predictions(conn) -> bool:
             if tot > 0:
                 kalshi_p_a = r["kalshi_p1_yes"] / tot
 
+        # Signed edge vs Kalshi: positive = we like p1 more than the
+        # market does. abs is used for sorting/binning. Only meaningful
+        # when kalshi_p_a is present (post-fix: pre-match snapshots only).
+        edge_a = round(r["p_pred"] - kalshi_p_a, 4) if kalshi_p_a is not None else None
+        edge_abs = abs(edge_a) if edge_a is not None else None
+
         enriched.append({
             "match_id":  r["match_id"],
             "date":      r["date"],
@@ -1470,6 +1484,8 @@ def materialize_predictions(conn) -> bool:
             "market_p_a":        round(market_p_a, 4) if market_p_a is not None else None,
             "kalshi_p_a":        round(kalshi_p_a, 4) if kalshi_p_a is not None else None,
             "kalshi_pre_match":  bool(r["kalshi_pre_match"]) if r["kalshi_pre_match"] is not None else None,
+            "edge_a":            edge_a,
+            "edge_abs":          edge_abs,
             "score":     r["score"],
             "model_version": r["model_version"],
         })
@@ -1516,6 +1532,48 @@ def materialize_predictions(conn) -> bool:
                             "pred": round(pred, 3),
                             "actual": round(actual, 3)})
 
+    # Edge calibration: bucket matches where both we and Kalshi opined,
+    # by |p_pred - kalshi_p_a|. For each bucket report sample size and
+    # who was right (lower Brier = better). The headline question this
+    # answers: "when our model disagrees with the market by a lot, who
+    # tends to be right?" Positive brier_us - brier_kalshi → market wins
+    # that bucket; negative → we have edge there.
+    edge_buckets = [
+        (0.00, 0.05), (0.05, 0.10), (0.10, 0.20),
+        (0.20, 0.30), (0.30, 1.00),
+    ]
+    edge_calibration = []
+    for lo, hi in edge_buckets:
+        bucket = [
+            e for e in enriched
+            if e["edge_abs"] is not None and lo <= e["edge_abs"] < hi
+        ]
+        if not bucket:
+            edge_calibration.append({
+                "lo": lo, "hi": hi, "n": 0,
+                "brier_us": None, "brier_kalshi": None,
+                "won_a_rate_when_we_lean_p1": None,
+            })
+            continue
+        b_us = sum((e["p_pred"]    - e["won_a"]) ** 2 for e in bucket) / len(bucket)
+        b_k  = sum((e["kalshi_p_a"] - e["won_a"]) ** 2 for e in bucket) / len(bucket)
+        lean_p1 = [e for e in bucket if e["edge_a"] > 0]
+        rate = (sum(e["won_a"] for e in lean_p1) / len(lean_p1)) if lean_p1 else None
+        edge_calibration.append({
+            "lo": lo, "hi": hi, "n": len(bucket),
+            "brier_us":     round(b_us, 4),
+            "brier_kalshi": round(b_k, 4),
+            "won_a_rate_when_we_lean_p1": round(rate, 3) if rate is not None else None,
+            "n_lean_p1":    len(lean_p1),
+        })
+
+    # Headline metric: negative = we beat the market on the overlap.
+    brier_diff_kalshi = (
+        round(brier_us_kalshi_subset - brier_kalshi, 4)
+        if (brier_us_kalshi_subset is not None and brier_kalshi is not None)
+        else None
+    )
+
     payload = {
         # Keep up to 500 most-recent resolved predictions in the dashboard
         # blob. Rationale: a year of prospective predictions is ~700-1000;
@@ -1533,10 +1591,12 @@ def materialize_predictions(conn) -> bool:
             "n_with_odds":     len(with_odds),
             "brier_kalshi":           round(brier_kalshi, 4) if brier_kalshi is not None else None,
             "brier_us_kalshi_subset": round(brier_us_kalshi_subset, 4) if brier_us_kalshi_subset is not None else None,
+            "brier_diff_kalshi":      brier_diff_kalshi,
             "n_with_kalshi":          len(with_kalshi),
             "model_version":   enriched[0]["model_version"] if enriched else None,
         },
         "calibration": calibration,
+        "edge_calibration": edge_calibration,
     }
     hash_input = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     path = DATA_DIR / "predictions.js"

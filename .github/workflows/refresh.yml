@@ -100,11 +100,13 @@ jobs:
       # alongside the sportsbook odds in matches.raw. Coverage is
       # near-100% on bio'd matches, including qualifying where
       # sportsbooks typically don't post. Zero impact on Matchstat budget.
-      # --include-settled to capture post-match prices for backtest.
+      # Pre-match snapshots only — settlement-time prices saturate at
+      # 0.99/0.01 and make Brier scoring meaningless (is_pre_match=1
+      # filter in materialize.py depends on us not polluting the table).
       - name: Sync Kalshi odds
         run: |
           cd "$GITHUB_WORKSPACE"
-          python3 scripts/sync_kalshi.py --include-settled
+          python3 scripts/sync_kalshi.py
 
       # ── Log prospective predictions for upcoming/active matches ────────
       # MUST run BEFORE materialize so today's new predictions land in

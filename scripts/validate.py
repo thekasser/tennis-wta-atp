@@ -21,12 +21,17 @@ USAGE
 """
 from __future__ import annotations
 import argparse
+import json
+import re
 import sys
 from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from db import DEFAULT_DB_PATH, connect
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+PREDICTIONS_JS = REPO_ROOT / "data" / "predictions.js"
 
 
 # Sane lower bounds — adjust as the corpus grows.
@@ -72,6 +77,33 @@ LOWER_TIER_NAME_MARKERS = (
 # stale dates (Hamburg 2026: catalog Jul, actual May → 58d drift, never
 # detected as active despite playing the Final yesterday).
 DATE_DRIFT_MAX_DAYS = 14
+
+# Kalshi Brier sanity floor. Real pre-match prediction markets score
+# ~0.18–0.22 on tennis (close to random for tossups, 0.05 for blowouts,
+# averages out). Anything <0.10 across a meaningful sample means we're
+# scoring post-settlement prices again — the 2026-05-23 bug class where
+# materialize.py joined to settlement-time snapshots saturated at 0/1.
+# Only enforce once the sample is non-trivial; pre-match snapshot
+# coverage is rebuilding after the fix.
+KALSHI_BRIER_MIN     = 0.10
+KALSHI_BRIER_MIN_N   = 50
+
+
+def _load_predictions_stats() -> dict | None:
+    """Parse the stats{} block from data/predictions.js (the JS const
+    has a JSON literal RHS — extract via regex). Returns None if the
+    file or block is missing."""
+    if not PREDICTIONS_JS.exists():
+        return None
+    text = PREDICTIONS_JS.read_text(encoding="utf-8")
+    m = re.search(r"const\s+PREDICTIONS_DATA\s*=\s*(\{.*?\});\s*$",
+                  text, flags=re.DOTALL | re.MULTILINE)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(1)).get("stats")
+    except json.JSONDecodeError:
+        return None
 
 
 def _check(label: str, ok: bool, msg: str) -> tuple[bool, str]:
@@ -271,6 +303,21 @@ def main() -> int:
     else:
         warn(f"tournament date drift (>{DATE_DRIFT_MAX_DAYS}d)", True,
              "all catalog dates within tolerance")
+
+    # 11. Kalshi Brier sanity floor (post-fix guardrail)
+    stats = _load_predictions_stats()
+    if stats is None:
+        warn("kalshi brier sanity", True, "predictions.js missing or unparseable — skipped")
+    else:
+        bk = stats.get("brier_kalshi")
+        nk = stats.get("n_with_kalshi") or 0
+        if bk is None or nk < KALSHI_BRIER_MIN_N:
+            warn("kalshi brier sanity", True,
+                 f"n_with_kalshi={nk} (need ≥{KALSHI_BRIER_MIN_N} to enforce; brier={bk})")
+        else:
+            hard("kalshi brier sanity", bk > KALSHI_BRIER_MIN,
+                 f"brier_kalshi={bk:.4f} on n={nk} (need >{KALSHI_BRIER_MIN}; "
+                 f"lower = scoring post-settlement prices)")
 
     print()
     if failures:
