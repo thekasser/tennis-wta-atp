@@ -31,8 +31,22 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v5
 
-      # ── Restore the SQLite DB from the committed snapshot ──────────────
+      # ── Install boto3 (used by scripts/r2.py for the R2 snapshot store) ──
+      # boto3 is the only non-stdlib runtime dep; everything else is pure
+      # stdlib + sqlite3. ~5-10s on a cold runner.
+      - name: Install Python deps
+        run: pip install --quiet boto3
+
+      # ── Restore the SQLite DB from R2 (private snapshot store) ─────────
+      # tennis.db.gz is gitignored since 2026-05-24 (raw Matchstat payloads
+      # can't be redistributed publicly per ToS). Canonical store is the
+      # R2 bucket configured below; restore_db.py downloads from there.
       - name: Restore DB snapshot
+        env:
+          R2_ACCOUNT_ID:        ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET:            ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           cd "$GITHUB_WORKSPACE"
           python3 scripts/restore_db.py
@@ -112,7 +126,15 @@ jobs:
           python3 scripts/materialize.py
 
       # ── Update the committed DB snapshot ───────────────────────────────
+      # snapshot_db.py writes the local .gz AND uploads to R2. The .gz is
+      # gitignored — R2 is the canonical store. R2 env vars must be set or
+      # the upload silently skips and next cron starts from a stale snapshot.
       - name: Snapshot DB
+        env:
+          R2_ACCOUNT_ID:        ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET:            ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           cd "$GITHUB_WORKSPACE"
           python3 scripts/snapshot_db.py
@@ -149,15 +171,16 @@ jobs:
             python3 scripts/upload_to_worker.py
           fi
 
-      # ── Commit & push the DB snapshot + manifest ───────────────────────
-      # We only commit the things that drive future CI runs:
-      #   - data/tennis.db.gz       (rehydrated by restore_db.py next run)
-      #   - data/snapshot_summary.txt (PR-diffable manifest)
+      # ── Commit & push the manifest ─────────────────────────────────────
+      # As of 2026-05-24 the DB snapshot itself (data/tennis.db.gz) is
+      # gitignored and lives in private R2 — see scripts/snapshot_db.py.
+      # The only things committed here are:
+      #   - data/snapshot_summary.txt (PR-diffable manifest, row counts)
       #   - data/players_*.js, data/tournaments.js (curated inputs only
       #     change on manual edits — won't show up in `git status` here
       #     unless an editor touched them)
-      # The derived data/*.js files (season_*, recent_matches, h2h, etc.)
-      # are gitignored — D1 is the canonical store now.
+      # Derived data/*.js (season_*, recent_matches, h2h, etc.) are also
+      # gitignored — D1 is the canonical store for the dashboard.
       - name: Commit and push
         run: |
           cd "$GITHUB_WORKSPACE"
