@@ -3917,13 +3917,25 @@ function computeDefending(bioId, tourn) {
   const tourKey = (typeof TOUR === 'string' ? TOUR : '').toLowerCase();
   const hist = ((TOURNAMENT_HISTORY[tourKey] || {})[bioId]) || [];
   if (!hist.length) return 0;
-  // Active tournament's calendar year is in the id (e.g. "madrid26") or use today
+  // Prefer tournament-id matching over name string matching. The
+  // materializer stamps each history entry with its canonical tid
+  // (e.g. "rg25"); the active tournament's id ends in the year suffix
+  // ("rg26"). Decrement the trailing 2 digits to get the prior-year id.
+  // Name matching is fragile because Matchstat's API names ("French
+  // Open - Paris") don't always match our catalog names ("Roland Garros"),
+  // so historical name-based matches silently returned 0.
+  const priorId = (tourn.id || '').replace(/(\d{2})$/, m =>
+    String(parseInt(m, 10) - 1).padStart(2, '0'));
   const thisYear = new Date().getFullYear();
   const priorYear = thisYear - 1;
-  // Match by tournament name keyword (e.g. "Mutua Madrid Open")
-  const entry = hist.find(h =>
-    h.year === priorYear &&
-    (h.tn || '').toLowerCase().includes((tourn.name || '').toLowerCase()));
+  // Try tid match first (resolved tournament — reliable). Fall back to
+  // name-includes for entries that didn't resolve to a tid (W125 etc).
+  let entry = hist.find(h => h.tid && h.tid === priorId);
+  if (!entry) {
+    entry = hist.find(h =>
+      h.year === priorYear &&
+      (h.tn || '').toLowerCase().includes((tourn.name || '').toLowerCase()));
+  }
   if (!entry) return 0;
   // Map raw Matchstat round → PTS key, draw-size aware
   const drawSize = tourn.draw || 96;
