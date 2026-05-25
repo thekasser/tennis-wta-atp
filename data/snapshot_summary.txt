@@ -1,22 +1,22 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-24T23:31:47.582576+00:00
+# Generated: 2026-05-25T08:38:13.020295+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    12,747
-  rankings_snapshots          5,756
-  api_fetch_log              16,909
+  matches                    12,748
+  rankings_snapshots          6,019
+  api_fetch_log              17,191
 
-## Latest rankings snapshot: 2026-05-24
+## Latest rankings snapshot: 2026-05-25
 
 ## Active tournaments
   geneva26       Gonet Geneva Open - Geneva       matches= 32  latest=2026-05-23
   hamburg26      Hamburg Open                     matches= 43  latest=2026-05-23
   rabat26        Grand Prix De SAR La Princesse Lalla Meryem - Rabat matches= 28  latest=2026-05-23
-  rg26           Roland Garros                    matches=125  latest=2026-05-24
+  rg26           Roland Garros                    matches=126  latest=2026-05-24
   strasbourg26   Internationaux de Strasbourg - Strasbourg matches= 37  latest=2026-05-23
 
 ## 5 most recent matches anywhere in DB
