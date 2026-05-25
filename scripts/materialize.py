@@ -348,30 +348,38 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
         # started) > "?" as last resort. Without this, RG showed "?" on the
         # Live Events card all of day 1 because no main-draw match had
         # completed yet.
+        final_stage = deepest_round_name or scheduled_stage or "?"
+
+        # Drop tournaments where the Final is decided (stage == "W"). The
+        # 1-day grace window above protects against the data-sync race
+        # where the Final has just been played but the winner row hasn't
+        # landed in our DB yet — once stage flips to "W" that race is
+        # resolved and continuing to show the tournament as "active" is
+        # wrong UX (it'd linger 24h past the Final on the Live Events
+        # tab). The tournament moves cleanly to the completed-results
+        # bucket via _compute_results_per_player's exclusion set.
+        if final_stage == "W":
+            continue
+
         out.append({
             "id":      t["id"],
-            "stage":   deepest_round_name or scheduled_stage or "?",
+            "stage":   final_stage,
             "players": players_block,
         })
     return out
 
 
-def _compute_results_per_player(conn, tour: str) -> dict[int, dict]:
+def _compute_results_per_player(conn, tour: str,
+                                active_ids: set[str] | None = None) -> dict[int, dict]:
     """For each bio, return {tournament_id: {r, pts}} of completed events.
-    Excludes any tournament currently inside its active window (those are
+    Excludes the tournaments in `active_ids` (which the caller should
+    populate from `_compute_active_tournaments`'s output IDs — those are
     projected via activeTournaments[] separately so we don't double-count).
+    A tournament dropped from active because stage=="W" is NOT in active_ids
+    and DOES land in this completed-results map, which is correct: the
+    Final winner's pts should show up in their per-tournament results.
     """
-    today = date.today()
-    # Build set of currently-active tournament ids (date-windowed) to exclude.
-    active_ids = set()
-    for r in conn.execute("SELECT id, start_date, end_date FROM tournaments WHERE start_date IS NOT NULL AND end_date IS NOT NULL"):
-        try:
-            sd = date.fromisoformat(r["start_date"])
-            ed = date.fromisoformat(r["end_date"])
-        except (ValueError, TypeError):
-            continue
-        if (sd - timedelta(days=7)) <= today <= (ed + timedelta(days=1)):
-            active_ids.add(r["id"])
+    active_ids = active_ids or set()
     placeholders = ",".join("?" * len(active_ids)) if active_ids else "''"
     api_id_col = f"api_id_{tour}"
     rows = list(conn.execute(f"""
@@ -505,8 +513,14 @@ def materialize_season(conn, tour: str) -> bool:
         WHERE tour = ? AND snapshot_date = ?
     """, (tour, baseline_date))} if baseline_date else {}
 
-    results_by_bio = _compute_results_per_player(conn, tour)
+    # Compute active first so we can pass its exclusion set to the results
+    # builder. Order matters: if we recomputed exclusion independently from a
+    # date window, a stage=="W" tournament (dropped from active) would also
+    # be excluded from results — falling into a gap where the Final winner's
+    # points never show up in their per-tournament results map.
     active_tournaments = _compute_active_tournaments(conn, tour)
+    active_ids = {t["id"] for t in active_tournaments}
+    results_by_bio = _compute_results_per_player(conn, tour, active_ids)
 
     # Build the players block in bio_id order so the file diff is stable.
     players_obj: dict[int, dict] = {}
