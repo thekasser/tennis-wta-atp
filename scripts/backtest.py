@@ -428,6 +428,18 @@ COMPOSITE_METRICS = [
                             # informative than per-chance BP conversion.
     "tbWinPct", "decSetWinPct", "matchWinPct",
 ]
+# Wider list for per-component attribution. Superset of COMPOSITE_METRICS plus
+# pts-level metrics we want to test as potential additions. The model's
+# composite is unchanged — these extra metrics are evaluated in isolation
+# (each as a hypothetical sole composite) to surface whether pts-won captures
+# independent signal beyond games-won. servePtsWonPct + returnPtsWonPct
+# encode "pressure applied" (winning points even on lost games); games-level
+# metrics encode "conversion." If pts adds Brier vs games, the pressure
+# signal isn't moot.
+ATTRIBUTION_METRICS = COMPOSITE_METRICS + [
+    "servePtsWonPct",
+    "returnPtsWonPct",
+]
 SHRINK_PRIOR          = 15      # matches `decorateTrapezoidComposite`
 COMPOSITE_WINDOW_DAYS = 180     # ≈ T6M (lookupComposite default in dashboard)
 COMPOSITE_MIN_ZS      = 3       # min metrics with valid z-score; below → None
@@ -486,8 +498,12 @@ def _build_composite_cohort(conn, tour: str, asof_date: str,
         metrics[mid] = agg
         matches_count[mid] = agg.get("matches", 0)
 
+    # Compute stats for the WIDER attribution set, not just COMPOSITE_METRICS.
+    # The model's composite still uses only COMPOSITE_METRICS — but pit_composite
+    # also returns per-metric z-scores for ATTRIBUTION_METRICS so we can run
+    # per-component attribution without re-querying the DB.
     stats: dict[str, tuple[float, float]] = {}
-    for m_name in COMPOSITE_METRICS:
+    for m_name in ATTRIBUTION_METRICS:
         vals = [agg[m_name] for agg in metrics.values()
                 if agg.get(m_name) is not None]
         if len(vals) < 3:
@@ -502,13 +518,20 @@ def _build_composite_cohort(conn, tour: str, asof_date: str,
 
 def pit_composite(conn, mid: int, tour: str, asof_date: str,
                   cache: dict[tuple[str, str], dict],
-                  mid_idx: dict[int, dict]) -> float | None:
-    """Composite z-score for `mid` as of `asof_date`. Z-scored against the
+                  mid_idx: dict[int, dict]
+                  ) -> tuple[float | None, dict[str, float]]:
+    """Composite z-score for `mid` as of `asof_date`, plus per-metric raw
+    z-scores for the full ATTRIBUTION_METRICS set. Z-scored against the
     cohort of all bio'd players on `tour` aggregated at the same week.
     Cohort is computed once per (tour, ISO-week) tuple and reused.
 
-    Returns None if the player has fewer than COMPOSITE_MIN_ZS valid metrics
-    (insufficient stat coverage in the window).
+    Returns (composite, per_metric_zs):
+      - composite: shrunk mean of COMPOSITE_METRICS z-scores, or None if
+        fewer than COMPOSITE_MIN_ZS valid metrics.
+      - per_metric_zs: {metric: shrunk_z} for every metric in
+        ATTRIBUTION_METRICS that has cohort stats AND a player value.
+        Each z has the same shrinkage applied as the composite (n/(n+prior))
+        so the per-metric attribution matches the model's effective scale.
     """
     week = _isoweek_start(asof_date)
     key  = (tour, week)
@@ -518,20 +541,27 @@ def pit_composite(conn, mid: int, tour: str, asof_date: str,
 
     raw = cohort["metrics"].get(mid)
     if not raw:
-        return None
-    zs = []
-    for m_name in COMPOSITE_METRICS:
+        return None, {}
+    n = cohort["matches"].get(mid, 0)
+    shrinkage = n / (n + SHRINK_PRIOR)
+
+    # Per-metric zs across the wider attribution set.
+    per_metric_zs: dict[str, float] = {}
+    for m_name in ATTRIBUTION_METRICS:
         v = raw.get(m_name)
         s = cohort["stats"].get(m_name)
         if v is None or not s:
             continue
-        zs.append((v - s[0]) / s[1])
-    if len(zs) < COMPOSITE_MIN_ZS:
-        return None
-    raw_z = sum(zs) / len(zs)
-    n = cohort["matches"].get(mid, 0)
-    shrinkage = n / (n + SHRINK_PRIOR)
-    return round(raw_z * shrinkage, 2)
+        per_metric_zs[m_name] = round(((v - s[0]) / s[1]) * shrinkage, 2)
+
+    # Composite uses only COMPOSITE_METRICS — model behaviour unchanged.
+    comp_zs = [per_metric_zs[m] for m in COMPOSITE_METRICS if m in per_metric_zs]
+    if len(comp_zs) < COMPOSITE_MIN_ZS:
+        return None, per_metric_zs
+    # comp_zs are already shrunk; mean them (matches the previous behaviour
+    # where shrinkage was applied to the mean, since mean of shrunk = shrunk mean).
+    composite = round(sum(comp_zs) / len(comp_zs), 2)
+    return composite, per_metric_zs
 
 
 # ─── Backtest driver ─────────────────────────────────────────────────────────
@@ -559,6 +589,12 @@ class MatchFeatures:
     h2h_b: int
     comp_a: float | None
     comp_b: float | None
+    # Per-metric shrunk z-scores from pit_composite. Populated for every
+    # metric in ATTRIBUTION_METRICS that has cohort stats. Used by
+    # per_component_attribution() to score hypothetical "what if comp was
+    # just this metric" predictions. Empty dict when stats are missing.
+    zs_a: dict
+    zs_b: dict
     won_a: int          # 1 if A won; 0 if B won (deterministic-by-mid slot)
 
 
@@ -586,6 +622,11 @@ class BacktestRow:
     won: int          # 1 if p1 won (matches p_pred for p1); 0 if p2 won
     weights_json: str
     signals_json: str
+    # Per-metric zs for both players (JSON-serialized when persisted).
+    # Format: {"metric_name": [za, zb], ...}. Drives per-component
+    # attribution: for each metric, we can reconstruct a hypothetical
+    # comp_p using just that metric and compute its Brier.
+    component_zs_json: str
 
 
 def load_completed_matches(conn, tour: str | None, year: int,
@@ -672,10 +713,11 @@ def collect_features(conn, tour: str, year: int, limit: int | None,
         h_a, h_b = pit_h2h(conn, mid_a, mid_b, asof)
 
         if use_composite:
-            cA = pit_composite(conn, mid_a, match_tour, asof, composite_cache, mid_idx)
-            cB = pit_composite(conn, mid_b, match_tour, asof, composite_cache, mid_idx)
+            cA, zsA = pit_composite(conn, mid_a, match_tour, asof, composite_cache, mid_idx)
+            cB, zsB = pit_composite(conn, mid_b, match_tour, asof, composite_cache, mid_idx)
         else:
             cA = cB = None
+            zsA, zsB = {}, {}
 
         features.append(MatchFeatures(
             match_id=m["id"], date=m["date"], tour=match_tour,
@@ -685,6 +727,7 @@ def collect_features(conn, tour: str, year: int, limit: int | None,
             pts_a=a_pts, ytd_a=a_ytd, pts_b=b_pts, ytd_b=b_ytd,
             form_a=fA, form_b=fB, h2h_a=h_a, h2h_b=h_b,
             comp_a=cA, comp_b=cB,
+            zs_a=zsA, zs_b=zsB,
             won_a=1 if m["winner_id"] == mid_a else 0,
         ))
 
@@ -709,6 +752,14 @@ def score_features(features: list[MatchFeatures], *,
               "composite": f.comp_b, "h2h_wins": f.h2h_b}
         result = match_prob(pA, pB, f.surface,
                             sharpen=sharpen, bare_elo=bare_elo)
+        # Component zs in compact form: {metric: [za, zb], ...}, only for
+        # metrics where BOTH players have a z (so per_component_brier can
+        # use the pair without conditional handling).
+        component_zs = {
+            m: [f.zs_a[m], f.zs_b[m]]
+            for m in ATTRIBUTION_METRICS
+            if m in f.zs_a and m in f.zs_b
+        }
         rows.append(BacktestRow(
             match_id=f.match_id, date=f.date, tour=f.tour, surface=f.surface,
             p1_mid=f.mid_a, p2_mid=f.mid_b,
@@ -720,6 +771,7 @@ def score_features(features: list[MatchFeatures], *,
             p_pred=result["prob"], won=f.won_a,
             weights_json=json.dumps(result["weights"], separators=(",", ":")),
             signals_json=json.dumps(result["signals"], separators=(",", ":")),
+            component_zs_json=json.dumps(component_zs, separators=(",", ":")),
         ))
     return rows
 
@@ -780,8 +832,93 @@ def load_prospective_rows(conn, model_version: str | None = None,
             p_pred=r["p_pred"], won=won,
             weights_json=r["weights_json"] or "{}",
             signals_json=r["signals_json"] or "{}",
+            # Prospective rows don't have per-metric zs persisted (the
+            # predictions table predates the attribution work). Per-component
+            # attribution will skip them automatically — the empty dict
+            # makes downstream code branch-free.
+            component_zs_json="{}",
         ))
     return rows
+
+
+def per_component_brier(rows: list[BacktestRow],
+                        sharpen: float = DEFAULT_SHARPEN) -> dict:
+    """For each metric in ATTRIBUTION_METRICS, score what the model's
+    prediction WOULD HAVE BEEN if the composite contained only that one
+    metric. Compares Brier of these hypothetical predictions to the
+    full-composite Brier (baseline) and the 0.25 random baseline.
+
+    Two questions answered:
+      1. Which COMPOSITE_METRICS are doing the heaviest lift inside the
+         current composite? (look at brier per metric — lower = stronger
+         standalone signal)
+      2. Do pts-level metrics (servePtsWonPct, returnPtsWonPct) add
+         independent predictive value beyond games-level metrics?
+         Compare brier(servePtsWonPct) vs brier(serviceGamesWonPct);
+         compare brier(returnPtsWonPct) vs brier(returnGamesWonPct).
+         If pts beat games, pressure-without-conversion isn't noise.
+         If games beat pts, conversion is what predicts (your hypothesis).
+
+    The reconstruction uses match_prob with composite replaced by the
+    metric's shrunk z — every other signal (elo, surf, form, h2h) and
+    every weight stays as in the live model. So we're isolating "would
+    swapping the composite signal change the prediction?" not "what if
+    we used a different model."
+    """
+    out: dict[str, dict] = {}
+    # Track aggregate full-composite Brier on the eligible-rows subset
+    # (rows that have ANY per-metric zs at all) so per-metric comparisons
+    # are apples-to-apples — we don't want to mix in matches where the
+    # cohort had no stats.
+    eligible_rows: list[BacktestRow] = []
+    parsed_zs: list[dict] = []
+    for r in rows:
+        try:
+            zs = json.loads(r.component_zs_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if zs:
+            eligible_rows.append(r)
+            parsed_zs.append(zs)
+    full_comp_brier = (sum((r.p_pred - r.won) ** 2 for r in eligible_rows)
+                       / len(eligible_rows)) if eligible_rows else float("nan")
+
+    for m_name in ATTRIBUTION_METRICS:
+        sq_errs: list[float] = []
+        for r, zs in zip(eligible_rows, parsed_zs):
+            pair = zs.get(m_name)
+            if not pair or len(pair) != 2:
+                continue
+            zA, zB = pair
+            # Reconstruct match_prob with composite = this single metric's
+            # shrunk z. Other signals come from the persisted JSON.
+            sigs = json.loads(r.signals_json or "{}")
+            wts  = json.loads(r.weights_json or "{}")
+            if not sigs or not wts:
+                continue
+            # Per-metric "comp_p" using the same sigmoid that match_prob
+            # applies: 1 / (1 + exp(-(zA - zB) * 0.7)).
+            comp_p = 1 / (1 + math.exp(-(zA - zB) * 0.7))
+            # Reassemble using existing weights + signals; swap comp_p.
+            sum_logit = (
+                wts.get("elo", 0)  * _logit(sigs.get("elo_p",  0.5))
+                + wts.get("surf", 0) * _logit(sigs.get("surf_p", 0.5))
+                + wts.get("form", 0) * _logit(sigs.get("form_p", 0.5))
+                + wts.get("h2h", 0)  * _logit(sigs.get("h2h_p",  0.5))
+                + wts.get("comp", 0) * _logit(comp_p)
+            )
+            raw_prob = 1 / (1 + math.exp(-sum_logit * sharpen))
+            p_pred = min(PROB_CAP, max(PROB_FLOOR, raw_prob))
+            sq_errs.append((p_pred - r.won) ** 2)
+        out[m_name] = {
+            "n":     len(sq_errs),
+            "brier": (sum(sq_errs) / len(sq_errs)) if sq_errs else float("nan"),
+        }
+    out["__full_composite__"] = {
+        "n":     len(eligible_rows),
+        "brier": full_comp_brier,
+    }
+    return out
 
 
 def write_csv(rows: list[BacktestRow], output_csv: Path) -> None:
@@ -1064,7 +1201,39 @@ def print_feature_attribution(rows: list[BacktestRow],
                   f"pred {b['pred']*100:>5.1f}%  actual {b['actual']*100:>5.1f}%  "
                   f"Δ {b['delta_pp']:>+5.1f}pp")
 
-    return {"standalone_brier": sb, "attribution": agg, "calibration": cal}
+    # 5. Per-component Brier inside the composite. Tells us which of the
+    # 6 in-composite metrics are doing the lift and whether pts-level
+    # metrics (not in composite) add independent signal vs games-level.
+    pc = per_component_brier(rows, sharpen)
+    full = pc.pop("__full_composite__", {})
+    if full.get("n"):
+        print(f"\n  per-component Brier (composite swapped for one metric "
+              f"at a time, all else equal):")
+        print(f"    {'metric':<22} {'in-comp':>7} {'n':>5} {'brier':>8} "
+              f"{'vs full':>8}")
+        # Sort: in-composite first by Brier asc, then candidates by Brier asc.
+        ranked = sorted(
+            pc.items(),
+            key=lambda kv: (kv[0] not in COMPOSITE_METRICS,
+                            float("inf") if not (kv[1]["n"] and kv[1]["brier"] == kv[1]["brier"])
+                            else kv[1]["brier"])
+        )
+        for m_name, s in ranked:
+            in_comp = "yes" if m_name in COMPOSITE_METRICS else " no"
+            if not s["n"] or s["brier"] != s["brier"]:
+                print(f"    {m_name:<22} {in_comp:>7} {s['n']:>5}     —        —")
+                continue
+            delta = s["brier"] - full["brier"]
+            mark = ' ' if delta > 0.005 else ('↓' if delta < -0.005 else '≈')
+            print(f"    {m_name:<22} {in_comp:>7} {s['n']:>5} "
+                  f"{s['brier']:>7.4f} {delta:>+7.4f} {mark}")
+        print(f"    {'(FULL COMPOSITE)':<22} {'':>7} {full['n']:>5} "
+              f"{full['brier']:>7.4f}  baseline")
+        print(f"    ↓ = beats full composite; ≈ = within ±0.005; "
+              f"blank = worse than full")
+
+    return {"standalone_brier": sb, "attribution": agg, "calibration": cal,
+            "per_component": pc}
 
 
 def brier_score(rows: list[BacktestRow]) -> float:
@@ -1267,7 +1436,10 @@ def main() -> int:
 
     conn = connect(read_only=True)
 
-    if args.prospective or args.feature_attribution:
+    # --prospective alone OR --prospective + --feature-attribution: read
+    # from predictions log. Per-component attribution will show "—" since
+    # predictions don't store per-metric zs.
+    if args.prospective:
         rows = load_prospective_rows(conn, model_version=args.model_version,
                                      limit=args.limit)
         print(f"[prospective] loaded {len(rows)} scored prediction(s) "
@@ -1279,7 +1451,25 @@ def main() -> int:
             return 0
         if args.feature_attribution:
             print_feature_attribution(rows, sharpen=args.sharpen)
-            # Also print regular summary so we have full context
+        write_csv(rows, args.output)
+        summarize(rows, composite_only=args.composite_only,
+                  sharpen=args.sharpen, bare_elo=args.bare_elo_weight,
+                  show_misses=args.show_misses)
+        return 0
+
+    # --feature-attribution alone (no --prospective): run a fresh PiT
+    # backtest so we have per-metric zs in scope. Per-component analysis
+    # needs the cohort data that load_prospective_rows can't reconstruct.
+    if args.feature_attribution:
+        features, _ = collect_features(
+            conn, args.tour, args.year, args.limit,
+            window_months=args.window_months,
+            use_composite=not args.no_composite,
+            soft=args.soft,
+        )
+        rows = score_features(features, sharpen=args.sharpen,
+                              bare_elo=args.bare_elo_weight)
+        print_feature_attribution(rows, sharpen=args.sharpen)
         write_csv(rows, args.output)
         summarize(rows, composite_only=args.composite_only,
                   sharpen=args.sharpen, bare_elo=args.bare_elo_weight,
