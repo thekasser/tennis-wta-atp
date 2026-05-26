@@ -921,6 +921,61 @@ def per_component_brier(rows: list[BacktestRow],
     return out
 
 
+def composite_variant_brier(rows: list[BacktestRow],
+                            metrics: list[str],
+                            sharpen: float = DEFAULT_SHARPEN) -> dict:
+    """Score the model with the composite recomputed from a CUSTOM subset
+    of metrics (instead of the model's COMPOSITE_METRICS). Reuses the
+    per-metric zs persisted on each row by per_component_brier's pipeline.
+
+    Mirrors pit_composite's math: composite = mean(metric_zs); then through
+    sigmoid via match_prob's formula. Other signals + weights come from the
+    persisted JSON. Returns {n, brier, metrics} on the same eligible-rows
+    subset per_component_brier uses, so variants are directly comparable
+    to each other and to the full composite baseline.
+    """
+    sq_errs: list[float] = []
+    for r in rows:
+        try:
+            zs = json.loads(r.component_zs_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not zs:
+            continue
+        zs_a_vals, zs_b_vals = [], []
+        for m in metrics:
+            pair = zs.get(m)
+            if not pair or len(pair) != 2:
+                continue
+            zs_a_vals.append(pair[0])
+            zs_b_vals.append(pair[1])
+        # Mirror pit_composite: require ≥ COMPOSITE_MIN_ZS contributing metrics.
+        if len(zs_a_vals) < COMPOSITE_MIN_ZS:
+            continue
+        cA = sum(zs_a_vals) / len(zs_a_vals)
+        cB = sum(zs_b_vals) / len(zs_b_vals)
+        sigs = json.loads(r.signals_json or "{}")
+        wts  = json.loads(r.weights_json or "{}")
+        if not sigs or not wts:
+            continue
+        comp_p = 1 / (1 + math.exp(-(cA - cB) * 0.7))
+        sum_logit = (
+            wts.get("elo", 0)  * _logit(sigs.get("elo_p",  0.5))
+            + wts.get("surf", 0) * _logit(sigs.get("surf_p", 0.5))
+            + wts.get("form", 0) * _logit(sigs.get("form_p", 0.5))
+            + wts.get("h2h", 0)  * _logit(sigs.get("h2h_p",  0.5))
+            + wts.get("comp", 0) * _logit(comp_p)
+        )
+        raw_prob = 1 / (1 + math.exp(-sum_logit * sharpen))
+        p_pred = min(PROB_CAP, max(PROB_FLOOR, raw_prob))
+        sq_errs.append((p_pred - r.won) ** 2)
+    return {
+        "n":       len(sq_errs),
+        "brier":   (sum(sq_errs) / len(sq_errs)) if sq_errs else float("nan"),
+        "metrics": list(metrics),
+    }
+
+
 def write_csv(rows: list[BacktestRow], output_csv: Path) -> None:
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     with output_csv.open("w", newline="", encoding="utf-8") as f:
@@ -1232,8 +1287,57 @@ def print_feature_attribution(rows: list[BacktestRow],
         print(f"    ↓ = beats full composite; ≈ = within ±0.005; "
               f"blank = worse than full")
 
+    # 6. Composite variants — testing if trimming low-signal metrics from
+    # the current composite improves Brier. Per-component (section 5)
+    # showed tbWinPct + decSetWinPct have Brier > 0.25 in isolation;
+    # this checks whether their inclusion is actually hurting the
+    # averaged composite or just doing nothing.
+    # Variants to test. "drop both" removes tbWinPct + decSetWinPct (the two
+    # metrics that scored above the 0.25 random baseline in section 5).
+    # The 4-metric core is then totalPtsWonPct + serviceGamesWonPct +
+    # returnGamesWonPct + matchWinPct. Other variants add pts-level metrics
+    # on top to test whether they bring independent signal.
+    CORE_4 = [m for m in COMPOSITE_METRICS
+              if m not in ("tbWinPct", "decSetWinPct")]
+    variants = [
+        ("default (6 metrics)",         COMPOSITE_METRICS),
+        ("drop tbWinPct",               [m for m in COMPOSITE_METRICS if m != "tbWinPct"]),
+        ("drop decSetWinPct",           [m for m in COMPOSITE_METRICS if m != "decSetWinPct"]),
+        ("drop both (4-core)",          CORE_4),
+        ("4-core + servePts",           CORE_4 + ["servePtsWonPct"]),
+        ("4-core + returnPts",          CORE_4 + ["returnPtsWonPct"]),
+        ("4-core + both pts",           CORE_4 + ["servePtsWonPct", "returnPtsWonPct"]),
+        ("4-core, swap total→pts",      ["servePtsWonPct", "returnPtsWonPct",
+                                         "serviceGamesWonPct", "returnGamesWonPct",
+                                         "matchWinPct"]),
+    ]
+    cv_results = []
+    for label, metrics in variants:
+        cv_results.append((label, metrics, composite_variant_brier(rows, metrics, sharpen)))
+    # Use default-variant Brier as the comparison baseline (not full[ "brier"]
+    # because eligibility can differ slightly when a variant drops a metric).
+    default_brier = next(r[2]["brier"] for r in cv_results
+                         if r[0].startswith("default"))
+    if default_brier == default_brier:  # NaN check
+        print(f"\n  composite variants (Brier on same eligible subset; "
+              f"compared to default 6-metric composite):")
+        print(f"    {'variant':<26} {'metrics':>3} {'n':>5} "
+              f"{'brier':>8} {'vs default':>11}")
+        # Sort: default first, then by Brier ascending (best variant on top)
+        ordered = sorted(cv_results, key=lambda r: (not r[0].startswith("default"),
+                                                    r[2]["brier"]))
+        for label, metrics, res in ordered:
+            if not res["n"] or res["brier"] != res["brier"]:
+                print(f"    {label:<26} {len(metrics):>3} {0:>5}     —          —")
+                continue
+            delta = res["brier"] - default_brier
+            mark = ('↓' if delta < -0.001 else ('↑' if delta > 0.001 else '≈'))
+            print(f"    {label:<26} {len(metrics):>3} {res['n']:>5} "
+                  f"{res['brier']:>7.4f} {delta:>+10.4f} {mark}")
+        print(f"    ↓ = beats default; ≈ = within ±0.001; ↑ = worse")
+
     return {"standalone_brier": sb, "attribution": agg, "calibration": cal,
-            "per_component": pc}
+            "per_component": pc, "composite_variants": cv_results}
 
 
 def brier_score(rows: list[BacktestRow]) -> float:
