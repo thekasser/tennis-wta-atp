@@ -159,6 +159,18 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 scripts/audit_tournaments.py --min-matches 15 | head -40
 
+      # ── Kalshi coverage audit (informational) ──────────────────────────
+      # Surfaces Kalshi market-capture gaps: matches with no Kalshi data,
+      # post-match-only captures (useless for Brier), per-tournament
+      # coverage rates. Continue-on-error so degraded coverage doesn't
+      # block the cron — visibility only. If pre-match rate drops below
+      # 25%, the script prints a warning header.
+      - name: Audit Kalshi coverage
+        continue-on-error: true
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/audit_kalshi.py --days 14 --show-misses 10
+
       # ── Push fresh blobs to D1 via the Worker's /api/admin/sync ────────
       # Phase 2: dashboard reads from D1, not from committed data/*.js files.
       # This is what actually makes the cron run "live" for users.
