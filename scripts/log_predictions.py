@@ -167,8 +167,10 @@ def predict_one(conn, m: dict, mid_idx: dict, bios_atp: dict, bios_wta: dict,
     fA = pit_form(conn, mid_a, asof)
     fB = pit_form(conn, mid_b, asof)
     h_a, h_b = pit_h2h(conn, mid_a, mid_b, asof)
-    cA = pit_composite(conn, mid_a, tour, asof, composite_cache, mid_idx)
-    cB = pit_composite(conn, mid_b, tour, asof, composite_cache, mid_idx)
+    # PR #13 changed pit_composite to return (composite, per_metric_zs).
+    # We only need the scalar composite here; discard the attribution dict.
+    cA, _ = pit_composite(conn, mid_a, tour, asof, composite_cache, mid_idx)
+    cB, _ = pit_composite(conn, mid_b, tour, asof, composite_cache, mid_idx)
 
     pA = {"id": bA["id"], "pts": a_pts, "ytd": a_ytd,
           "surf": bA["surf"], "form": fA, "composite": cA, "h2h_wins": h_a}
