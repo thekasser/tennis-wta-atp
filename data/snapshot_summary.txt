@@ -1,27 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-25T23:34:36.861235+00:00
+# Generated: 2026-05-27T08:24:19.100377+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    12,798
-  rankings_snapshots          6,019
-  api_fetch_log              17,755
+  matches                    12,802
+  rankings_snapshots          6,282
+  api_fetch_log              17,950
 
-## Latest rankings snapshot: 2026-05-25
+## Latest rankings snapshot: 2026-05-27
 
 ## Active tournaments
-  geneva26       Gonet Geneva Open - Geneva       matches= 32  latest=2026-05-23
-  hamburg26      Hamburg Open                     matches= 43  latest=2026-05-23
-  rabat26        Grand Prix De SAR La Princesse Lalla Meryem - Rabat matches= 28  latest=2026-05-23
-  rg26           Roland Garros                    matches=174  latest=2026-05-25
-  strasbourg26   Internationaux de Strasbourg - Strasbourg matches= 37  latest=2026-05-23
+  rg26           Roland Garros                    matches=177  latest=2026-05-26
 
 ## 5 most recent matches anywhere in DB
+  2026-05-26  First     p1=45979 p2=20104 winner=45979  (Vicenza Challenger)
+  2026-05-26  First     p1=64741 p2=26140 winner=64741  (French Open - Paris)
+  2026-05-26  First     p1=83795 p2=33502 winner=83795  (French Open - Paris)
+  2026-05-26  First     p1=57147 p2=65912 winner=57147  (French Open - Paris)
   2026-05-25  First     p1=39309 p2=79068 winner=39309  (French Open - Paris)
-  2026-05-25  First     p1=14432 p2=61838 winner=14432  (French Open - Paris)
-  2026-05-25  First     p1=26473 p2=31358 winner=26473  (French Open - Paris)
-  2026-05-25  First     p1=29939 p2=71083 winner=29939  (French Open - Paris)
-  2026-05-25  First     p1=38911 p2=7806 winner=38911  (French Open - Paris)
