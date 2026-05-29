@@ -121,7 +121,7 @@ def decide_fetch(conn, mid: int, active_ids: set[str], any_onboarding: bool
     Empty list = skip. Logic:
       1. No matches in DB                          → COLD_START_YEARS (backfill)
       2. Any active tournament still onboarding    → DEFAULT_YEARS (broad sweep)
-      3. Has match at an active tournament         → DEFAULT_YEARS (precision)
+      3. Has match OR fixture at active tournament → DEFAULT_YEARS (precision)
       4. Otherwise                                  → [] (skip)
     """
     row = conn.execute(
@@ -147,6 +147,25 @@ def decide_fetch(conn, mid: int, active_ids: set[str], any_onboarding: bool
     """, (mid, mid, *active_ids)).fetchone()
     if in_active:
         return list(DEFAULT_YEARS), "in active-window tournament"
+
+    # Also fetch players who have a FIXTURE at an active tournament but no
+    # match there yet. Without this, the onboarding window ([start-2d,
+    # start+2d]) is the ONLY thing that breaks the chicken-and-egg: a
+    # player whose first result at the tournament lands AFTER onboarding
+    # closes never gets fetched (no match → skipped → no match), so their
+    # wins silently never sync. For a 2-week Slam, qualifiers and players
+    # whose R1/R2 fall past day +2 hit this. The fixtures table already
+    # knows they're entered (it's why they show in the active draw), so
+    # use that as the fetch trigger too. Bounded cost: only adds players
+    # the fixture sync has scheduled.
+    in_active_fixture = conn.execute(f"""
+        SELECT 1 FROM fixtures
+        WHERE (p1_mid = ? OR p2_mid = ?)
+          AND tournament_id IN ({placeholders})
+        LIMIT 1
+    """, (mid, mid, *active_ids)).fetchone()
+    if in_active_fixture:
+        return list(DEFAULT_YEARS), "fixture at active-window tournament"
 
     return [], f"latest match {latest}, not in any active-window tournament"
 
