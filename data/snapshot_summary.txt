@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-31T08:08:16.423210+00:00
+# Generated: 2026-05-31T17:32:24.827525+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    12,901
+  matches                    12,915
   rankings_snapshots          7,334
-  api_fetch_log              20,379
+  api_fetch_log              20,601
 
 ## Latest rankings snapshot: 2026-05-31
 
 ## Active tournaments
-  rg26           Roland Garros                    matches=269  latest=2026-05-30
+  rg26           Roland Garros                    matches=278  latest=2026-05-31
 
 ## 5 most recent matches anywhere in DB
-  2026-05-30  Third     p1=67546 p2=93452 winner=67546  (French Open - Paris)
-  2026-05-30  Third     p1=73620 p2=52279 winner=73620  (French Open - Paris)
-  2026-05-30  Third     p1=29812 p2=61971 winner=29812  (French Open - Paris)
-  2026-05-30  Third     p1=18455 p2=17503 winner=18455  (French Open - Paris)
-  2026-05-30  Third     p1=51151 p2=41564 winner=51151  (French Open - Paris)
+  2026-05-31  Q3        p1=13937 p2=78164 winner=13937  (Lexus Birmingham Open - Birmingham)
+  2026-05-31  Q3        p1=28732 p2=72174 winner=28732  (Lexus Birmingham Open - Birmingham)
+  2026-05-31  Q3        p1=26356 p2=29373 winner=26356  (Lexus Birmingham Open - Birmingham)
+  2026-05-31  Q1        p1=26218 p2=59356 winner=26218  (Birmingham Challenger)
+  2026-05-31  Q1        p1=72574 p2=67853 winner=72574  (Birmingham Challenger)
