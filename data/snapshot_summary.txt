@@ -1,19 +1,19 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-30T23:31:01.710600+00:00
+# Generated: 2026-05-31T08:08:16.423210+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    12,898
-  rankings_snapshots          7,071
-  api_fetch_log              20,161
+  matches                    12,901
+  rankings_snapshots          7,334
+  api_fetch_log              20,379
 
-## Latest rankings snapshot: 2026-05-30
+## Latest rankings snapshot: 2026-05-31
 
 ## Active tournaments
-  rg26           Roland Garros                    matches=266  latest=2026-05-30
+  rg26           Roland Garros                    matches=269  latest=2026-05-30
 
 ## 5 most recent matches anywhere in DB
   2026-05-30  Third     p1=67546 p2=93452 winner=67546  (French Open - Paris)
