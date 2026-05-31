@@ -1,19 +1,19 @@
 # Tennis DB snapshot summary
-# Generated: 2026-05-31T17:32:24.827525+00:00
+# Generated: 2026-05-31T23:32:54.204067+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    12,915
+  matches                    12,916
   rankings_snapshots          7,334
-  api_fetch_log              20,601
+  api_fetch_log              20,824
 
 ## Latest rankings snapshot: 2026-05-31
 
 ## Active tournaments
-  rg26           Roland Garros                    matches=278  latest=2026-05-31
+  rg26           Roland Garros                    matches=279  latest=2026-05-31
 
 ## 5 most recent matches anywhere in DB
   2026-05-31  Q3        p1=13937 p2=78164 winner=13937  (Lexus Birmingham Open - Birmingham)
