@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-03T08:43:56.463234+00:00
+# Generated: 2026-06-03T18:34:29.239072+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    12,984
+  matches                    12,996
   rankings_snapshots          8,123
-  api_fetch_log              22,469
+  api_fetch_log              22,709
 
 ## Latest rankings snapshot: 2026-06-03
 
 ## Active tournaments
-  rg26           Roland Garros                    matches=310  latest=2026-06-02
+  rg26           Roland Garros                    matches=313  latest=2026-06-03
 
 ## 5 most recent matches anywhere in DB
-  2026-06-02  First     p1=58149 p2=68090 winner=58149  (Birmingham Challenger)
-  2026-06-02  First     p1=19689 p2=72578 winner=19689  (Birmingham Challenger)
-  2026-06-02  First     p1=12190 p2=73983 winner=12190  (Perugia Challenger)
-  2026-06-02  First     p1=95311 p2=18477 winner=95311  (Bad Rappenau Challenger)
-  2026-06-02  First     p1=86156 p2=1837 winner=86156  (Prostejov Challenger)
+  2026-06-03  Second    p1=56197 p2=84561 winner=56197  (Bad Rappenau Challenger)
+  2026-06-03  Second    p1=20104 p2=61857 winner=20104  (Perugia Challenger)
+  2026-06-03  Second    p1=48013 p2=27358 winner=48013  (Bad Rappenau Challenger)
+  2026-06-03  Second    p1=52721 p2=56195 winner=52721  (Prostejov Challenger)
+  2026-06-03  Second    p1=41484 p2=64891 winner=41484  (Prostejov Challenger)
