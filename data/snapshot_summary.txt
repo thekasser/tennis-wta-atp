@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-06T08:01:01.387639+00:00
+# Generated: 2026-06-06T17:35:00.715536+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    13,053
+  matches                    13,066
   rankings_snapshots          8,912
-  api_fetch_log              24,648
+  api_fetch_log              24,894
 
 ## Latest rankings snapshot: 2026-06-06
 
 ## Active tournaments
-  rg26           Roland Garros                    matches=325  latest=2026-06-05
+  rg26           Roland Garros                    matches=326  latest=2026-06-06
 
 ## 5 most recent matches anywhere in DB
-  2026-06-05  1/4       p1=79065 p2=58149 winner=79065  (Birmingham Challenger)
-  2026-06-05  1/4       p1=56197 p2=84236 winner=56197  (Bad Rappenau Challenger)
-  2026-06-05  1/4       p1=55257 p2=20104 winner=55257  (Perugia Challenger)
-  2026-06-05  1/4       p1=28898 p2=39863 winner=28898  (Birmingham Challenger)
-  2026-06-05  1/4       p1=55252 p2=90774 winner=55252  (Birmingham Challenger)
+  2026-06-06  Q1        p1=73241 p2=18094 winner=73241  (Libema Open - 's-Hertogenbosch)
+  2026-06-06  Q1        p1=83315 p2=71166 winner=83315  (Libema Open - 's-Hertogenbosch)
+  2026-06-06  Q1        p1=72574 p2=68393 winner=72574  (Libema Open - 's-Hertogenbosch)
+  2026-06-06  Q1        p1=26356 p2=12432 winner=26356  (Libema Open - 's-Hertogenbosch)
+  2026-06-06  Q1        p1=52790 p2=13937 winner=52790  (Libema Open - 's-Hertogenbosch)
