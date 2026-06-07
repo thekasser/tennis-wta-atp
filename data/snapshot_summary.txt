@@ -1,20 +1,20 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-07T17:38:25.914553+00:00
+# Generated: 2026-06-07T23:32:45.844033+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    13,093
+  matches                    13,097
   rankings_snapshots          9,175
-  api_fetch_log              25,632
+  api_fetch_log              25,878
 
 ## Latest rankings snapshot: 2026-06-07
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
-  rg26           Roland Garros                    matches=326  latest=2026-06-06
+  rg26           Roland Garros                    matches=327  latest=2026-06-07
 
 ## 5 most recent matches anywhere in DB
   2026-06-08  1/2       p1=55252 p2=28898 winner=55252  (Birmingham Challenger)
