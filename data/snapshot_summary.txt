@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-07T23:32:45.844033+00:00
+# Generated: 2026-06-08T08:40:23.004902+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,13 +7,15 @@
   players                       274
   tournaments                   163
   matches                    13,097
-  rankings_snapshots          9,175
-  api_fetch_log              25,878
+  rankings_snapshots          9,438
+  api_fetch_log              26,125
 
-## Latest rankings snapshot: 2026-06-07
+## Latest rankings snapshot: 2026-06-08
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
+  halle26        Terra Wortmann Open              matches=  0  latest=None
+  queens26       cinch Championships              matches=  0  latest=None
   rg26           Roland Garros                    matches=327  latest=2026-06-07
 
 ## 5 most recent matches anywhere in DB
