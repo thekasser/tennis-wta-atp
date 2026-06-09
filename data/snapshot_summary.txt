@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-08T23:35:27.078824+00:00
+# Generated: 2026-06-09T08:15:35.278686+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,16 +7,15 @@
   players                       274
   tournaments                   163
   matches                    13,119
-  rankings_snapshots          9,438
-  api_fetch_log              26,619
+  rankings_snapshots          9,701
+  api_fetch_log              26,626
 
-## Latest rankings snapshot: 2026-06-08
+## Latest rankings snapshot: 2026-06-09
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
   halle26        Terra Wortmann Open              matches=  0  latest=None
   queens26       cinch Championships              matches=  0  latest=None
-  rg26           Roland Garros                    matches=327  latest=2026-06-07
 
 ## 5 most recent matches anywhere in DB
   2026-06-08  First     p1=38911 p2=26218 winner=38911  (Libema Open - 's-Hertogenbosch)
