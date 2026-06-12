@@ -1,16 +1,16 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-11T23:37:49.339277+00:00
+# Generated: 2026-06-12T08:34:18.200032+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    13,119
-  rankings_snapshots         10,227
-  api_fetch_log              26,682
+  matches                    13,173
+  rankings_snapshots         10,490
+  api_fetch_log              26,823
 
-## Latest rankings snapshot: 2026-06-11
+## Latest rankings snapshot: 2026-06-12
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
@@ -18,8 +18,8 @@
   queens26       cinch Championships              matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-06-08  First     p1=38911 p2=26218 winner=38911  (Libema Open - 's-Hertogenbosch)
-  2026-06-08  First     p1=72578 p2=36519 winner=72578  (Boss Open - Stuttgart)
-  2026-06-08  First     p1=94493 p2=14727 winner=94493  (Boss Open - Stuttgart)
-  2026-06-08  First     p1=31446 p2=67535 winner=31446  (Libema Open - 's-Hertogenbosch)
-  2026-06-08  First     p1=82371 p2=28932 winner=82371  (Lyon Challenger)
+  2026-06-11  Second    p1=17774 p2=13351 winner=17774  (Libema Open - 's-Hertogenbosch)
+  2026-06-11  Second    p1=9357 p2=90390 winner=9357  (Libema Open - 's-Hertogenbosch)
+  2026-06-11  Second    p1=49991 p2=40156 winner=49991  (Libema Open - 's-Hertogenbosch)
+  2026-06-11  Second    p1=13267 p2=73836 winner=13267  (Libema Open - 's-Hertogenbosch)
+  2026-06-11  Second    p1=42096 p2=27035 winner=42096  (Memorial Eugenio Fontana - Modena)
