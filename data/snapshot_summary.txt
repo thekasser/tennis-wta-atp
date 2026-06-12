@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-12T08:34:18.200032+00:00
+# Generated: 2026-06-12T17:51:43.516785+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   163
-  matches                    13,173
+  matches                    13,189
   rankings_snapshots         10,490
-  api_fetch_log              26,823
+  api_fetch_log              26,964
 
 ## Latest rankings snapshot: 2026-06-12
 
@@ -18,8 +18,8 @@
   queens26       cinch Championships              matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-06-11  Second    p1=17774 p2=13351 winner=17774  (Libema Open - 's-Hertogenbosch)
-  2026-06-11  Second    p1=9357 p2=90390 winner=9357  (Libema Open - 's-Hertogenbosch)
-  2026-06-11  Second    p1=49991 p2=40156 winner=49991  (Libema Open - 's-Hertogenbosch)
-  2026-06-11  Second    p1=13267 p2=73836 winner=13267  (Libema Open - 's-Hertogenbosch)
-  2026-06-11  Second    p1=42096 p2=27035 winner=42096  (Memorial Eugenio Fontana - Modena)
+  2026-06-12  Second    p1=36558 p2=4110 winner=36558  (The HSBC Championships - London)
+  2026-06-12  Second    p1=13498 p2=24572 winner=13498  (The HSBC Championships - London)
+  2026-06-12  Second    p1=53487 p2=6019 winner=53487  (The HSBC Championships - London)
+  2026-06-12  Second    p1=14175 p2=17614 winner=14175  (The HSBC Championships - London)
+  2026-06-12  Second    p1=9503 p2=37266 winner=9503  (Libema Open - 's-Hertogenbosch)
