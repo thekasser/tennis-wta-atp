@@ -31,8 +31,14 @@ const TOURNAMENTS_DATA = [
   { id:"rg26",       name:"Roland Garros",      short:"RG",       tour:"BOTH", type:"GS",    surf:"C", draw:128, wk:21, month:5,  startDate:"2026-05-24", endDate:"2026-06-07", active:false, complete:false, apiId:{atp:21329, wta:16725} },
 
   // ── JUNE ──────────────────────────────────────────────────────────────────
+  // Grass warm-up week 23 (Jun 8-14, 2026)
+  { id:"shertogenbosch_a26", name:"Libema Open - 's-Hertogenbosch", short:"Den Bosch",  tour:"ATP", type:"M250",  surf:"G", draw:28,  wk:23, month:6,  startDate:"2026-06-08", endDate:"2026-06-14", active:true,  complete:false, apiId:{atp:21331} },
+  { id:"shertogenbosch_w26", name:"Libema Open - 's-Hertogenbosch", short:"Den Bosch W",tour:"WTA", type:"W250",  surf:"G", draw:32,  wk:23, month:6,  startDate:"2026-06-08", endDate:"2026-06-14", active:true,  complete:false, apiId:{wta:16728} },
+  { id:"stuttgart_a26",      name:"Boss Open - Stuttgart",          short:"Stuttgart",  tour:"ATP", type:"M250",  surf:"G", draw:28,  wk:23, month:6,  startDate:"2026-06-08", endDate:"2026-06-14", active:true,  complete:false, apiId:{atp:21332} },
+  { id:"london_w26",         name:"HSBC Championships - London",    short:"Queen's W",  tour:"WTA", type:"W500",  surf:"G", draw:32,  wk:23, month:6,  startDate:"2026-06-08", endDate:"2026-06-14", active:true,  complete:false, apiId:{wta:16727} },
+  // Grass warm-up week 24 (Jun 15-21, 2026)
   { id:"eastbourne26", name:"Eastbourne",       short:"Eastbourne",tour:"WTA", type:"W250",  surf:"G", draw:28,  wk:24, month:6,  startDate:"2026-06-14", endDate:"2026-06-20", active:false, complete:false },
-  { id:"queens26",   name:"cinch Championships",short:"Queen's",  tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false },
+  { id:"queens26",   name:"HSBC Championships - London", short:"Queen's", tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false, apiId:{atp:21334} },
   { id:"halle26",    name:"Terra Wortmann Open",short:"Halle",    tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false, apiId:{atp:21333} },
   { id:"wimbledon26",name:"Wimbledon",          short:"Wimbledon",tour:"BOTH", type:"GS",    surf:"G", draw:128, wk:26, month:6,  startDate:"2026-06-29", endDate:"2026-07-12", active:false, complete:false, apiId:{atp:21337, wta:16733} },
 
