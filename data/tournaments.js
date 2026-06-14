@@ -28,7 +28,7 @@ const TOURNAMENTS_DATA = [
 
   // ── MAY ───────────────────────────────────────────────────────────────────
   { id:"rome26",     name:"Internazionali BNL d'Italia", short:"Rome", tour:"BOTH", type:"M1000", surf:"C", draw:96, wk:18, month:5, startDate:"2026-05-06", endDate:"2026-05-17", active:false, complete:true,  apiId:{atp:21326, wta:16722} },
-  { id:"rg26",       name:"Roland Garros",      short:"RG",       tour:"BOTH", type:"GS",    surf:"C", draw:128, wk:21, month:5,  startDate:"2026-05-24", endDate:"2026-06-07", active:false, complete:false, apiId:{atp:21329, wta:16725} },
+  { id:"rg26",       name:"Roland Garros",      short:"RG",       tour:"BOTH", type:"GS",    surf:"C", draw:128, wk:21, month:5,  startDate:"2026-05-24", endDate:"2026-06-07", active:false, complete:true,  apiId:{atp:21329, wta:16725} },
 
   // ── JUNE ──────────────────────────────────────────────────────────────────
   // Grass warm-up week 23 (Jun 8-14, 2026)

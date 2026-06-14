@@ -3642,7 +3642,13 @@ function blufLive() {
   const acts = activeTournaments();
   const sd = seasonData();
   if (!acts.length) {
-    const upcoming = TOURNAMENTS_DATA.filter(t=>(t.tour==='BOTH'||t.tour===TOUR)&&!t.complete&&!t.active);
+    // Date-driven (NOT t.complete/t.active flags, which were chronically
+    // stale — see same comment at renderLive line ~1426). Sort by startDate
+    // so [0] is the soonest upcoming, not just file order.
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = TOURNAMENTS_DATA
+      .filter(t=>(t.tour==='BOTH'||t.tour===TOUR) && (t.startDate||'') > today)
+      .sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||''));
     const next = upcoming[0];
     return blufWrap(`
       <div class="bluf-label">Executive Summary</div>
