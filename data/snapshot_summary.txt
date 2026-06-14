@@ -1,29 +1,29 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-14T08:28:34.291916+00:00
+# Generated: 2026-06-14T17:39:10.273140+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    13,329
+  matches                    13,351
   rankings_snapshots         11,016
-  api_fetch_log              28,512
+  api_fetch_log              28,795
 
 ## Latest rankings snapshot: 2026-06-14
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
-  halle26        Terra Wortmann Open              matches=  6  latest=2026-06-13
-  london_w26     HSBC Championships - London      matches= 41  latest=2026-06-13
-  queens26       HSBC Championships - London      matches=  7  latest=2026-06-13
-  shertogenbosch_a26 Libema Open - 's-Hertogenbosch   matches= 31  latest=2026-06-13
+  halle26        Terra Wortmann Open              matches= 10  latest=2026-06-14
+  london_w26     HSBC Championships - London      matches= 42  latest=2026-06-14
+  queens26       HSBC Championships - London      matches= 11  latest=2026-06-14
+  shertogenbosch_a26 Libema Open - 's-Hertogenbosch   matches= 32  latest=2026-06-14
   shertogenbosch_w26 Libema Open - 's-Hertogenbosch   matches= 38  latest=2026-06-13
-  stuttgart_a26  Boss Open - Stuttgart            matches= 27  latest=2026-06-13
+  stuttgart_a26  Boss Open - Stuttgart            matches= 28  latest=2026-06-14
 
 ## 5 most recent matches anywhere in DB
-  2026-06-13  Q1        p1=94493 p2=35297 winner=94493  (Terra Wortmann Open - Halle)
-  2026-06-13  Q1        p1=39152 p2=26925 winner=39152  (HSBC Championships - London)
-  2026-06-13  Q1        p1=58149 p2=85899 winner=58149  (HSBC Championships - London)
-  2026-06-13  Q1        p1=72578 p2=9043 winner=72578  (Terra Wortmann Open - Halle)
-  2026-06-13  Q1        p1=31392 p2=55290 winner=31392  (Terra Wortmann Open - Halle)
+  2026-06-14  Q3        p1=94493 p2=86351 winner=94493  (Terra Wortmann Open - Halle)
+  2026-06-14  Q3        p1=71174 p2=39152 winner=71174  (HSBC Championships - London)
+  2026-06-14  Q3        p1=58149 p2=18736 winner=58149  (HSBC Championships - London)
+  2026-06-14  Q3        p1=72578 p2=19689 winner=72578  (Terra Wortmann Open - Halle)
+  2026-06-14  Q3        p1=14716 p2=31392 winner=14716  (Terra Wortmann Open - Halle)
