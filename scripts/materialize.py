@@ -261,17 +261,25 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
             players_block[bio_id] = {"r": scheduled_stage, "elim": False}
             fixture_augmented_bios.add(bio_id)
 
-        # Top-seed bye augmentation. In 96-draw M1000s + 128-draw GS, top
-        # 32 seeds get byes through R1 — they have NO match record (no
-        # R1 match played) AND NO R1 fixture (R2 fixtures are scheduled
-        # only after R1 completes). Without this step, players like
-        # Sinner and Alcaraz disappear from the active draw entirely,
-        # then show as "missing/eliminated" in the dashboard.
+        # Top-seed bye augmentation. In 96-draw M1000s/W1000s, the top 32
+        # seeds get byes through R1 — they have NO match record (no R1
+        # match played) AND NO R1 fixture (R2 fixtures are scheduled only
+        # after R1 completes). Without this step, players like Sinner and
+        # Alcaraz disappear from the active draw entirely, then show as
+        # "missing/eliminated" in the dashboard.
         #
-        # Heuristic: if the tournament is M1000/W1000/GS with draw≥96 OR
-        # ≥128, and a top-32 ranked player isn't already in players_block,
-        # they're almost certainly seeded with a bye. Add them at the
-        # "next" round (where byes enter) marked alive.
+        # GRAND SLAMS ARE EXCLUDED: a 128-draw GS has NO byes — all 128
+        # players contest R1. So a top-32 seed missing from BOTH matches
+        # AND fixtures at a GS has WITHDRAWN (or their R1 just hasn't
+        # synced yet), NOT byed. Including GS here falsely resurrected
+        # withdrawn seeds as alive for the whole event (Korda @ RG '26:
+        # 2-month injury gap, no RG match, shown alive at R128). Legit GS
+        # seeds are covered by the matches loop (once R1 plays) or the
+        # fixture augmentation above (R1 scheduled) — they don't need this.
+        #
+        # Heuristic: 96-draw M1000/W1000 + a top-32 ranked player not
+        # already in players_block ⇒ almost certainly seeded with a bye.
+        # Add them at the "next" round (where byes enter) marked alive.
         # sqlite3.Row supports __getitem__ but not .get() — use bracket
         # access with a try/except for missing-key safety.
         try:
@@ -279,7 +287,7 @@ def _compute_active_tournaments(conn, tour: str) -> list[dict]:
         except (IndexError, KeyError):
             tournament_type = None
         is_byes_draw = (t["draw_size"] or 0) >= 96 and tournament_type in (
-            "GS", "M1000", "W1000")
+            "M1000", "W1000")
         if is_byes_draw:
             # Top-32 seeds skip R1 (bye) and enter at R2 — but for the
             # dashboard's Live Events count, all that matters is they're
