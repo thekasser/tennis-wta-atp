@@ -1,21 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-13T23:34:27.665042+00:00
+# Generated: 2026-06-14T04:38:27.091338+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
-  tournaments                   163
+  tournaments                   167
   matches                    13,329
-  rankings_snapshots         10,753
-  api_fetch_log              27,948
+  rankings_snapshots         11,016
+  api_fetch_log              28,230
 
-## Latest rankings snapshot: 2026-06-13
+## Latest rankings snapshot: 2026-06-14
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
   halle26        Terra Wortmann Open              matches=  6  latest=2026-06-13
-  queens26       cinch Championships              matches=  0  latest=None
+  london_w26     HSBC Championships - London      matches= 41  latest=2026-06-13
+  queens26       HSBC Championships - London      matches=  7  latest=2026-06-13
+  shertogenbosch_a26 Libema Open - 's-Hertogenbosch   matches= 31  latest=2026-06-13
+  shertogenbosch_w26 Libema Open - 's-Hertogenbosch   matches= 38  latest=2026-06-13
+  stuttgart_a26  Boss Open - Stuttgart            matches= 27  latest=2026-06-13
 
 ## 5 most recent matches anywhere in DB
   2026-06-13  Q1        p1=94493 p2=35297 winner=94493  (Terra Wortmann Open - Halle)
