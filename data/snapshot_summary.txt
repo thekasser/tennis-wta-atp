@@ -1,29 +1,29 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-15T09:14:46.865803+00:00
+# Generated: 2026-06-15T18:42:12.091431+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    13,352
+  matches                    13,395
   rankings_snapshots         11,279
-  api_fetch_log              29,361
+  api_fetch_log              29,644
 
 ## Latest rankings snapshot: 2026-06-15
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
-  halle26        Terra Wortmann Open              matches= 10  latest=2026-06-14
+  halle26        Terra Wortmann Open              matches= 15  latest=2026-06-15
   london_w26     HSBC Championships - London      matches= 42  latest=2026-06-14
-  queens26       HSBC Championships - London      matches= 11  latest=2026-06-14
+  queens26       HSBC Championships - London      matches= 14  latest=2026-06-15
   shertogenbosch_a26 Libema Open - 's-Hertogenbosch   matches= 32  latest=2026-06-14
   shertogenbosch_w26 Libema Open - 's-Hertogenbosch   matches= 38  latest=2026-06-13
   stuttgart_a26  Boss Open - Stuttgart            matches= 28  latest=2026-06-14
 
 ## 5 most recent matches anywhere in DB
-  2026-06-14  Q3        p1=94493 p2=86351 winner=94493  (Terra Wortmann Open - Halle)
-  2026-06-14  Q3        p1=71174 p2=39152 winner=71174  (HSBC Championships - London)
-  2026-06-14  Q3        p1=58149 p2=18736 winner=58149  (HSBC Championships - London)
-  2026-06-14  Q3        p1=72578 p2=19689 winner=72578  (Terra Wortmann Open - Halle)
-  2026-06-14  Q3        p1=14716 p2=31392 winner=14716  (Terra Wortmann Open - Halle)
+  2026-06-15  Q3        p1=51151 p2=16043 winner=51151  (Berlin Tennis Open - Berlin)
+  2026-06-15  Q3        p1=18403 p2=73203 winner=18403  (Berlin Tennis Open - Berlin)
+  2026-06-15  Q3        p1=17501 p2=12089 winner=17501  (Berlin Tennis Open - Berlin)
+  2026-06-15  Q3        p1=4263 p2=17155 winner=4263  (Berlin Tennis Open - Berlin)
+  2026-06-15  Q3        p1=28732 p2=90390 winner=28732  (Berlin Tennis Open - Berlin)
