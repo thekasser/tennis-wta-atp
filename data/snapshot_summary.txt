@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-15T23:44:27.455008+00:00
+# Generated: 2026-06-16T09:02:10.210670+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,19 +7,15 @@
   players                       274
   tournaments                   167
   matches                    13,398
-  rankings_snapshots         11,279
-  api_fetch_log              29,927
+  rankings_snapshots         11,542
+  api_fetch_log              30,208
 
-## Latest rankings snapshot: 2026-06-15
+## Latest rankings snapshot: 2026-06-16
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
   halle26        Terra Wortmann Open              matches= 15  latest=2026-06-15
-  london_w26     HSBC Championships - London      matches= 42  latest=2026-06-14
   queens26       HSBC Championships - London      matches= 14  latest=2026-06-15
-  shertogenbosch_a26 Libema Open - 's-Hertogenbosch   matches= 32  latest=2026-06-14
-  shertogenbosch_w26 Libema Open - 's-Hertogenbosch   matches= 38  latest=2026-06-13
-  stuttgart_a26  Boss Open - Stuttgart            matches= 28  latest=2026-06-14
 
 ## 5 most recent matches anywhere in DB
   2026-06-15  Q3        p1=51151 p2=16043 winner=51151  (Berlin Tennis Open - Berlin)
