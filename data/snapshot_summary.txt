@@ -1,25 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-18T08:35:38.169252+00:00
+# Generated: 2026-06-18T18:05:38.966564+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    13,473
+  matches                    13,478
   rankings_snapshots         12,068
-  api_fetch_log              31,286
+  api_fetch_log              31,356
 
 ## Latest rankings snapshot: 2026-06-18
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
-  halle26        Terra Wortmann Open              matches= 30  latest=2026-06-17
-  queens26       HSBC Championships - London      matches= 30  latest=2026-06-17
+  halle26        Terra Wortmann Open              matches= 33  latest=2026-06-18
+  queens26       HSBC Championships - London      matches= 32  latest=2026-06-18
 
 ## 5 most recent matches anywhere in DB
-  2026-06-17  Second    p1=73742 p2=18094 winner=73742  (Nottingham 2 Challenger)
-  2026-06-17  Second    p1=39309 p2=33502 winner=39309  (HSBC Championships - London)
-  2026-06-17  Second    p1=40434 p2=93452 winner=40434  (Terra Wortmann Open - Halle)
-  2026-06-17  Second    p1=29732 p2=26473 winner=29732  (Terra Wortmann Open - Halle)
-  2026-06-17  Second    p1=11953 p2=79688 winner=11953  (Dublin Challenger)
+  2026-06-18  Second    p1=24008 p2=14856 winner=24008  (Terra Wortmann Open - Halle)
+  2026-06-18  Second    p1=29932 p2=52140 winner=29932  (Terra Wortmann Open - Halle)
+  2026-06-18  Second    p1=87562 p2=82269 winner=87562  (Terra Wortmann Open - Halle)
+  2026-06-18  Second    p1=29935 p2=24249 winner=29935  (HSBC Championships - London)
+  2026-06-18  Second    p1=36519 p2=36263 winner=36519  (HSBC Championships - London)
