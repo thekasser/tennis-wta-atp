@@ -37,9 +37,13 @@ const TOURNAMENTS_DATA = [
   { id:"stuttgart_a26",      name:"Boss Open - Stuttgart",          short:"Stuttgart",  tour:"ATP", type:"M250",  surf:"G", draw:28,  wk:23, month:6,  startDate:"2026-06-08", endDate:"2026-06-14", active:true,  complete:false, apiId:{atp:21332} },
   { id:"london_w26",         name:"HSBC Championships - London",    short:"Queen's W",  tour:"WTA", type:"W500",  surf:"G", draw:32,  wk:23, month:6,  startDate:"2026-06-08", endDate:"2026-06-14", active:true,  complete:false, apiId:{wta:16727} },
   // Grass warm-up week 24 (Jun 15-21, 2026)
-  { id:"eastbourne26", name:"Eastbourne",       short:"Eastbourne",tour:"WTA", type:"W250",  surf:"G", draw:28,  wk:24, month:6,  startDate:"2026-06-14", endDate:"2026-06-20", active:false, complete:false },
-  { id:"queens26",   name:"HSBC Championships - London", short:"Queen's", tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false, apiId:{atp:21334} },
-  { id:"halle26",    name:"Terra Wortmann Open",short:"Halle",    tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:false, complete:false, apiId:{atp:21333} },
+  { id:"berlin26",     name:"Berlin Ladies Open - Berlin",        short:"Berlin",     tour:"WTA", type:"W500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:true,  complete:false, apiId:{wta:16729} },
+  { id:"nottingham26", name:"Rothesay Open - Nottingham",         short:"Nottingham", tour:"WTA", type:"W250",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:true,  complete:false, apiId:{wta:16730} },
+  { id:"queens26",   name:"HSBC Championships - London", short:"Queen's", tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:true,  complete:false, apiId:{atp:21334} },
+  { id:"halle26",    name:"Terra Wortmann Open",short:"Halle",    tour:"ATP", type:"M500",  surf:"G", draw:32,  wk:24, month:6,  startDate:"2026-06-15", endDate:"2026-06-21", active:true,  complete:false, apiId:{atp:21333} },
+  // Grass warm-up week 25 (Jun 22-28, 2026)
+  { id:"badhomburg26", name:"Bad Homburg Open - Bad Homburg",        short:"Bad Homburg", tour:"WTA", type:"W500",  surf:"G", draw:32,  wk:25, month:6,  startDate:"2026-06-22", endDate:"2026-06-28", active:false, complete:false, apiId:{wta:16731} },
+  { id:"eastbourne26", name:"Rothesay International - Eastbourne",    short:"Eastbourne",  tour:"WTA", type:"W250",  surf:"G", draw:32,  wk:25, month:6,  startDate:"2026-06-22", endDate:"2026-06-28", active:false, complete:false, apiId:{wta:16732} },
   { id:"wimbledon26",name:"Wimbledon",          short:"Wimbledon",tour:"BOTH", type:"GS",    surf:"G", draw:128, wk:26, month:6,  startDate:"2026-06-29", endDate:"2026-07-12", active:false, complete:false, apiId:{atp:21337, wta:16733} },
 
   // ── JULY ──────────────────────────────────────────────────────────────────
