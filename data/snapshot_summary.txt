@@ -1,25 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-20T17:37:13.871395+00:00
+# Generated: 2026-06-20T23:34:17.801790+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    13,496
+  matches                    13,498
   rankings_snapshots         12,594
-  api_fetch_log              31,776
+  api_fetch_log              31,846
 
 ## Latest rankings snapshot: 2026-06-20
 
 ## Active tournaments
   eastbourne26   Eastbourne                       matches=  0  latest=None
-  halle26        Terra Wortmann Open              matches= 39  latest=2026-06-20
+  halle26        Terra Wortmann Open              matches= 40  latest=2026-06-20
   queens26       HSBC Championships - London      matches= 40  latest=2026-06-20
 
 ## 5 most recent matches anywhere in DB
   2026-06-20  Q1        p1=73620 p2=35297 winner=73620  (Mallorca Championships - Mallorca)
   2026-06-20  Q1        p1=71188 p2=11517 winner=71188  (Lexus Eastbourne Open - Eastbourne)
   2026-06-20  Q1        p1=28267 p2=65558 winner=28267  (Lexus Eastbourne Open - Eastbourne)
+  2026-06-20  Q1        p1=18736 p2=39438 winner=18736  (Lexus Eastbourne Open - Eastbourne)
   2026-06-20  1/2       p1=29932 p2=24008 winner=29932  (Terra Wortmann Open - Halle)
-  2026-06-20  1/2       p1=29935 p2=38911 winner=29935  (HSBC Championships - London)
