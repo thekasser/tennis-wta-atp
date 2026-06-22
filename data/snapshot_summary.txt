@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-21T23:36:16.453797+00:00
+# Generated: 2026-06-22T09:06:06.877670+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,15 +7,15 @@
   players                       274
   tournaments                   167
   matches                    13,506
-  rankings_snapshots         12,857
-  api_fetch_log              32,058
+  rankings_snapshots         13,119
+  api_fetch_log              32,131
 
-## Latest rankings snapshot: 2026-06-21
+## Latest rankings snapshot: 2026-06-22
 
 ## Active tournaments
-  eastbourne26   Eastbourne                       matches=  0  latest=None
   halle26        Terra Wortmann Open              matches= 41  latest=2026-06-21
   queens26       HSBC Championships - London      matches= 41  latest=2026-06-21
+  wimbledon26    Wimbledon                        matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
   2026-06-21  Q3        p1=13447 p2=73620 winner=13447  (Mallorca Championships - Mallorca)
