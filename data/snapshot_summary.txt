@@ -1,21 +1,21 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-22T18:29:04.859105+00:00
+# Generated: 2026-06-22T23:37:44.942174+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    13,551
+  matches                    13,558
   rankings_snapshots         13,119
-  api_fetch_log              32,228
+  api_fetch_log              32,348
 
 ## Latest rankings snapshot: 2026-06-22
 
 ## Active tournaments
   halle26        Terra Wortmann Open              matches= 41  latest=2026-06-21
   queens26       HSBC Championships - London      matches= 41  latest=2026-06-21
-  wimbledon26    Wimbledon                        matches= 21  latest=2026-06-22
+  wimbledon26    Wimbledon                        matches= 22  latest=2026-06-22
 
 ## 5 most recent matches anywhere in DB
   2026-06-22  Q1        p1=30849 p2=20104 winner=30849  (Wimbledon - London)
