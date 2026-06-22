@@ -1,25 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-22T09:06:06.877670+00:00
+# Generated: 2026-06-22T18:29:04.859105+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    13,506
+  matches                    13,551
   rankings_snapshots         13,119
-  api_fetch_log              32,131
+  api_fetch_log              32,228
 
 ## Latest rankings snapshot: 2026-06-22
 
 ## Active tournaments
   halle26        Terra Wortmann Open              matches= 41  latest=2026-06-21
   queens26       HSBC Championships - London      matches= 41  latest=2026-06-21
-  wimbledon26    Wimbledon                        matches=  0  latest=None
+  wimbledon26    Wimbledon                        matches= 21  latest=2026-06-22
 
 ## 5 most recent matches anywhere in DB
-  2026-06-21  Q3        p1=13447 p2=73620 winner=13447  (Mallorca Championships - Mallorca)
-  2026-06-21  Q3        p1=26421 p2=18736 winner=26421  (Lexus Eastbourne Open - Eastbourne)
-  2026-06-21  Q3        p1=28267 p2=59443 winner=28267  (Lexus Eastbourne Open - Eastbourne)
-  2026-06-21  First     p1=31446 p2=7806 winner=31446  (Mallorca Championships - Mallorca)
-  2026-06-21  First     p1=31392 p2=66828 winner=31392  (Mallorca Championships - Mallorca)
+  2026-06-22  Q1        p1=30849 p2=20104 winner=30849  (Wimbledon - London)
+  2026-06-22  Q1        p1=39043 p2=64741 winner=39043  (Wimbledon - London)
+  2026-06-22  Q1        p1=24721 p2=97369 winner=24721  (Wimbledon - London)
+  2026-06-22  Q1        p1=46747 p2=90203 winner=46747  (Wimbledon - London)
+  2026-06-22  Q1        p1=55252 p2=27358 winner=55252  (Wimbledon - London)
