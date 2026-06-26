@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-26T17:40:23.484280+00:00
+# Generated: 2026-06-26T23:35:31.851956+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    13,625
+  matches                    13,787
   rankings_snapshots         14,167
-  api_fetch_log              32,975
+  api_fetch_log              33,228
 
 ## Latest rankings snapshot: 2026-06-26
 
@@ -16,8 +16,8 @@
   wimbledon26    Wimbledon                        matches= 85  latest=2026-06-25
 
 ## 5 most recent matches anywhere in DB
-  2026-06-25  Q3        p1=18094 p2=24721 winner=18094  (Wimbledon - London)
-  2026-06-25  Q3        p1=46747 p2=36114 winner=46747  (Wimbledon - London)
-  2026-06-25  Q3        p1=79088 p2=12190 winner=79088  (Wimbledon - London)
-  2026-06-25  Q3        p1=55252 p2=104215 winner=55252  (Wimbledon - London)
-  2026-06-25  Q3        p1=28900 p2=76298 winner=28900  (Wimbledon - London)
+  2026-06-26  1/2       p1=38911 p2=63017 winner=38911  (Lexus Eastbourne Open - Eastbourne)
+  2026-06-26  1/2       p1=36519 p2=52140 winner=36519  (Mallorca Championships - Mallorca)
+  2026-06-26  1/2       p1=82269 p2=31446 winner=82269  (Mallorca Championships - Mallorca)
+  2026-06-26  1/2       p1=37741 p2=79068 winner=37741  (Lexus Eastbourne Open - Eastbourne)
+  2026-06-26  1/2       p1=18482 p2=17774 winner=18482  (Bad Homburg Open - Bad Homburg)
