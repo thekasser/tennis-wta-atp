@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-06-28T23:33:27.859588+00:00
+# Generated: 2026-06-29T08:44:16.088153+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   167
   matches                    13,796
-  rankings_snapshots         14,691
-  api_fetch_log              34,926
+  rankings_snapshots         14,952
+  api_fetch_log              35,209
 
-## Latest rankings snapshot: 2026-06-28
+## Latest rankings snapshot: 2026-06-29
 
 ## Active tournaments
   wimbledon26    Wimbledon                        matches= 85  latest=2026-06-25
