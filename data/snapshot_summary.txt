@@ -1,19 +1,19 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-01T17:45:09.943281+00:00
+# Generated: 2026-07-01T23:39:04.530536+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    13,950
+  matches                    13,959
   rankings_snapshots         15,474
-  api_fetch_log              37,194
+  api_fetch_log              37,478
 
 ## Latest rankings snapshot: 2026-07-01
 
 ## Active tournaments
-  wimbledon26    Wimbledon                        matches=231  latest=2026-07-01
+  wimbledon26    Wimbledon                        matches=238  latest=2026-07-01
 
 ## 5 most recent matches anywhere in DB
   2026-07-01  Second    p1=47275 p2=31446 winner=47275  (Wimbledon - London)
