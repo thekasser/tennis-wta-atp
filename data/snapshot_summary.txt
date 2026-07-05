@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-05T00:09:18.504196+00:00
+# Generated: 2026-07-05T09:45:09.364485+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,045
+  matches                    14,046
   rankings_snapshots         16,518
-  api_fetch_log              39,753
+  api_fetch_log              40,006
 
 ## Latest rankings snapshot: 2026-07-05
 
@@ -16,8 +16,8 @@
   wimbledon26    Wimbledon                        matches=304  latest=2026-07-04
 
 ## 5 most recent matches anywhere in DB
+  2026-07-05  1/2       p1=32633 p2=29825 winner=32633  (W100 Cary)
   2026-07-04  Third     p1=24008 p2=18736 winner=24008  (Wimbledon - London)
   2026-07-04  Third     p1=39309 p2=73620 winner=39309  (Wimbledon - London)
   2026-07-04  Third     p1=67546 p2=25543 winner=67546  (Wimbledon - London)
   2026-07-04  Third     p1=61838 p2=31358 winner=61838  (Wimbledon - London)
-  2026-07-04  Third     p1=13351 p2=36558 winner=13351  (Wimbledon - London)
