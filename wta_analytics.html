@@ -448,6 +448,13 @@ select:focus{outline:none;border-color:var(--tc)}
           <option value="alive">Alive only</option>
         </select>
       </div>
+      <div class="trap-group" id="trap-qual-group" style="display:none">
+        <label title="Only applies to Current Tournament — controls whether qualifying-round matches count toward this window's stats">Qualifiers</label>
+        <select id="trap-qual" onchange="trapApp && trapApp.update()">
+          <option value="all">Include qualifiers</option>
+          <option value="main">Main draw only</option>
+        </select>
+      </div>
       <div class="trap-group">
         <label title="Auto-set per window to the 25th percentile of match counts. Lower to surface more players, raise to keep only large samples.">Min Matches</label>
         <select id="trap-min" onchange="trapApp && trapApp.update()">
@@ -4316,6 +4323,7 @@ class TrapezoidApp {
     sel.value = years.includes('T6M') ? 'T6M' : (years.includes('T12M') ? 'T12M' : String(years[0]));
     // Match min-matches default to the chosen year (no UI redraw needed yet).
     this.applyDefaultMin();
+    this.updateQualVisibility();
 
     // Compare-to dropdown: same options + "Off" sentinel at the top.
     const cmpSel = document.getElementById('trap-compare');
@@ -4364,7 +4372,17 @@ class TrapezoidApp {
 
   onYearChange() {
     this.applyDefaultMin();
+    this.updateQualVisibility();
     this.update();
+  }
+  // Qualifier toggle only makes sense for the Current Tournament window —
+  // other windows already exclude qualifying rounds via the main-draw filter
+  // applied in materialize.py's rolling-window aggregation.
+  updateQualVisibility() {
+    const yearEl = document.getElementById('trap-year');
+    const grp = document.getElementById('trap-qual-group');
+    if (!grp) return;
+    grp.style.display = (yearEl && yearEl.value === 'CURR') ? '' : 'none';
   }
   setupDropdowns() {
     const targets = ['trap-x','trap-y','trap-size','trap-color'];
@@ -4431,6 +4449,13 @@ class TrapezoidApp {
     // returns nothing (which is the honest signal — no data).
     const surfEl = document.getElementById('trap-surf');
     const surf = surfEl ? surfEl.value : 'All';
+    // Qualifier toggle — only meaningful for CURR, which can carry two rows
+    // per player when qualifying + main-draw matches both fall inside the
+    // current tournament: one with qual:'all' (quals included), one with
+    // qual:'main' (quals stripped). Rows with no qual field at all mean the
+    // player has no qualifying matches this window — always keep those.
+    const qualEl = document.getElementById('trap-qual');
+    const qualMode = qualEl ? qualEl.value : 'all';
     // Draw filter — build per-tour Sets of qualifying bioIds from activeTournaments
     const drawFilter = (document.getElementById('trap-draw') || {}).value || 'all';
     const drawIds = { atp: null, wta: null }; // null = no filter
@@ -4457,6 +4482,7 @@ class TrapezoidApp {
       const pSurf = p.surf || 'All';
       if (surf !== 'All' && pSurf !== surf) return false;
       if (surf === 'All' && pSurf !== 'All') return false;  // exclude surface variants when on 'All'
+      if (year === 'CURR' && p.qual && p.qual !== qualMode) return false;
       if (p.matches < minM) return false;
       if (p[xKey] === null || p[yKey] === null) return false;
       // Draw filter
@@ -4808,7 +4834,14 @@ function openPlayerModal(bioId, tour) {
         ${trapRows.map(r => {
           const surf = r.surf || 'All';
           const isAll = surf === 'All';
-          const periodCell = isAll ? `<strong>${r.year}</strong>` : `<span style="color:var(--muted)">${r.year}</span>`;
+          // CURR can carry two rows for a player who has qualifying-round
+          // matches at the current tournament: one including them (qual:'all')
+          // and one main-draw-only (qual:'main'). Label them so the M column
+          // isn't ambiguous — see materialize.py's _trapezoid_rows CURR block.
+          const periodLabel = r.year === 'CURR' && r.qual
+            ? `CURR (${r.qual === 'main' ? 'MD only' : '+Quals'})`
+            : r.year;
+          const periodCell = isAll ? `<strong>${periodLabel}</strong>` : `<span style="color:var(--muted)">${periodLabel}</span>`;
           return `<tr${isAll ? '' : ' style="background:rgba(36,43,42,0.02)"'}>
             <td>${periodCell}</td>
             <td style="font-size:11px">${SURF_LABEL[surf]||surf}</td>

@@ -1197,21 +1197,70 @@ def _trapezoid_rows(conn, tour: str, all_year_matches: dict[int, list[dict]],
                     "surf": surf, **surf_agg,
                 })
 
-        # CURR — last 14 days, lower threshold to surface in-tournament players.
-        # Keep tour_only=False so a player active at a W125 still appears as
-        # "what they're doing right now" — this view is about presence, not metric ranking.
-        curr_ms = [m for m in all_ms
-                   if (d := _dt(m)) and d >= (today - timedelta(days=14))]
+        # CURR — matches from the player's CURRENT (single) tournament only.
+        # Previously this was "last 14 days", which silently merged matches
+        # from two different events whenever a player's most recent
+        # tournament fell within 14 days of a prior one — e.g. a grass
+        # warm-up event the week before Wimbledon, or (for a seeded player)
+        # Wimbledon qualifying + main draw both landing in-window. That
+        # inflated the "M" (matches) count shown in the Trapezoid tab and
+        # the player drill-down modal well past what the player had actually
+        # played at the tournament currently on screen.
+        #
+        # Fix: find the player's most recent match, then take only the
+        # contiguous run of their most-recent matches that share its
+        # tournament identity (tournament_id when resolved, else the raw
+        # tournament_api_id / tournament_name for untracked events like
+        # W125s — mirrors the fallback chain sync_matches.py already writes
+        # per match row). tour_only stays False so lower-tier "what are they
+        # doing right now" events still surface.
+        recent_ms = sorted((m for m in all_ms if _dt(m)),
+                           key=_dt, reverse=True)
+
+        def _tourn_key(m):
+            return m.get("tournament_id") or m.get("tournament_api_id") or m.get("tournament_name")
+
+        curr_ms = []
+        if recent_ms:
+            key = _tourn_key(recent_ms[0])
+            if key is not None:
+                for m in recent_ms:
+                    if _tourn_key(m) != key:
+                        break
+                    curr_ms.append(m)
+            else:
+                curr_ms = [recent_ms[0]]
+
         if curr_ms:
+            has_quals = any(not _is_main_draw(m) for m in curr_ms)
             curr_agg = _aggregate_year(curr_ms, mid,
                                        min_matches=1, min_tb=1, min_dec=1,
                                        tour_only=False)
             if curr_agg:
-                rows_by["CURR"].append({
+                row = {
                     "id": str(mid), "bioId": bio_id, "name": b["name"],
                     "ioc": b["country"] or "", "year": "CURR", "tour": tour.upper(),
                     "surf": "All", **curr_agg,
-                })
+                }
+                if has_quals:
+                    row["qual"] = "all"   # includes qualifying-round matches
+                rows_by["CURR"].append(row)
+            # Main-draw-only variant (qualifying rounds stripped) so the
+            # dashboard can offer a "hide qualifiers" toggle without losing
+            # the qualifier-inclusive numbers. Only emitted when the two
+            # actually differ (i.e. this tournament's CURR window mixes
+            # qualifying + main-draw matches for this player).
+            if has_quals:
+                curr_ms_main = [m for m in curr_ms if _is_main_draw(m)]
+                curr_agg_main = _aggregate_year(curr_ms_main, mid,
+                                                min_matches=1, min_tb=1, min_dec=1,
+                                                tour_only=False) if curr_ms_main else None
+                if curr_agg_main:
+                    rows_by["CURR"].append({
+                        "id": str(mid), "bioId": bio_id, "name": b["name"],
+                        "ioc": b["country"] or "", "year": "CURR", "tour": tour.upper(),
+                        "surf": "All", "qual": "main", **curr_agg_main,
+                    })
 
     return rows_by
 
@@ -1249,7 +1298,8 @@ def materialize_trapezoid(conn) -> bool:
         cur = conn.execute("""
             SELECT m.date, m.round, m.p1_id, m.p2_id, m.winner_id, m.score,
                    m.surface, m.best_of, m.stat_p1, m.stat_p2,
-                   m.tournament_id, t.type AS t_type
+                   m.tournament_id, m.tournament_api_id, m.tournament_name,
+                   t.type AS t_type
             FROM matches m
             LEFT JOIN tournaments t ON t.id = m.tournament_id
             WHERE m.tour = ?
