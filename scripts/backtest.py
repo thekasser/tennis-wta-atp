@@ -123,14 +123,19 @@ def form_pct(form_str: str, n: int = 10) -> float:
 
 def match_prob(pA: dict, pB: dict, surf_code: str,
                *, sharpen: float = DEFAULT_SHARPEN,
-               bare_elo: float = DEFAULT_BARE_ELO_WEIGHT) -> dict:
+               bare_elo: float = DEFAULT_BARE_ELO_WEIGHT,
+               curr_weight: float = 0.0) -> dict:
     """Port of matchProbBreakdown. Returns {prob, weights, signals, raw}.
 
     surf_code: 'H' | 'C' | 'G'
-    pA / pB shape: {id, pts, ytd, surf: {H,C,G}, form: str, composite: float|None}
+    pA / pB shape: {id, pts, ytd, surf: {H,C,G}, form: str, composite: float|None,
+                    curr_composite: float|None}
 
     sharpen / bare_elo are exposed as kwargs so the backtest can sweep them
-    without touching the dashboard's JS source.
+    without touching the dashboard's JS source. curr_weight is the
+    candidate current-tournament-form signal — 0.0 (default) reproduces
+    the live model exactly; the backtest sweeps this to find the weight
+    that improves Brier, if any.
     """
     eA_elo, eA_src = effective_elo(pA.get("pts", 0), pA.get("ytd", 0))
     eB_elo, eB_src = effective_elo(pB.get("pts", 0), pB.get("ytd", 0))
@@ -185,12 +190,30 @@ def match_prob(pA: dict, pB: dict, surf_code: str,
     if sum_w > 0:
         weights = {k: v / sum_w for k, v in weights.items()}
 
+    # Current-tournament form (candidate 6th signal) — bolted on as an
+    # independent weight slice AFTER the existing 4-branch blend + surface
+    # renormalization above, so curr_weight=0 (the default) reproduces the
+    # live model bit-for-bit. When available, it takes `curr_weight` off
+    # the top and every other weight is scaled down proportionally —
+    # relative ratios among elo/surf/form/h2h/comp are preserved.
+    cC_a = pA.get("curr_composite")
+    cC_b = pB.get("curr_composite")
+    curr_avail = cC_a is not None and cC_b is not None
+    curr_p = (1 / (1 + math.exp(-(cC_a - cC_b) * 0.7))) if curr_avail else 0.5
+    if curr_avail and curr_weight > 0:
+        for k in weights:
+            weights[k] *= (1.0 - curr_weight)
+        weights["curr"] = curr_weight
+    else:
+        weights["curr"] = 0.0
+
     sum_logit = (
         weights["elo"]  * _logit(elo_p)
         + weights["surf"] * _logit(surf_p)
         + weights["form"] * _logit(form_p)
         + weights["h2h"]  * _logit(h2h_p)
         + weights["comp"] * _logit(comp_p)
+        + weights["curr"] * _logit(curr_p)
     )
     raw_prob = 1 / (1 + math.exp(-sum_logit * sharpen))
     prob = min(PROB_CAP, max(PROB_FLOOR, raw_prob))
@@ -199,9 +222,9 @@ def match_prob(pA: dict, pB: dict, surf_code: str,
         "prob": prob,
         "weights": weights,
         "signals": {"elo_p": elo_p, "surf_p": surf_p, "form_p": form_p,
-                    "h2h_p": h2h_p, "comp_p": comp_p},
+                    "h2h_p": h2h_p, "comp_p": comp_p, "curr_p": curr_p},
         "raw": {"eloA": eA_elo, "eloB": eB_elo, "elo_src_A": eA_src, "elo_src_B": eB_src,
-                "fA": fA, "fB": fB, "sA": sA, "sB": sB,
+                "fA": fA, "fB": fB, "sA": sA, "sB": sB, "curr_avail": curr_avail,
                 "h2h_avail": h2h_avail, "comp_avail": comp_avail},
     }
 
@@ -443,6 +466,10 @@ ATTRIBUTION_METRICS = COMPOSITE_METRICS + [
 SHRINK_PRIOR          = 15      # matches `decorateTrapezoidComposite`
 COMPOSITE_WINDOW_DAYS = 180     # ≈ T6M (lookupComposite default in dashboard)
 COMPOSITE_MIN_ZS      = 3       # min metrics with valid z-score; below → None
+CURR_MIN_MATCHES      = 3       # min prior same-tournament matches before the
+                                # current-tournament-form signal activates —
+                                # matches the dashboard's Trapezoid CURR window
+                                # gate requested for the matchup predictor.
 
 
 def _player_matches_in_window(conn, mid: int, asof_date: str,
@@ -564,6 +591,75 @@ def pit_composite(conn, mid: int, tour: str, asof_date: str,
     return composite, per_metric_zs
 
 
+# ─── PiT current-tournament composite ───────────────────────────────────────
+# "How is this player performing at the event they're in RIGHT NOW", as a
+# candidate 6th signal for matchProbBreakdown. Mirrors materialize.py's
+# CURR trapezoid window (same tournament, main-draw matches only, dated
+# before the match being scored) — NOT a trailing date window, so it can't
+# leak a different event's matches the way the old 14-day CURR window did.
+#
+# Normalization choice: rather than building a bespoke "who else is
+# currently mid-tournament" cohort (noisy — a handful of players per event,
+# different events live at different times), per-metric raw values are
+# z-scored against the SAME weekly T6M cohort pit_composite already builds
+# and caches. That puts both composites on one scale (comparable to "how
+# much better/worse than their typical T6M level are they playing at this
+# event") and reuses the existing cache with zero extra cohort queries.
+def pit_curr_tournament_composite(conn, mid: int, tour: str,
+                                  tournament_id: str | None, asof_date: str,
+                                  composite_cache: dict[tuple[str, str], dict],
+                                  mid_idx: dict[int, dict],
+                                  min_matches: int = CURR_MIN_MATCHES
+                                  ) -> tuple[float | None, int]:
+    """Composite z-score for `mid` from ONLY their prior main-draw matches
+    in `tournament_id`, dated < asof_date. Returns (composite, n_matches);
+    composite is None if tournament_id is unresolved or n < min_matches or
+    fewer than COMPOSITE_MIN_ZS metrics have cohort stats.
+    """
+    if not tournament_id:
+        return None, 0
+    rows = conn.execute("""
+        SELECT m.id, m.p1_id, m.p2_id, m.winner_id, m.score, m.best_of,
+               m.round, m.stat_p1, m.stat_p2, m.date, t.type AS t_type
+        FROM matches m
+        LEFT JOIN tournaments t ON m.tournament_id = t.id
+        WHERE m.tournament_id = ?
+          AND (m.p1_id = ? OR m.p2_id = ?)
+          AND m.date < ?
+    """, (tournament_id, mid, mid, asof_date)).fetchall()
+    ms = [dict(r) for r in rows if not (r["round"] or "").startswith("Q")]
+    n = len(ms)
+    if n < min_matches:
+        return None, n
+    agg = _aggregate_year(ms, mid, min_matches=min_matches,
+                          min_tb=1, min_dec=1, tour_only=False)
+    if agg is None:
+        return None, n
+
+    week = _isoweek_start(asof_date)
+    key = (tour, week)
+    if key not in composite_cache:
+        composite_cache[key] = _build_composite_cohort(conn, tour, week, mid_idx)
+    cohort = composite_cache[key]
+
+    zs = []
+    for m_name in COMPOSITE_METRICS:
+        v = agg.get(m_name)
+        s = cohort["stats"].get(m_name)
+        if v is None or not s:
+            continue
+        zs.append((v - s[0]) / s[1])
+    if len(zs) < COMPOSITE_MIN_ZS:
+        return None, n
+
+    # Shrinkage uses the (small, by construction) current-tournament match
+    # count — n=3 gives shrinkage=3/18=0.167, so this signal starts muted
+    # and only strengthens as the player advances further in the event.
+    shrinkage = n / (n + SHRINK_PRIOR)
+    composite = round((sum(zs) / len(zs)) * shrinkage, 2)
+    return composite, n
+
+
 # ─── Backtest driver ─────────────────────────────────────────────────────────
 
 @dataclass
@@ -595,6 +691,13 @@ class MatchFeatures:
     # just this metric" predictions. Empty dict when stats are missing.
     zs_a: dict
     zs_b: dict
+    # Current-tournament composite (see pit_curr_tournament_composite) —
+    # None until the player has CURR_MIN_MATCHES prior main-draw matches
+    # in this same tournament.
+    curr_comp_a: float | None
+    curr_comp_b: float | None
+    curr_n_a: int
+    curr_n_b: int
     won_a: int          # 1 if A won; 0 if B won (deterministic-by-mid slot)
 
 
@@ -618,6 +721,8 @@ class BacktestRow:
     h2h_p2: int
     comp_p1: float | None
     comp_p2: float | None
+    curr_comp_p1: float | None
+    curr_comp_p2: float | None
     p_pred: float
     won: int          # 1 if p1 won (matches p_pred for p1); 0 if p2 won
     weights_json: str
@@ -634,7 +739,8 @@ def load_completed_matches(conn, tour: str | None, year: int,
     """Pull scoreable matches: known winner, known surface, both players
     are bio'd (we have surface profile, can look up bio_id)."""
     sql = """
-        SELECT m.id, m.date, m.tour, m.surface, m.p1_id, m.p2_id, m.winner_id
+        SELECT m.id, m.date, m.tour, m.surface, m.p1_id, m.p2_id, m.winner_id,
+               m.tournament_id
         FROM matches m
         WHERE m.winner_id IS NOT NULL
           AND m.surface IN ('H', 'C', 'G')
@@ -715,9 +821,15 @@ def collect_features(conn, tour: str, year: int, limit: int | None,
         if use_composite:
             cA, zsA = pit_composite(conn, mid_a, match_tour, asof, composite_cache, mid_idx)
             cB, zsB = pit_composite(conn, mid_b, match_tour, asof, composite_cache, mid_idx)
+            currA, currNA = pit_curr_tournament_composite(
+                conn, mid_a, match_tour, m["tournament_id"], asof, composite_cache, mid_idx)
+            currB, currNB = pit_curr_tournament_composite(
+                conn, mid_b, match_tour, m["tournament_id"], asof, composite_cache, mid_idx)
         else:
             cA = cB = None
             zsA, zsB = {}, {}
+            currA = currB = None
+            currNA = currNB = 0
 
         features.append(MatchFeatures(
             match_id=m["id"], date=m["date"], tour=match_tour,
@@ -728,6 +840,8 @@ def collect_features(conn, tour: str, year: int, limit: int | None,
             form_a=fA, form_b=fB, h2h_a=h_a, h2h_b=h_b,
             comp_a=cA, comp_b=cB,
             zs_a=zsA, zs_b=zsB,
+            curr_comp_a=currA, curr_comp_b=currB,
+            curr_n_a=currNA, curr_n_b=currNB,
             won_a=1 if m["winner_id"] == mid_a else 0,
         ))
 
@@ -737,21 +851,25 @@ def collect_features(conn, tour: str, year: int, limit: int | None,
 
 def score_features(features: list[MatchFeatures], *,
                    sharpen: float = DEFAULT_SHARPEN,
-                   bare_elo: float = DEFAULT_BARE_ELO_WEIGHT) -> list[BacktestRow]:
+                   bare_elo: float = DEFAULT_BARE_ELO_WEIGHT,
+                   curr_weight: float = 0.0) -> list[BacktestRow]:
     """Pass 2: run match_prob on each MatchFeatures and produce CSV-shaped
-    rows. Cheap — no DB access. Re-callable with different sharpen/bare_elo
-    to sweep tuning without re-collecting features.
+    rows. Cheap — no DB access. Re-callable with different sharpen/bare_elo/
+    curr_weight to sweep tuning without re-collecting features.
     """
     rows: list[BacktestRow] = []
     for f in features:
         pA = {"id": f.bio_a["id"], "pts": f.pts_a, "ytd": f.ytd_a,
               "surf": f.bio_a["surf"], "form": f.form_a,
-              "composite": f.comp_a, "h2h_wins": f.h2h_a}
+              "composite": f.comp_a, "h2h_wins": f.h2h_a,
+              "curr_composite": f.curr_comp_a}
         pB = {"id": f.bio_b["id"], "pts": f.pts_b, "ytd": f.ytd_b,
               "surf": f.bio_b["surf"], "form": f.form_b,
-              "composite": f.comp_b, "h2h_wins": f.h2h_b}
+              "composite": f.comp_b, "h2h_wins": f.h2h_b,
+              "curr_composite": f.curr_comp_b}
         result = match_prob(pA, pB, f.surface,
-                            sharpen=sharpen, bare_elo=bare_elo)
+                            sharpen=sharpen, bare_elo=bare_elo,
+                            curr_weight=curr_weight)
         # Component zs in compact form: {metric: [za, zb], ...}, only for
         # metrics where BOTH players have a z (so per_component_brier can
         # use the pair without conditional handling).
@@ -768,6 +886,7 @@ def score_features(features: list[MatchFeatures], *,
             form_p1=f.form_a, form_p2=f.form_b,
             h2h_p1=f.h2h_a, h2h_p2=f.h2h_b,
             comp_p1=f.comp_a, comp_p2=f.comp_b,
+            curr_comp_p1=f.curr_comp_a, curr_comp_p2=f.curr_comp_b,
             p_pred=result["prob"], won=f.won_a,
             weights_json=json.dumps(result["weights"], separators=(",", ":")),
             signals_json=json.dumps(result["signals"], separators=(",", ":")),
@@ -829,6 +948,10 @@ def load_prospective_rows(conn, model_version: str | None = None,
             form_p1=r["form_p1"] or "", form_p2=r["form_p2"] or "",
             h2h_p1=r["h2h_p1"] or 0, h2h_p2=r["h2h_p2"] or 0,
             comp_p1=r["comp_p1"], comp_p2=r["comp_p2"],
+            # Prospective predictions table predates the curr-tournament
+            # signal — not persisted, so attribution treats it as unavailable
+            # for these rows (curr weight was 0 when they were logged anyway).
+            curr_comp_p1=None, curr_comp_p2=None,
             p_pred=r["p_pred"], won=won,
             weights_json=r["weights_json"] or "{}",
             signals_json=r["signals_json"] or "{}",
@@ -992,13 +1115,15 @@ def backtest(conn, tour: str, year: int, limit: int | None,
              use_composite: bool = True, soft: bool = False,
              sharpen: float = DEFAULT_SHARPEN,
              bare_elo: float = DEFAULT_BARE_ELO_WEIGHT,
+             curr_weight: float = 0.0,
              composite_only: bool = False,
              show_misses: int = 10) -> dict:
     """Convenience wrapper for single-config runs."""
     features, _ = collect_features(conn, tour, year, limit,
                                    window_months=window_months,
                                    use_composite=use_composite, soft=soft)
-    rows = score_features(features, sharpen=sharpen, bare_elo=bare_elo)
+    rows = score_features(features, sharpen=sharpen, bare_elo=bare_elo,
+                          curr_weight=curr_weight)
     write_csv(rows, output_csv)
     return summarize(rows, composite_only=composite_only,
                      sharpen=sharpen, bare_elo=bare_elo,
@@ -1022,13 +1147,14 @@ def backtest(conn, tour: str, year: int, limit: int | None,
 # contribution to the prediction. Sign × outcome tells us whether the
 # signal pushed correctly or not.
 
-SIGNAL_NAMES = ("elo_p", "surf_p", "form_p", "h2h_p", "comp_p")
+SIGNAL_NAMES = ("elo_p", "surf_p", "form_p", "h2h_p", "comp_p", "curr_p")
 SIGNAL_TO_WEIGHT = {
     "elo_p":  "elo",
     "surf_p": "surf",
     "form_p": "form",
     "h2h_p":  "h2h",
     "comp_p": "comp",
+    "curr_p": "curr",
 }
 
 def _decompose_row(row: BacktestRow, sharpen: float = DEFAULT_SHARPEN
@@ -1504,6 +1630,22 @@ def main() -> int:
                    help="Comma-separated SHARPEN values, e.g. '1.0,1.5,2.0,2.5'. "
                         "Collects features once, scores under each value, "
                         "prints comparison. Skips CSV writing.")
+    p.add_argument("--curr-weight", type=float, default=0.0,
+                   help="Weight given to the candidate current-tournament-"
+                        "form signal (composite from the player's matches "
+                        "already played THIS event, min 3). Default 0.0 "
+                        "reproduces the live model exactly — this signal "
+                        "isn't wired into the dashboard yet. Applies to "
+                        "every mode below except --sweep-curr-weight, which "
+                        "overrides it per value.")
+    p.add_argument("--sweep-curr-weight", type=str, default=None,
+                   help="Comma-separated curr_weight values to sweep, e.g. "
+                        "'0,0.05,0.1,0.15,0.2'. Collects features once "
+                        "(including the current-tournament PiT composite), "
+                        "scores under each weight, prints a Brier comparison "
+                        "restricted to matches where both players have a "
+                        "qualifying current-tournament composite. Use this "
+                        "to pick the weight before touching wta_analytics.html.")
     p.add_argument("--show-misses", type=int, default=10,
                    help="Print the top N highest-confidence wrong calls "
                         "(losing favorites) at the end of every run. "
@@ -1572,7 +1714,8 @@ def main() -> int:
             soft=args.soft,
         )
         rows = score_features(features, sharpen=args.sharpen,
-                              bare_elo=args.bare_elo_weight)
+                              bare_elo=args.bare_elo_weight,
+                              curr_weight=args.curr_weight)
         print_feature_attribution(rows, sharpen=args.sharpen)
         write_csv(rows, args.output)
         summarize(rows, composite_only=args.composite_only,
@@ -1593,7 +1736,8 @@ def main() -> int:
         results = []
         for s in sharpen_vals:
             rows = score_features(features, sharpen=s,
-                                  bare_elo=args.bare_elo_weight)
+                                  bare_elo=args.bare_elo_weight,
+                                  curr_weight=args.curr_weight)
             res = summarize(rows, composite_only=args.composite_only,
                             sharpen=s, bare_elo=args.bare_elo_weight,
                             show_misses=0)   # suppress in sweep — too noisy
@@ -1606,12 +1750,49 @@ def main() -> int:
             print(f"  {s:>5.2f}  {r['n']:>5}   {r['brier']:.4f}")
         return 0
 
+    if args.sweep_curr_weight:
+        weight_vals = [float(s.strip()) for s in args.sweep_curr_weight.split(",")]
+        features, _ = collect_features(
+            conn, args.tour, args.year, args.limit,
+            window_months=args.window_months,
+            use_composite=not args.no_composite,
+            soft=args.soft,
+        )
+        n_eligible = sum(1 for f in features
+                         if f.curr_comp_a is not None and f.curr_comp_b is not None)
+        print(f"\n[sweep] {n_eligible}/{len(features)} matches have a "
+              f"current-tournament composite for BOTH players "
+              f"(>= {CURR_MIN_MATCHES} prior main-draw matches this event). "
+              f"Brier below is scored on the FULL set — curr_weight=0 rows "
+              f"are unaffected, so compare against the curr_weight=0 row as "
+              f"baseline. Use --feature-attribution --curr-weight <val> to "
+              f"see this signal's standalone Brier / net helpful-harmful "
+              f"contribution on just the eligible subset.")
+        results = []
+        for w in weight_vals:
+            rows = score_features(features, sharpen=args.sharpen,
+                                  bare_elo=args.bare_elo_weight,
+                                  curr_weight=w)
+            res = summarize(rows, composite_only=args.composite_only,
+                            sharpen=args.sharpen, bare_elo=args.bare_elo_weight,
+                            show_misses=0)
+            results.append((w, res))
+        print("\n[sweep] Brier comparison (curr_weight):")
+        print("  curr_weight   n     Brier")
+        print("  ---------------------------")
+        for w, r in results:
+            print(f"  {w:>9.2f}  {r['n']:>5}   {r['brier']:.4f}")
+        best = min(results, key=lambda wr: wr[1]['brier'])
+        print(f"\n  best: curr_weight={best[0]:.2f}  Brier={best[1]['brier']:.4f}")
+        return 0
+
     backtest(conn, args.tour, args.year, args.limit, args.output,
              window_months=args.window_months,
              use_composite=not args.no_composite,
              soft=args.soft,
              sharpen=args.sharpen,
              bare_elo=args.bare_elo_weight,
+             curr_weight=args.curr_weight,
              composite_only=args.composite_only,
              show_misses=args.show_misses)
     return 0
