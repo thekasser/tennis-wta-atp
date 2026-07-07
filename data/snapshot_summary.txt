@@ -1,21 +1,21 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-06T19:03:26.115513+00:00
+# Generated: 2026-07-07T00:18:25.853670+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,069
-  rankings_snapshots         16,779
-  api_fetch_log              41,276
+  matches                    14,071
+  rankings_snapshots         17,040
+  api_fetch_log              41,530
 
-## Latest rankings snapshot: 2026-07-06
+## Latest rankings snapshot: 2026-07-07
 
 ## Active tournaments
   bastad26       Nordea Open                      matches=  0  latest=None
   palermo26      Palermo Open                     matches=  0  latest=None
-  wimbledon26    Wimbledon                        matches=317  latest=2026-07-06
+  wimbledon26    Wimbledon                        matches=319  latest=2026-07-06
 
 ## 5 most recent matches anywhere in DB
   2026-07-06  Fourth    p1=67546 p2=39309 winner=67546  (Wimbledon - London)
