@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-07T00:18:25.853670+00:00
+# Generated: 2026-07-07T10:29:12.860268+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,071
+  matches                    14,072
   rankings_snapshots         17,040
-  api_fetch_log              41,530
+  api_fetch_log              41,784
 
 ## Latest rankings snapshot: 2026-07-07
 
@@ -18,8 +18,8 @@
   wimbledon26    Wimbledon                        matches=319  latest=2026-07-06
 
 ## 5 most recent matches anywhere in DB
+  2026-07-07  First     p1=27547 p2=17928 winner=27547  (Braunschweig Challenger)
   2026-07-06  Fourth    p1=67546 p2=39309 winner=67546  (Wimbledon - London)
   2026-07-06  Fourth    p1=14362 p2=67792 winner=14362  (Wimbledon - London)
   2026-07-06  Fourth    p1=66597 p2=11672 winner=66597  (Wimbledon - London)
   2026-07-06  Fourth    p1=13351 p2=24572 winner=13351  (Wimbledon - London)
-  2026-07-06  Fourth    p1=47742 p2=64343 winner=47742  (Wimbledon - London)
