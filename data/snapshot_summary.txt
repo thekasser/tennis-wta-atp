@@ -1,25 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-08T09:28:36.451536+00:00
+# Generated: 2026-07-08T18:25:25.350216+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,098
+  matches                    14,111
   rankings_snapshots         17,301
-  api_fetch_log              42,546
+  api_fetch_log              42,800
 
 ## Latest rankings snapshot: 2026-07-08
 
 ## Active tournaments
   bastad26       Nordea Open                      matches=  0  latest=None
   palermo26      Palermo Open                     matches=  0  latest=None
-  wimbledon26    Wimbledon                        matches=324  latest=2026-07-07
+  wimbledon26    Wimbledon                        matches=328  latest=2026-07-08
 
 ## 5 most recent matches anywhere in DB
-  2026-07-07  Fourth    p1=24008 p2=61838 winner=24008  (Wimbledon - London)
-  2026-07-07  First     p1=27547 p2=17928 winner=27547  (Braunschweig Challenger)
-  2026-07-07  First     p1=64741 p2=48442 winner=64741  (Braunschweig Challenger)
-  2026-07-07  First     p1=46747 p2=39445 winner=46747  (Braunschweig Challenger)
-  2026-07-07  First     p1=27358 p2=32349 winner=27358  (Iasi Challenger)
+  2026-07-08  Second    p1=76010 p2=27547 winner=76010  (Braunschweig Challenger)
+  2026-07-08  Second    p1=17142 p2=39540 winner=17142  (Nordea Open - Bastad)
+  2026-07-08  Second    p1=12390 p2=72946 winner=12390  (Nordea Open - Bastad)
+  2026-07-08  Second    p1=34747 p2=30797 winner=34747  (Grand Est Open 88 - Contrexeville)
+  2026-07-08  Second    p1=461 p2=14694 winner=461  (Nordea Open - Bastad)
