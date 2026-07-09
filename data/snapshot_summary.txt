@@ -1,16 +1,16 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-08T18:25:25.350216+00:00
+# Generated: 2026-07-09T00:20:31.269414+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,111
-  rankings_snapshots         17,301
-  api_fetch_log              42,800
+  matches                    14,120
+  rankings_snapshots         17,562
+  api_fetch_log              43,054
 
-## Latest rankings snapshot: 2026-07-08
+## Latest rankings snapshot: 2026-07-09
 
 ## Active tournaments
   bastad26       Nordea Open                      matches=  0  latest=None
