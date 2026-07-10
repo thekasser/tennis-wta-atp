@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-10T00:14:58.368989+00:00
+# Generated: 2026-07-10T10:26:11.500860+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,143
+  matches                    14,151
   rankings_snapshots         17,823
-  api_fetch_log              43,818
+  api_fetch_log              44,073
 
 ## Latest rankings snapshot: 2026-07-10
 
@@ -18,8 +18,8 @@
   wimbledon26    Wimbledon                        matches=330  latest=2026-07-09
 
 ## 5 most recent matches anywhere in DB
+  2026-07-10  Second    p1=26356 p2=61710 winner=26356  (Hall of Fame Open - Newport)
   2026-07-09  Second    p1=78144 p2=59448 winner=78144  (Grand Est Open 88 - Contrexeville)
   2026-07-09  Second    p1=64741 p2=79088 winner=64741  (Braunschweig Challenger)
   2026-07-09  Second    p1=46747 p2=100215 winner=46747  (Braunschweig Challenger)
   2026-07-09  Second    p1=87277 p2=67986 winner=87277  (Newport Challenger)
-  2026-07-09  Second    p1=61857 p2=79842 winner=61857  (Iasi Challenger)
