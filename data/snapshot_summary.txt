@@ -1,25 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-10T18:28:40.021220+00:00
+# Generated: 2026-07-11T00:07:28.611261+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,160
-  rankings_snapshots         17,823
-  api_fetch_log              44,328
+  matches                    14,170
+  rankings_snapshots         18,084
+  api_fetch_log              44,616
 
-## Latest rankings snapshot: 2026-07-10
+## Latest rankings snapshot: 2026-07-11
 
 ## Active tournaments
   bastad26       Nordea Open                      matches=  0  latest=None
   palermo26      Palermo Open                     matches=  0  latest=None
-  wimbledon26    Wimbledon                        matches=331  latest=2026-07-10
+  wimbledon26    Wimbledon                        matches=332  latest=2026-07-10
 
 ## 5 most recent matches anywhere in DB
+  2026-07-11  1/4       p1=68090 p2=92243 winner=68090  (Newport Challenger)
   2026-07-10  Second    p1=26356 p2=61710 winner=26356  (Hall of Fame Open - Newport)
+  2026-07-10  Second    p1=68090 p2=26221 winner=68090  (Newport Challenger)
   2026-07-10  1/4       p1=64741 p2=104451 winner=64741  (Braunschweig Challenger)
   2026-07-10  1/4       p1=46747 p2=52968 winner=46747  (Braunschweig Challenger)
-  2026-07-10  1/4       p1=59092 p2=74899 winner=59092  (Iasi Challenger)
-  2026-07-10  1/4       p1=47752 p2=87277 winner=47752  (Newport Challenger)
