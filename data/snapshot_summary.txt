@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-11T08:49:40.780107+00:00
+# Generated: 2026-07-11T18:02:22.559348+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,170
+  matches                    14,179
   rankings_snapshots         18,084
-  api_fetch_log              44,904
+  api_fetch_log              45,192
 
 ## Latest rankings snapshot: 2026-07-11
 
@@ -18,8 +18,8 @@
   wimbledon26    Wimbledon                        matches=332  latest=2026-07-10
 
 ## 5 most recent matches anywhere in DB
-  2026-07-11  1/4       p1=68090 p2=92243 winner=68090  (Newport Challenger)
-  2026-07-10  Second    p1=26356 p2=61710 winner=26356  (Hall of Fame Open - Newport)
-  2026-07-10  Second    p1=68090 p2=26221 winner=68090  (Newport Challenger)
-  2026-07-10  1/4       p1=64741 p2=104451 winner=64741  (Braunschweig Challenger)
-  2026-07-10  1/4       p1=46747 p2=52968 winner=46747  (Braunschweig Challenger)
+  2026-07-11  Q1        p1=20104 p2=47543 winner=20104  (Plava Laguna Croatia Open - Umag)
+  2026-07-11  Q1        p1=85859 p2=55252 winner=85859  (EFG Swiss Open - Gstaad)
+  2026-07-11  Q1        p1=40187 p2=71221 winner=40187  (Plava Laguna Croatia Open - Umag)
+  2026-07-11  Q1        p1=28904 p2=94055 winner=28904  (EFG Swiss Open - Gstaad)
+  2026-07-11  Q1        p1=95698 p2=48011 winner=95698  (EFG Swiss Open - Gstaad)
