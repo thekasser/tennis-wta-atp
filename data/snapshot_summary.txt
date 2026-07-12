@@ -1,21 +1,21 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-11T18:02:22.559348+00:00
+# Generated: 2026-07-12T00:05:47.843267+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,179
-  rankings_snapshots         18,084
-  api_fetch_log              45,192
+  matches                    14,185
+  rankings_snapshots         18,345
+  api_fetch_log              45,480
 
-## Latest rankings snapshot: 2026-07-11
+## Latest rankings snapshot: 2026-07-12
 
 ## Active tournaments
   bastad26       Nordea Open                      matches=  0  latest=None
   palermo26      Palermo Open                     matches=  0  latest=None
-  wimbledon26    Wimbledon                        matches=332  latest=2026-07-10
+  wimbledon26    Wimbledon                        matches=333  latest=2026-07-11
 
 ## 5 most recent matches anywhere in DB
   2026-07-11  Q1        p1=20104 p2=47543 winner=20104  (Plava Laguna Croatia Open - Umag)
