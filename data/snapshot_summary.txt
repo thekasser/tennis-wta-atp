@@ -1,25 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-13T10:28:50.902064+00:00
+# Generated: 2026-07-13T18:50:08.467540+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,198
+  matches                    14,217
   rankings_snapshots         18,607
-  api_fetch_log              46,634
+  api_fetch_log              46,923
 
 ## Latest rankings snapshot: 2026-07-13
 
 ## Active tournaments
-  bastad26       Nordea Open                      matches=  0  latest=None
+  bastad26       Nordea Open                      matches=  1  latest=2026-07-13
   palermo26      Palermo Open                     matches=  0  latest=None
   wimbledon26    Wimbledon                        matches=334  latest=2026-07-12
 
 ## 5 most recent matches anywhere in DB
+  2026-07-13  Q3        p1=39310 p2=99265 winner=39310  (Lincoln Challenger)
   2026-07-13  Q1        p1=39310 p2=60951 winner=39310  (Lincoln Challenger)
-  2026-07-12  Q3        p1=20104 p2=37577 winner=20104  (Plava Laguna Croatia Open - Umag)
-  2026-07-12  Q3        p1=55257 p2=28904 winner=55257  (EFG Swiss Open - Gstaad)
-  2026-07-12  Q3        p1=95698 p2=25533 winner=95698  (EFG Swiss Open - Gstaad)
-  2026-07-12  Q3        p1=13937 p2=13412 winner=13937  (Athens Open - Athens)
+  2026-07-13  First     p1=34337 p2=85862 winner=34337  (EFG Swiss Open - Gstaad)
+  2026-07-13  First     p1=73196 p2=31358 winner=73196  (EFG Swiss Open - Gstaad)
+  2026-07-13  First     p1=31392 p2=97369 winner=31392  (EFG Swiss Open - Gstaad)
