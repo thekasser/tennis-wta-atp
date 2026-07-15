@@ -1,24 +1,24 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-15T00:01:07.383203+00:00
+# Generated: 2026-07-15T09:12:12.590633+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,264
-  rankings_snapshots         18,865
-  api_fetch_log              48,071
+  matches                    14,266
+  rankings_snapshots         19,123
+  api_fetch_log              48,358
 
-## Latest rankings snapshot: 2026-07-14
+## Latest rankings snapshot: 2026-07-15
 
 ## Active tournaments
   bastad26       Nordea Open                      matches=  9  latest=2026-07-14
   palermo26      Palermo Open                     matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
+  2026-07-15  First     p1=39310 p2=30954 winner=39310  (Lincoln Challenger)
   2026-07-14  First     p1=71166 p2=29953 winner=71166  (Lincoln Challenger)
   2026-07-14  First     p1=28267 p2=18016 winner=28267  (Granby Challenger)
   2026-07-14  First     p1=30470 p2=79113 winner=30470  (EFG Swiss Open - Gstaad)
   2026-07-14  First     p1=11953 p2=63299 winner=11953  (Nordea Open - Bastad)
-  2026-07-14  First     p1=31446 p2=111498 winner=31446  (Nordea Open - Bastad)
