@@ -1,24 +1,24 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-16T09:12:36.362614+00:00
+# Generated: 2026-07-16T18:11:17.340514+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,281
+  matches                    14,283
   rankings_snapshots         19,381
-  api_fetch_log              48,696
+  api_fetch_log              48,721
 
 ## Latest rankings snapshot: 2026-07-16
 
 ## Active tournaments
-  bastad26       Nordea Open                      matches= 13  latest=2026-07-15
+  bastad26       Nordea Open                      matches= 15  latest=2026-07-16
   palermo26      Palermo Open                     matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
+  2026-07-16  Second    p1=29372 p2=29457 winner=29372  (Nordea Open - Bastad)
+  2026-07-16  Second    p1=52394 p2=14716 winner=52394  (Nordea Open - Bastad)
   2026-07-15  Second    p1=31446 p2=11953 winner=31446  (Nordea Open - Bastad)
   2026-07-15  Second    p1=36594 p2=14856 winner=36594  (EFG Swiss Open - Gstaad)
   2026-07-15  Second    p1=83223 p2=37532 winner=83223  (Plava Laguna Croatia Open - Umag)
-  2026-07-15  Second    p1=80391 p2=24249 winner=80391  (Nordea Open - Bastad)
-  2026-07-15  Second    p1=12097 p2=66828 winner=12097  (Nordea Open - Bastad)
