@@ -1,24 +1,24 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-18T08:48:06.002770+00:00
+# Generated: 2026-07-18T18:00:35.078180+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,288
+  matches                    14,291
   rankings_snapshots         19,897
-  api_fetch_log              48,821
+  api_fetch_log              48,847
 
 ## Latest rankings snapshot: 2026-07-18
 
 ## Active tournaments
-  bastad26       Nordea Open                      matches= 19  latest=2026-07-17
+  bastad26       Nordea Open                      matches= 21  latest=2026-07-18
   palermo26      Palermo Open                     matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
+  2026-07-18  Q1        p1=29457 p2=31966 winner=29457  (Millennium Estoril Open - Estoril)
+  2026-07-18  1/2       p1=29372 p2=30087 winner=29372  (Nordea Open - Bastad)
+  2026-07-18  1/2       p1=76127 p2=80391 winner=76127  (Nordea Open - Bastad)
   2026-07-17  1/4       p1=29372 p2=52721 winner=29372  (Nordea Open - Bastad)
   2026-07-17  1/4       p1=76127 p2=31446 winner=76127  (Nordea Open - Bastad)
-  2026-07-16  Second    p1=29372 p2=29457 winner=29372  (Nordea Open - Bastad)
-  2026-07-16  Second    p1=52394 p2=14716 winner=52394  (Nordea Open - Bastad)
-  2026-07-16  Second    p1=30087 p2=90203 winner=30087  (Nordea Open - Bastad)
