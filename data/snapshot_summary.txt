@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-20T18:57:23.483000+00:00
+# Generated: 2026-07-21T00:02:01.375655+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,14 +7,13 @@
   players                       274
   tournaments                   167
   matches                    14,295
-  rankings_snapshots         20,413
-  api_fetch_log              49,003
+  rankings_snapshots         20,670
+  api_fetch_log              49,009
 
-## Latest rankings snapshot: 2026-07-20
+## Latest rankings snapshot: 2026-07-21
 
 ## Active tournaments
-  bastad26       Nordea Open                      matches= 22  latest=2026-07-19
-  palermo26      Palermo Open                     matches=  0  latest=None
+  (none currently active)
 
 ## 5 most recent matches anywhere in DB
   2026-07-20  First     p1=66828 p2=28108 winner=66828  (Generali Open - Kitzbuhel)
