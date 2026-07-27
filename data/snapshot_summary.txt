@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-26T18:05:09.851307+00:00
+# Generated: 2026-07-27T00:05:43.505112+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,13 +7,14 @@
   players                       274
   tournaments                   167
   matches                    14,295
-  rankings_snapshots         21,955
-  api_fetch_log              49,111
+  rankings_snapshots         22,212
+  api_fetch_log              49,119
 
-## Latest rankings snapshot: 2026-07-26
+## Latest rankings snapshot: 2026-07-27
 
 ## Active tournaments
-  (none currently active)
+  montreal26     National Bank Open               matches=  0  latest=None
+  toronto26      National Bank Open               matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
   2026-07-20  First     p1=66828 p2=28108 winner=66828  (Generali Open - Kitzbuhel)
