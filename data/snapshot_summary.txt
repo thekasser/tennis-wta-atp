@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-29T18:11:08.586189+00:00
+# Generated: 2026-07-30T00:04:14.404502+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   167
   matches                    14,295
-  rankings_snapshots         22,722
-  api_fetch_log              49,183
+  rankings_snapshots         22,977
+  api_fetch_log              49,191
 
-## Latest rankings snapshot: 2026-07-29
+## Latest rankings snapshot: 2026-07-30
 
 ## Active tournaments
   montreal26     National Bank Open               matches=  0  latest=None
