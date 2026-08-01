@@ -1,24 +1,24 @@
 # Tennis DB snapshot summary
-# Generated: 2026-07-31T18:23:36.047205+00:00
+# Generated: 2026-08-01T00:08:37.215811+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,295
-  rankings_snapshots         23,232
-  api_fetch_log              49,231
+  matches                    14,684
+  rankings_snapshots         23,487
+  api_fetch_log              49,532
 
-## Latest rankings snapshot: 2026-07-31
+## Latest rankings snapshot: 2026-08-01
 
 ## Active tournaments
   montreal26     National Bank Open               matches=  0  latest=None
   toronto26      National Bank Open               matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-07-20  First     p1=66828 p2=28108 winner=66828  (Generali Open - Kitzbuhel)
-  2026-07-20  First     p1=64741 p2=95698 winner=64741  (Generali Open - Kitzbuhel)
-  2026-07-19  Q3        p1=73983 p2=29457 winner=73983  (Millennium Estoril Open - Estoril)
-  2026-07-19  Final     p1=29372 p2=76127 winner=29372  (Nordea Open - Bastad)
-  2026-07-18  Q1        p1=29457 p2=31966 winner=29457  (Millennium Estoril Open - Estoril)
+  2026-07-31  Second    p1=87562 p2=38911 winner=87562  (Citi Open - Washington)
+  2026-07-31  Second    p1=30087 p2=67535 winner=30087  (Citi Open - Washington)
+  2026-07-31  Second    p1=11371 p2=60791 winner=11371  (Mubadala DC Open - Washington)
+  2026-07-31  Second    p1=65911 p2=40156 winner=65911  (Mubadala DC Open - Washington)
+  2026-07-31  1/4       p1=56846 p2=39309 winner=56846  (Citi Open - Washington)
