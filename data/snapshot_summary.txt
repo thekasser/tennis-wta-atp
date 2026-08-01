@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-01T00:08:37.215811+00:00
+# Generated: 2026-08-01T09:09:04.477363+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,684
+  matches                    14,696
   rankings_snapshots         23,487
-  api_fetch_log              49,532
+  api_fetch_log              49,834
 
 ## Latest rankings snapshot: 2026-08-01
 
@@ -17,8 +17,8 @@
   toronto26      National Bank Open               matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-07-31  Second    p1=87562 p2=38911 winner=87562  (Citi Open - Washington)
-  2026-07-31  Second    p1=30087 p2=67535 winner=30087  (Citi Open - Washington)
-  2026-07-31  Second    p1=11371 p2=60791 winner=11371  (Mubadala DC Open - Washington)
-  2026-07-31  Second    p1=65911 p2=40156 winner=65911  (Mubadala DC Open - Washington)
-  2026-07-31  1/4       p1=56846 p2=39309 winner=56846  (Citi Open - Washington)
+  2026-08-01  1/4       p1=99691 p2=63572 winner=99691  (Citi Open - Washington)
+  2026-08-01  1/4       p1=30087 p2=87562 winner=30087  (Citi Open - Washington)
+  2026-08-01  1/4       p1=67792 p2=11371 winner=67792  (Mubadala DC Open - Washington)
+  2026-08-01  1/4       p1=18403 p2=52660 winner=18403  (The Memphis Classic - Memphis)
+  2026-08-01  1/4       p1=61710 p2=52790 winner=61710  (The Memphis Classic - Memphis)
