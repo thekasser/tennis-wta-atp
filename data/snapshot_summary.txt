@@ -1,24 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-02T18:07:19.621858+00:00
+# Generated: 2026-08-03T00:06:36.845906+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,730
-  rankings_snapshots         23,742
-  api_fetch_log              51,048
+  matches                    14,738
+  rankings_snapshots         23,997
+  api_fetch_log              51,352
 
-## Latest rankings snapshot: 2026-08-02
+## Latest rankings snapshot: 2026-08-03
 
 ## Active tournaments
-  montreal26     National Bank Open               matches= 11  latest=2026-08-02
-  toronto26      National Bank Open               matches= 14  latest=2026-08-02
+  cincinnati26   Western & Southern Open          matches=  0  latest=None
+  montreal26     National Bank Open               matches= 17  latest=2026-08-03
+  toronto26      National Bank Open               matches= 15  latest=2026-08-02
 
 ## 5 most recent matches anywhere in DB
+  2026-08-03  First     p1=52254 p2=24344 winner=52254  (National Bank Open - Toronto)
+  2026-08-03  First     p1=44040 p2=32633 winner=44040  (National Bank Open - Toronto)
   2026-08-02  Q3        p1=17062 p2=49995 winner=17062  (National Bank Open - Toronto)
   2026-08-02  First     p1=86082 p2=80391 winner=86082  (National Bank Open - Montreal)
-  2026-08-02  Final     p1=87277 p2=33502 winner=87277  (Mifel Tennis Open - Los Cabos)
-  2026-08-02  1/2       p1=29932 p2=56846 winner=29932  (Citi Open - Washington)
-  2026-08-02  1/2       p1=99691 p2=30087 winner=99691  (Citi Open - Washington)
+  2026-08-02  First     p1=31358 p2=58149 winner=31358  (National Bank Open - Montreal)
