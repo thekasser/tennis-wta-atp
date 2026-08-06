@@ -1,25 +1,25 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-05T18:30:28.470684+00:00
+# Generated: 2026-08-06T00:06:26.443956+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,840
-  rankings_snapshots         24,507
-  api_fetch_log              53,794
+  matches                    14,860
+  rankings_snapshots         24,762
+  api_fetch_log              53,996
 
-## Latest rankings snapshot: 2026-08-05
+## Latest rankings snapshot: 2026-08-06
 
 ## Active tournaments
   cincinnati26   Western & Southern Open          matches=  0  latest=None
-  montreal26     National Bank Open               matches= 56  latest=2026-08-06
-  toronto26      National Bank Open               matches= 57  latest=2026-08-05
+  montreal26     National Bank Open               matches= 65  latest=2026-08-06
+  toronto26      National Bank Open               matches= 68  latest=2026-08-06
 
 ## 5 most recent matches anywhere in DB
   2026-08-06  Second    p1=45866 p2=73977 winner=45866  (National Bank Open - Toronto)
+  2026-08-06  Second    p1=92985 p2=52279 winner=92985  (National Bank Open - Montreal)
+  2026-08-06  Second    p1=16430 p2=43866 winner=16430  (National Bank Open - Toronto)
   2026-08-05  Second    p1=39309 p2=11517 winner=39309  (National Bank Open - Montreal)
   2026-08-05  Second    p1=14856 p2=67546 winner=14856  (National Bank Open - Montreal)
-  2026-08-05  Second    p1=61838 p2=42971 winner=61838  (National Bank Open - Montreal)
-  2026-08-05  Second    p1=29939 p2=6101 winner=29939  (National Bank Open - Montreal)
