@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-10T08:29:40.659221+00:00
+# Generated: 2026-08-10T17:58:06.439129+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,974
+  matches                    14,975
   rankings_snapshots         25,782
-  api_fetch_log              57,190
+  api_fetch_log              57,501
 
 ## Latest rankings snapshot: 2026-08-10
 
@@ -22,4 +22,4 @@
   2026-08-10  Fourth    p1=86691 p2=24249 winner=86691  (National Bank Open - Montreal)
   2026-08-10  Fourth    p1=14056 p2=67792 winner=14056  (National Bank Open - Toronto)
   2026-08-10  Fourth    p1=16430 p2=49081 winner=16430  (National Bank Open - Toronto)
-  2026-08-09  Fourth    p1=99691 p2=61838 winner=99691  (National Bank Open - Montreal)
+  2026-08-10  First     p1=28904 p2=47557 winner=28904  (Hamburg Challenger)
