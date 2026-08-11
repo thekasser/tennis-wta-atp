@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-11T18:03:57.780583+00:00
+# Generated: 2026-08-11T23:53:19.387665+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,980
+  matches                    14,995
   rankings_snapshots         26,037
-  api_fetch_log              58,430
+  api_fetch_log              58,739
 
 ## Latest rankings snapshot: 2026-08-11
 
@@ -16,8 +16,8 @@
   cincinnati26   Western & Southern Open          matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-08-11  First     p1=87766 p2=26925 winner=87766  (Brownsburg Challenger)
-  2026-08-11  First     p1=61291 p2=102194 winner=61291  (W35 Aldershot)
-  2026-08-11  1/4       p1=45854 p2=65911 winner=45854  (National Bank Open - Toronto)
-  2026-08-11  1/4       p1=11371 p2=14054 winner=11371  (National Bank Open - Toronto)
-  2026-08-10  Fourth    p1=87562 p2=91521 winner=87562  (National Bank Open - Montreal)
+  2026-08-11  Q1        p1=82371 p2=74899 winner=82371  (Cincinnati Open - Cincinnati)
+  2026-08-11  Q1        p1=24721 p2=56590 winner=24721  (Cincinnati Open - Cincinnati)
+  2026-08-11  Q1        p1=55252 p2=120104 winner=55252  (Cincinnati Open - Cincinnati)
+  2026-08-11  Q1        p1=94591 p2=71174 winner=94591  (Cincinnati Open - Cincinnati)
+  2026-08-11  Q1        p1=71166 p2=28074 winner=71166  (Cincinnati Open - Cincinnati)
