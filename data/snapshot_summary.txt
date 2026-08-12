@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-11T23:53:19.387665+00:00
+# Generated: 2026-08-12T08:19:55.179069+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    14,995
-  rankings_snapshots         26,037
-  api_fetch_log              58,739
+  matches                    15,014
+  rankings_snapshots         26,292
+  api_fetch_log              59,049
 
-## Latest rankings snapshot: 2026-08-11
+## Latest rankings snapshot: 2026-08-12
 
 ## Active tournaments
   cincinnati26   Western & Southern Open          matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-08-11  Q1        p1=82371 p2=74899 winner=82371  (Cincinnati Open - Cincinnati)
-  2026-08-11  Q1        p1=24721 p2=56590 winner=24721  (Cincinnati Open - Cincinnati)
-  2026-08-11  Q1        p1=55252 p2=120104 winner=55252  (Cincinnati Open - Cincinnati)
-  2026-08-11  Q1        p1=94591 p2=71174 winner=94591  (Cincinnati Open - Cincinnati)
-  2026-08-11  Q1        p1=71166 p2=28074 winner=71166  (Cincinnati Open - Cincinnati)
+  2026-08-12  Q1        p1=59092 p2=34233 winner=59092  (Cincinnati Open - Cincinnati)
+  2026-08-12  Q1        p1=39310 p2=18094 winner=39310  (Cincinnati Open - Cincinnati)
+  2026-08-12  Q1        p1=104215 p2=46747 winner=104215  (Cincinnati Open - Cincinnati)
+  2026-08-12  Q1        p1=39863 p2=18477 winner=39863  (Cincinnati Open - Cincinnati)
+  2026-08-12  Q1        p1=12653 p2=27547 winner=12653  (Cincinnati Open - Cincinnati)
