@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-12T08:19:55.179069+00:00
+# Generated: 2026-08-12T18:03:26.415133+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    15,014
+  matches                    15,017
   rankings_snapshots         26,292
-  api_fetch_log              59,049
+  api_fetch_log              59,359
 
 ## Latest rankings snapshot: 2026-08-12
 
@@ -16,8 +16,8 @@
   cincinnati26   Western & Southern Open          matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
+  2026-08-12  Second    p1=20104 p2=51965 winner=20104  (Todi Challenger)
+  2026-08-12  Second    p1=85859 p2=28904 winner=85859  (Hamburg Challenger)
+  2026-08-12  Second    p1=33355 p2=61291 winner=33355  (W35 Aldershot)
   2026-08-12  Q1        p1=59092 p2=34233 winner=59092  (Cincinnati Open - Cincinnati)
   2026-08-12  Q1        p1=39310 p2=18094 winner=39310  (Cincinnati Open - Cincinnati)
-  2026-08-12  Q1        p1=104215 p2=46747 winner=104215  (Cincinnati Open - Cincinnati)
-  2026-08-12  Q1        p1=39863 p2=18477 winner=39863  (Cincinnati Open - Cincinnati)
-  2026-08-12  Q1        p1=12653 p2=27547 winner=12653  (Cincinnati Open - Cincinnati)
