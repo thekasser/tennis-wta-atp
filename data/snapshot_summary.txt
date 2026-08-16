@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-15T23:25:43.983864+00:00
+# Generated: 2026-08-16T07:29:53.547395+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   167
   matches                    15,018
-  rankings_snapshots         27,057
-  api_fetch_log              59,711
+  rankings_snapshots         27,312
+  api_fetch_log              59,717
 
-## Latest rankings snapshot: 2026-08-15
+## Latest rankings snapshot: 2026-08-16
 
 ## Active tournaments
   cincinnati26   Western & Southern Open          matches=  0  latest=None
