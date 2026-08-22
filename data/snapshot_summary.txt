@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-21T23:29:24.792240+00:00
+# Generated: 2026-08-22T07:34:35.985784+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    15,018
-  rankings_snapshots         28,587
-  api_fetch_log              59,819
+  matches                    15,338
+  rankings_snapshots         28,842
+  api_fetch_log              60,140
 
-## Latest rankings snapshot: 2026-08-21
+## Latest rankings snapshot: 2026-08-22
 
 ## Active tournaments
   uso26          US Open                          matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-08-12  Second    p1=20104 p2=51965 winner=20104  (Todi Challenger)
-  2026-08-12  Second    p1=85859 p2=28904 winner=85859  (Hamburg Challenger)
-  2026-08-12  Second    p1=33355 p2=61291 winner=33355  (W35 Aldershot)
-  2026-08-12  Q1        p1=59092 p2=34233 winner=59092  (Cincinnati Open - Cincinnati)
-  2026-08-12  Q1        p1=39310 p2=18094 winner=39310  (Cincinnati Open - Cincinnati)
+  2026-08-22  1/4       p1=29939 p2=63572 winner=29939  (Cincinnati Open - Cincinnati)
+  2026-08-22  1/4       p1=26473 p2=28900 winner=26473  (Cancun Challenger)
+  2026-08-22  1/4       p1=52721 p2=71166 winner=52721  (Cancun Challenger)
+  2026-08-22  1/4       p1=36449 p2=42971 winner=36449  (Cancun Challenger)
+  2026-08-22  1/4       p1=20648 p2=68090 winner=20648  (Quebec City Challenger)
