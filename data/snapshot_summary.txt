@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-22T17:30:13.202417+00:00
+# Generated: 2026-08-22T23:30:15.494848+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    15,343
+  matches                    15,350
   rankings_snapshots         28,842
-  api_fetch_log              60,461
+  api_fetch_log              60,783
 
 ## Latest rankings snapshot: 2026-08-22
 
@@ -16,8 +16,8 @@
   uso26          US Open                          matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
+  2026-08-23  Q1        p1=12390 p2=17500 winner=12390  (Abierto GNP Seguros - Monterrey)
+  2026-08-23  Final     p1=61857 p2=27358 winner=61857  (Kingston 1 Challenger)
+  2026-08-22  Q1        p1=45072 p2=11959 winner=45072  (Abierto GNP Seguros - Monterrey)
+  2026-08-22  Q1        p1=43866 p2=39540 winner=43866  (Abierto GNP Seguros - Monterrey)
   2026-08-22  1/4       p1=29939 p2=63572 winner=29939  (Cincinnati Open - Cincinnati)
-  2026-08-22  1/4       p1=26473 p2=28900 winner=26473  (Cancun Challenger)
-  2026-08-22  1/4       p1=52721 p2=71166 winner=52721  (Cancun Challenger)
-  2026-08-22  1/4       p1=36449 p2=42971 winner=36449  (Cancun Challenger)
-  2026-08-22  1/4       p1=20648 p2=68090 winner=20648  (Quebec City Challenger)
