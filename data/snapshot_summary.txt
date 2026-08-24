@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-24T17:39:34.514335+00:00
+# Generated: 2026-08-24T23:31:05.027184+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    15,380
+  matches                    15,409
   rankings_snapshots         29,352
-  api_fetch_log              62,395
+  api_fetch_log              62,719
 
 ## Latest rankings snapshot: 2026-08-24
 
@@ -16,8 +16,8 @@
   uso26          US Open                          matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
+  2026-08-25  Q1        p1=55252 p2=44595 winner=55252  (U.S. Open - New York)
+  2026-08-25  Q1        p1=84377 p2=59591 winner=84377  (U.S. Open - New York)
+  2026-08-25  First     p1=45866 p2=44040 winner=45866  (Abierto GNP Seguros - Monterrey)
   2026-08-24  Q3        p1=61710 p2=43866 winner=61710  (Abierto GNP Seguros - Monterrey)
   2026-08-24  Q3        p1=72414 p2=12390 winner=72414  (Abierto GNP Seguros - Monterrey)
-  2026-08-24  Q3        p1=31728 p2=39535 winner=31728  (Abierto GNP Seguros - Monterrey)
-  2026-08-24  Q3        p1=60792 p2=45072 winner=60792  (Abierto GNP Seguros - Monterrey)
-  2026-08-24  Q1        p1=68090 p2=21506 winner=68090  (U.S. Open - New York)
