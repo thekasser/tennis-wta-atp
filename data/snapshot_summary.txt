@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-24T08:01:23.427477+00:00
+# Generated: 2026-08-24T17:39:34.514335+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    15,376
+  matches                    15,380
   rankings_snapshots         29,352
-  api_fetch_log              62,072
+  api_fetch_log              62,395
 
 ## Latest rankings snapshot: 2026-08-24
 
@@ -20,4 +20,4 @@
   2026-08-24  Q3        p1=72414 p2=12390 winner=72414  (Abierto GNP Seguros - Monterrey)
   2026-08-24  Q3        p1=31728 p2=39535 winner=31728  (Abierto GNP Seguros - Monterrey)
   2026-08-24  Q3        p1=60792 p2=45072 winner=60792  (Abierto GNP Seguros - Monterrey)
-  2026-08-24  First     p1=58149 p2=92243 winner=58149  (Winston-Salem Open - Winston-Salem)
+  2026-08-24  Q1        p1=68090 p2=21506 winner=68090  (U.S. Open - New York)
