@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-08-25T23:33:41.034708+00:00
+# Generated: 2026-08-26T07:48:17.161646+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    15,452
-  rankings_snapshots         29,603
-  api_fetch_log              63,697
+  matches                    15,470
+  rankings_snapshots         29,854
+  api_fetch_log              64,028
 
-## Latest rankings snapshot: 2026-08-25
+## Latest rankings snapshot: 2026-08-26
 
 ## Active tournaments
   uso26          US Open                          matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-08-26  First     p1=24344 p2=31728 winner=24344  (Abierto GNP Seguros - Monterrey)
-  2026-08-26  First     p1=60792 p2=4263 winner=60792  (Abierto GNP Seguros - Monterrey)
-  2026-08-25  Second    p1=30470 p2=40609 winner=30470  (Winston-Salem Open - Winston-Salem)
-  2026-08-25  Second    p1=29732 p2=61971 winner=29732  (Winston-Salem Open - Winston-Salem)
-  2026-08-25  Second    p1=76127 p2=72578 winner=76127  (Winston-Salem Open - Winston-Salem)
+  2026-08-26  Second    p1=72574 p2=22807 winner=72574  (Winston-Salem Open - Winston-Salem)
+  2026-08-26  Second    p1=52140 p2=34337 winner=52140  (Winston-Salem Open - Winston-Salem)
+  2026-08-26  Second    p1=96765 p2=58327 winner=96765  (Winston-Salem Open - Winston-Salem)
+  2026-08-26  Second    p1=11517 p2=66828 winner=11517  (Winston-Salem Open - Winston-Salem)
+  2026-08-26  Second    p1=31392 p2=7806 winner=31392  (Winston-Salem Open - Winston-Salem)
