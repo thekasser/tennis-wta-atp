@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-03T19:41:59.235445+00:00
+# Generated: 2026-09-04T00:53:08.080573+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   167
   matches                    15,477
-  rankings_snapshots         31,862
-  api_fetch_log              64,503
+  rankings_snapshots         32,113
+  api_fetch_log              64,509
 
-## Latest rankings snapshot: 2026-09-03
+## Latest rankings snapshot: 2026-09-04
 
 ## Active tournaments
   uso26          US Open                          matches=  0  latest=None
