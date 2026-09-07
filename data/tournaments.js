@@ -51,7 +51,7 @@ const TOURNAMENTS_DATA = [
   { id:"montreal26", name:"National Bank Open", short:"Montreal", tour:"WTA", type:"W1000", surf:"H", draw:64,  wk:32, month:8,  startDate:"2026-08-03", endDate:"2026-08-09", active:false, complete:false, apiId:{wta:16739} },
   { id:"toronto26",  name:"National Bank Open", short:"Toronto",  tour:"ATP", type:"M1000", surf:"H", draw:96,  wk:32, month:8,  startDate:"2026-08-03", endDate:"2026-08-09", active:false, complete:false, apiId:{atp:21346} },
   { id:"cincinnati26",name:"Western & Southern Open",short:"Cincinnati",tour:"BOTH",type:"M1000",surf:"H",draw:96,wk:33,month:8, startDate:"2026-08-10", endDate:"2026-08-16", active:false, complete:false },
-  { id:"uso26",      name:"US Open",            short:"US Open",  tour:"BOTH", type:"GS",    surf:"H", draw:128, wk:35, month:8,  startDate:"2026-08-24", endDate:"2026-09-06", active:false, complete:false },
+  { id:"uso26",      name:"US Open",            short:"US Open",  tour:"BOTH", type:"GS",    surf:"H", draw:128, wk:35, month:8,  startDate:"2026-08-30", endDate:"2026-09-13", active:false, complete:false },
 
   // ── SEPTEMBER / OCTOBER ───────────────────────────────────────────────────
   { id:"shanghai26", name:"Rolex Shanghai Masters",short:"Shanghai",tour:"ATP",type:"M1000",surf:"H", draw:96,  wk:41, month:10, startDate:"2026-10-05", endDate:"2026-10-11", active:false, complete:false },

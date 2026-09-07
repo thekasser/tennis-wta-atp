@@ -153,11 +153,26 @@ jobs:
       # (Challengers, W125s, BJK Cup) but a real tour-level miss surfaces
       # here before it shows up as missing Live Events cards. continue-on-
       # error: never blocks the cron — visibility only.
+      #
+      # `| head -40` used to truncate this BEFORE the "JS skeletons" section
+      # (paste-ready TOURNAMENTS_DATA[] rows with the real apiId) ever
+      # printed — the script silently crashed with BrokenPipeError against
+      # `head` every run once unresolved events exceeded ~35 rows, which
+      # they reliably did (103 events / 2,589 matches as of 2026-09-07,
+      # including the live US Open — see the tournament-catalog-audit
+      # finding this comment documents). --min-matches 15 already bounds
+      # the row count to tour-level-or-bigger events, so nothing further
+      # needs truncating; a hard `head -400` is just a sane ceiling against
+      # a runaway report, not the primary filter.
       - name: Audit unresolved tournaments
         continue-on-error: true
         run: |
           cd "$GITHUB_WORKSPACE"
-          python3 scripts/audit_tournaments.py --min-matches 15 | head -40
+          python3 scripts/audit_tournaments.py --min-matches 15 | tee /tmp/audit_out.txt | head -400
+          total=$(grep -oP '(?<=covering )[\d,]+(?= matches)' /tmp/audit_out.txt | tr -d ',' | head -1)
+          if [ -n "$total" ] && [ "$total" -gt 500 ]; then
+            echo "::warning::${total} matches sit under unresolved tournament_api_ids not yet in data/tournaments.js — see the JS skeletons in this step's log to fix them."
+          fi
 
       # ── Kalshi coverage audit (informational) ──────────────────────────
       # Surfaces Kalshi market-capture gaps: matches with no Kalshi data,
