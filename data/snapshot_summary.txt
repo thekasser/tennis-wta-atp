@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-07T13:09:02.316762+00:00
+# Generated: 2026-09-07T13:13:14.691387+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    15,477
+  matches                    15,593
   rankings_snapshots         32,866
-  api_fetch_log              64,569
+  api_fetch_log              64,653
 
 ## Latest rankings snapshot: 2026-09-07
 
 ## Active tournaments
-  uso26          US Open                          matches=  0  latest=None
+  uso26          US Open                          matches=124  latest=2026-09-06
 
 ## 5 most recent matches anywhere in DB
-  2026-08-26  Second    p1=72574 p2=22807 winner=72574  (Winston-Salem Open - Winston-Salem)
-  2026-08-26  Second    p1=52140 p2=34337 winner=52140  (Winston-Salem Open - Winston-Salem)
-  2026-08-26  Second    p1=96765 p2=58327 winner=96765  (Winston-Salem Open - Winston-Salem)
-  2026-08-26  Second    p1=11517 p2=66828 winner=11517  (Winston-Salem Open - Winston-Salem)
-  2026-08-26  Second    p1=31392 p2=7806 winner=31392  (Winston-Salem Open - Winston-Salem)
+  2026-09-06  Third     p1=24008 p2=30087 winner=24008  (U.S. Open - New York)
+  2026-09-06  Final     p1=14898 p2=18477 winner=14898  (Porto Challenger)
+  2026-09-06  Final     p1=80418 p2=65912 winner=80418  (W50 Leiria)
+  2026-09-05  Third     p1=87277 p2=87512 winner=87277  (U.S. Open - New York)
+  2026-09-05  Third     p1=53128 p2=11672 winner=53128  (U.S. Open - New York)
