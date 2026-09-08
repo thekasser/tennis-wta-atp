@@ -1,19 +1,19 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-07T20:28:44.742020+00:00
+# Generated: 2026-09-08T01:07:45.851513+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    15,852
-  rankings_snapshots         32,866
-  api_fetch_log              65,471
+  matches                    15,855
+  rankings_snapshots         33,117
+  api_fetch_log              65,772
 
-## Latest rankings snapshot: 2026-09-07
+## Latest rankings snapshot: 2026-09-08
 
 ## Active tournaments
-  uso26          US Open                          matches=310  latest=2026-09-07
+  uso26          US Open                          matches=312  latest=2026-09-07
 
 ## 5 most recent matches anywhere in DB
   2026-09-07  Q3        p1=57147 p2=43010 winner=57147  (Kia Open - Barranquilla)
