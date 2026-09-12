@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-12T01:02:53.559398+00:00
+# Generated: 2026-09-12T11:32:22.791308+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,051
+  matches                    16,054
   rankings_snapshots         34,121
-  api_fetch_log              69,397
+  api_fetch_log              69,700
 
 ## Latest rankings snapshot: 2026-09-12
 
 ## Active tournaments
-  uso26          US Open                          matches=405  latest=2026-09-11
+  uso26          US Open                          matches=406  latest=2026-09-11
 
 ## 5 most recent matches anywhere in DB
+  2026-09-12  1/2       p1=84377 p2=28904 winner=84377  (Tulln Challenger)
   2026-09-11  1/4       p1=34747 p2=52500 winner=34747  (Kia Open - Barranquilla)
   2026-09-11  1/4       p1=31358 p2=33904 winner=31358  (Seville Challenger)
   2026-09-11  1/4       p1=64741 p2=27547 winner=64741  (Seville Challenger)
   2026-09-11  1/4       p1=27358 p2=73268 winner=27358  (Genoa Challenger)
-  2026-09-11  1/4       p1=59092 p2=48825 winner=59092  (Cassis Challenger)
