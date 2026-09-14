@@ -1,23 +1,24 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-13T19:19:21.569324+00:00
+# Generated: 2026-09-14T00:55:31.169717+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,066
-  rankings_snapshots         34,372
-  api_fetch_log              70,912
+  matches                    16,073
+  rankings_snapshots         34,623
+  api_fetch_log              71,215
 
-## Latest rankings snapshot: 2026-09-13
+## Latest rankings snapshot: 2026-09-14
 
 ## Active tournaments
-  uso26          US Open                          matches=407  latest=2026-09-12
+  beijing26      China Open                       matches=  0  latest=None
+  uso26          US Open                          matches=408  latest=2026-09-13
 
 ## 5 most recent matches anywhere in DB
   2026-09-13  Q3        p1=13937 p2=8859 winner=13937  (Guadalajara Open Akron - Guadalajara)
+  2026-09-13  Q3        p1=28585 p2=13839 winner=28585  (Guadalajara Open Akron - Guadalajara)
   2026-09-13  Q1        p1=78049 p2=51417 winner=78049  (Szczecin Challenger)
-  2026-09-13  Final     p1=36858 p2=27358 winner=36858  (Genoa Challenger)
-  2026-09-13  Final     p1=59092 p2=87283 winner=59092  (Cassis Challenger)
-  2026-09-12  Q1        p1=13937 p2=106457 winner=13937  (Guadalajara Open Akron - Guadalajara)
+  2026-09-13  First     p1=45540 p2=461 winner=45540  (Guadalajara Open Akron - Guadalajara)
+  2026-09-13  First     p1=53793 p2=39540 winner=53793  (Guadalajara Open Akron - Guadalajara)
