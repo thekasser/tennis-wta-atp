@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-14T20:54:41.595729+00:00
+# Generated: 2026-09-15T01:18:54.540195+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,14 +7,13 @@
   players                       274
   tournaments                   167
   matches                    16,076
-  rankings_snapshots         34,625
-  api_fetch_log              71,821
+  rankings_snapshots         34,874
+  api_fetch_log              71,827
 
-## Latest rankings snapshot: 2026-09-14
+## Latest rankings snapshot: 2026-09-15
 
 ## Active tournaments
   beijing26      China Open                       matches=  0  latest=None
-  uso26          US Open                          matches=408  latest=2026-09-13
 
 ## 5 most recent matches anywhere in DB
   2026-09-14  First     p1=26218 p2=59353 winner=26218  (Guangzhou Challenger)
