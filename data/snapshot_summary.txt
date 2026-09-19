@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-19T11:49:35.518152+00:00
+# Generated: 2026-09-19T19:17:29.928123+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,145
+  matches                    16,146
   rankings_snapshots         35,870
-  api_fetch_log              72,245
+  api_fetch_log              72,421
 
 ## Latest rankings snapshot: 2026-09-19
 
@@ -18,6 +18,6 @@
 ## 5 most recent matches anywhere in DB
   2026-09-19  Q1        p1=13937 p2=84840 winner=13937  (Singapore Tennis Open - Singapore)
   2026-09-19  1/2       p1=53793 p2=24368 winner=53793  (Guadalajara Open Akron - Guadalajara)
+  2026-09-19  1/2       p1=9669 p2=72132 winner=9669  (Zavarovalnica Triglav - Ljubljana)
   2026-09-18  1/4       p1=17142 p2=70519 winner=17142  (SP Open - Sao Paulo)
   2026-09-18  1/4       p1=34747 p2=52646 winner=34747  (SP Open - Sao Paulo)
-  2026-09-18  1/4       p1=53793 p2=10033 winner=53793  (Guadalajara Open Akron - Guadalajara)
