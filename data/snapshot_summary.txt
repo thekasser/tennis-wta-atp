@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-18T19:29:35.499198+00:00
+# Generated: 2026-09-19T01:06:22.329612+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,076
-  rankings_snapshots         35,621
-  api_fetch_log              71,893
+  matches                    16,139
+  rankings_snapshots         35,870
+  api_fetch_log              72,069
 
-## Latest rankings snapshot: 2026-09-18
+## Latest rankings snapshot: 2026-09-19
 
 ## Active tournaments
   beijing26      China Open                       matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-09-14  First     p1=26218 p2=59353 winner=26218  (Guangzhou Challenger)
-  2026-09-14  First     p1=44595 p2=29180 winner=44595  (Rennes Challenger)
-  2026-09-13  Q3        p1=13937 p2=8859 winner=13937  (Guadalajara Open Akron - Guadalajara)
-  2026-09-13  Q3        p1=28585 p2=13839 winner=28585  (Guadalajara Open Akron - Guadalajara)
-  2026-09-13  Q1        p1=78049 p2=51417 winner=78049  (Szczecin Challenger)
+  2026-09-18  1/4       p1=17142 p2=70519 winner=17142  (SP Open - Sao Paulo)
+  2026-09-18  1/4       p1=34747 p2=52646 winner=34747  (SP Open - Sao Paulo)
+  2026-09-18  1/4       p1=53793 p2=10033 winner=53793  (Guadalajara Open Akron - Guadalajara)
+  2026-09-18  1/4       p1=75313 p2=25216 winner=75313  (W75 Le Neubourg)
+  2026-09-18  1/4       p1=72132 p2=8757 winner=72132  (Zavarovalnica Triglav - Ljubljana)
