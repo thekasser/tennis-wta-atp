@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-09-21T00:59:40.848709+00:00
+# Generated: 2026-09-21T13:41:08.568081+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,151
+  matches                    16,160
   rankings_snapshots         36,368
-  api_fetch_log              73,128
+  api_fetch_log              73,305
 
 ## Latest rankings snapshot: 2026-09-21
 
@@ -16,8 +16,8 @@
   beijing26      China Open                       matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-09-20  Q3        p1=13937 p2=61481 winner=13937  (Singapore Tennis Open - Singapore)
-  2026-09-19  Q1        p1=13937 p2=84840 winner=13937  (Singapore Tennis Open - Singapore)
-  2026-09-19  Final     p1=80381 p2=53793 winner=80381  (Guadalajara Open Akron - Guadalajara)
-  2026-09-19  1/2       p1=53793 p2=24368 winner=53793  (Guadalajara Open Akron - Guadalajara)
-  2026-09-19  1/2       p1=9669 p2=72132 winner=9669  (Zavarovalnica Triglav - Ljubljana)
+  2026-09-21  First     p1=49081 p2=15642 winner=49081  (Singapore Tennis Open - Singapore)
+  2026-09-21  First     p1=12842 p2=17503 winner=12842  (Singapore Tennis Open - Singapore)
+  2026-09-21  First     p1=59411 p2=9357 winner=59411  (Korea Open - Seoul)
+  2026-09-21  First     p1=43323 p2=17062 winner=43323  (Singapore Tennis Open - Singapore)
+  2026-09-21  First     p1=63749 p2=16664 winner=63749  (Singapore Tennis Open - Singapore)
