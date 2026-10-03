@@ -1,24 +1,24 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-02T21:14:25.798197+00:00
+# Generated: 2026-10-03T01:55:34.298301+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,191
-  rankings_snapshots         39,096
-  api_fetch_log              74,725
+  matches                    16,583
+  rankings_snapshots         39,344
+  api_fetch_log              75,123
 
-## Latest rankings snapshot: 2026-10-02
+## Latest rankings snapshot: 2026-10-03
 
 ## Active tournaments
   shanghai26     Rolex Shanghai Masters           matches=  0  latest=None
   wuhan26        Wuhan Open                       matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-09-23  Second    p1=77934 p2=12842 winner=77934  (Singapore Tennis Open - Singapore)
-  2026-09-23  Second    p1=52790 p2=45072 winner=52790  (Korea Open - Seoul)
-  2026-09-23  Second    p1=72414 p2=52663 winner=72414  (Korea Open - Seoul)
-  2026-09-23  Second    p1=43323 p2=51696 winner=43323  (Singapore Tennis Open - Singapore)
-  2026-09-23  Second    p1=49081 p2=45540 winner=49081  (Singapore Tennis Open - Singapore)
+  2026-10-02  Second    p1=5992 p2=61667 winner=5992  (China Open - Beijing)
+  2026-10-02  Second    p1=26473 p2=87277 winner=26473  (China Open - Beijing)
+  2026-10-02  Second    p1=36594 p2=30470 winner=36594  (Japan Open Tennis Championships - Tokyo)
+  2026-10-02  Second    p1=83135 p2=29939 winner=83135  (Japan Open Tennis Championships - Tokyo)
+  2026-10-02  Second    p1=65904 p2=76127 winner=65904  (Japan Open Tennis Championships - Tokyo)
