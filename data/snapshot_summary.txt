@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-05T15:39:15.325820+00:00
+# Generated: 2026-10-05T23:10:41.960661+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,680
+  matches                    16,683
   rankings_snapshots         39,840
-  api_fetch_log              77,938
+  api_fetch_log              78,341
 
 ## Latest rankings snapshot: 2026-10-05
 
