@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-05T01:51:28.739274+00:00
+# Generated: 2026-10-05T15:39:15.325820+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,645
+  matches                    16,680
   rankings_snapshots         39,840
-  api_fetch_log              77,535
+  api_fetch_log              77,938
 
 ## Latest rankings snapshot: 2026-10-05
 
@@ -17,8 +17,8 @@
   wuhan26        Wuhan Open                       matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-10-04  Third     p1=71092 p2=18455 winner=71092  (China Open - Beijing)
-  2026-10-04  Third     p1=77934 p2=60791 winner=77934  (China Open - Beijing)
-  2026-10-04  Third     p1=14054 p2=65911 winner=14054  (China Open - Beijing)
-  2026-10-04  Third     p1=66597 p2=10749 winner=66597  (China Open - Beijing)
-  2026-10-04  Third     p1=50943 p2=37266 winner=50943  (China Open - Beijing)
+  2026-10-05  Third     p1=45854 p2=13498 winner=45854  (China Open - Beijing)
+  2026-10-05  Third     p1=11371 p2=13541 winner=11371  (China Open - Beijing)
+  2026-10-05  Third     p1=45866 p2=14056 winner=45866  (China Open - Beijing)
+  2026-10-05  Third     p1=80381 p2=45072 winner=80381  (China Open - Beijing)
+  2026-10-05  Third     p1=13351 p2=16628 winner=13351  (China Open - Beijing)
