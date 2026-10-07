@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-07T02:16:40.001514+00:00
+# Generated: 2026-10-07T14:18:18.606311+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,708
+  matches                    16,732
   rankings_snapshots         40,336
-  api_fetch_log              79,958
+  api_fetch_log              80,363
 
 ## Latest rankings snapshot: 2026-10-07
 
@@ -17,8 +17,8 @@
   wuhan26        Wuhan Open                       matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-10-06  Q3        p1=72578 p2=28108 winner=72578  (Shanghai Rolex Masters - Shanghai)
-  2026-10-06  Q3        p1=63299 p2=24225 winner=63299  (Shanghai Rolex Masters - Shanghai)
-  2026-10-06  Q3        p1=28900 p2=73742 winner=28900  (Shanghai Rolex Masters - Shanghai)
-  2026-10-06  Q3        p1=71166 p2=36449 winner=71166  (Shanghai Rolex Masters - Shanghai)
-  2026-10-06  Q3        p1=45553 p2=28267 winner=45553  (Shanghai Rolex Masters - Shanghai)
+  2026-10-07  Second    p1=17062 p2=27804 winner=17062  (Suzhou WTA 125 - Suzhou)
+  2026-10-07  Second    p1=18403 p2=59411 winner=18403  (Suzhou WTA 125 - Suzhou)
+  2026-10-07  Second    p1=12842 p2=65912 winner=12842  (Suzhou WTA 125 - Suzhou)
+  2026-10-07  Second    p1=54990 p2=59448 winner=54990  (Samsun Open - Samsun)
+  2026-10-07  Second    p1=15642 p2=72881 winner=15642  (Suzhou WTA 125 - Suzhou)
