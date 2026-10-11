@@ -1,24 +1,24 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-11T01:45:58.237700+00:00
+# Generated: 2026-10-11T13:47:31.648231+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,760
+  matches                    16,768
   rankings_snapshots         41,328
-  api_fetch_log              81,072
+  api_fetch_log              81,152
 
 ## Latest rankings snapshot: 2026-10-11
 
 ## Active tournaments
   shanghai26     Rolex Shanghai Masters           matches=  0  latest=None
-  wuhan26        Wuhan Open                       matches= 15  latest=2026-10-10
+  wuhan26        Wuhan Open                       matches= 23  latest=2026-10-11
 
 ## 5 most recent matches anywhere in DB
-  2026-10-10  Q1        p1=17503 p2=10749 winner=17503  (Wuhan Open - Wuhan)
-  2026-10-10  Q1        p1=12390 p2=17774 winner=12390  (Wuhan Open - Wuhan)
-  2026-10-10  Q1        p1=50943 p2=9357 winner=50943  (Wuhan Open - Wuhan)
-  2026-10-10  Q1        p1=45072 p2=23432 winner=45072  (Wuhan Open - Wuhan)
-  2026-10-10  Q1        p1=61481 p2=45540 winner=61481  (Wuhan Open - Wuhan)
+  2026-10-11  Q3        p1=17503 p2=13839 winner=17503  (Wuhan Open - Wuhan)
+  2026-10-11  Q3        p1=12390 p2=64343 winner=12390  (Wuhan Open - Wuhan)
+  2026-10-11  Q3        p1=52790 p2=44040 winner=52790  (Wuhan Open - Wuhan)
+  2026-10-11  Q3        p1=49995 p2=31728 winner=49995  (Wuhan Open - Wuhan)
+  2026-10-11  Q3        p1=67639 p2=45072 winner=67639  (Wuhan Open - Wuhan)
