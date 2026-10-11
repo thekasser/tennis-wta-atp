@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-10T20:32:23.236858+00:00
+# Generated: 2026-10-11T01:45:58.237700+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   167
   matches                    16,760
-  rankings_snapshots         41,080
-  api_fetch_log              80,994
+  rankings_snapshots         41,328
+  api_fetch_log              81,072
 
-## Latest rankings snapshot: 2026-10-10
+## Latest rankings snapshot: 2026-10-11
 
 ## Active tournaments
   shanghai26     Rolex Shanghai Masters           matches=  0  latest=None
