@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-12T23:34:30.787714+00:00
+# Generated: 2026-10-13T03:26:33.684603+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,14 +7,13 @@
   players                       274
   tournaments                   167
   matches                    16,780
-  rankings_snapshots         41,576
-  api_fetch_log              81,488
+  rankings_snapshots         41,822
+  api_fetch_log              81,494
 
-## Latest rankings snapshot: 2026-10-12
+## Latest rankings snapshot: 2026-10-13
 
 ## Active tournaments
-  shanghai26     Rolex Shanghai Masters           matches=  0  latest=None
-  wuhan26        Wuhan Open                       matches= 34  latest=2026-10-12
+  (none currently active)
 
 ## 5 most recent matches anywhere in DB
   2026-10-12  First     p1=14362 p2=71163 winner=14362  (Wuhan Open - Wuhan)
