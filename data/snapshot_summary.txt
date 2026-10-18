@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-17T19:09:39.195239+00:00
+# Generated: 2026-10-18T00:47:01.252971+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   167
   matches                    16,780
-  rankings_snapshots         42,806
-  api_fetch_log              81,578
+  rankings_snapshots         43,052
+  api_fetch_log              81,584
 
-## Latest rankings snapshot: 2026-10-17
+## Latest rankings snapshot: 2026-10-18
 
 ## Active tournaments
   (none currently active)
