@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-30T02:31:32.048056+00:00
+# Generated: 2026-10-30T13:53:53.985383+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    17,078
+  matches                    17,084
   rankings_snapshots         45,944
-  api_fetch_log              82,024
+  api_fetch_log              82,239
 
 ## Latest rankings snapshot: 2026-10-30
 
@@ -16,8 +16,8 @@
   wta_finals26   WTA Finals                       matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-10-29  Second    p1=36558 p2=12390 winner=36558  (Toray Pan Pacific Open - Tokyo)
-  2026-10-29  Second    p1=90390 p2=16430 winner=90390  (Toray Pan Pacific Open - Tokyo)
-  2026-10-29  Second    p1=49081 p2=13351 winner=49081  (Toray Pan Pacific Open - Tokyo)
-  2026-10-29  Second    p1=79778 p2=9357 winner=79778  (Guangzhou Open - Guangzhou)
-  2026-10-29  Second    p1=45540 p2=18427 winner=45540  (Toray Pan Pacific Open - Tokyo)
+  2026-10-30  Second    p1=28075 p2=27035 winner=28075  (Queretaro Open - Queretaro)
+  2026-10-30  1/4       p1=65911 p2=67792 winner=65911  (Toray Pan Pacific Open - Tokyo)
+  2026-10-30  1/4       p1=14609 p2=17142 winner=14609  (Guangzhou Open - Guangzhou)
+  2026-10-30  1/4       p1=90390 p2=45540 winner=90390  (Toray Pan Pacific Open - Tokyo)
+  2026-10-30  1/4       p1=45072 p2=72414 winner=45072  (Toray Pan Pacific Open - Tokyo)
