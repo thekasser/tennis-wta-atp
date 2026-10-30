@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-10-29T21:42:13.901973+00:00
+# Generated: 2026-10-30T02:31:32.048056+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    16,780
-  rankings_snapshots         45,706
-  api_fetch_log              81,809
+  matches                    17,078
+  rankings_snapshots         45,944
+  api_fetch_log              82,024
 
-## Latest rankings snapshot: 2026-10-29
+## Latest rankings snapshot: 2026-10-30
 
 ## Active tournaments
   wta_finals26   WTA Finals                       matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-10-12  First     p1=14362 p2=71163 winner=14362  (Wuhan Open - Wuhan)
-  2026-10-12  First     p1=49081 p2=14054 winner=49081  (Wuhan Open - Wuhan)
-  2026-10-12  First     p1=24572 p2=54989 winner=24572  (Wuhan Open - Wuhan)
-  2026-10-12  First     p1=67639 p2=67792 winner=67639  (Wuhan Open - Wuhan)
-  2026-10-12  First     p1=13541 p2=13498 winner=13541  (Wuhan Open - Wuhan)
+  2026-10-29  Second    p1=36558 p2=12390 winner=36558  (Toray Pan Pacific Open - Tokyo)
+  2026-10-29  Second    p1=90390 p2=16430 winner=90390  (Toray Pan Pacific Open - Tokyo)
+  2026-10-29  Second    p1=49081 p2=13351 winner=49081  (Toray Pan Pacific Open - Tokyo)
+  2026-10-29  Second    p1=79778 p2=9357 winner=79778  (Guangzhou Open - Guangzhou)
+  2026-10-29  Second    p1=45540 p2=18427 winner=45540  (Toray Pan Pacific Open - Tokyo)
