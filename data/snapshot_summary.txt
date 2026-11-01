@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-11-01T14:05:44.871286+00:00
+# Generated: 2026-11-01T21:04:28.369404+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    17,116
+  matches                    17,119
   rankings_snapshots         46,420
-  api_fetch_log              83,529
+  api_fetch_log              83,744
 
 ## Latest rankings snapshot: 2026-11-01
 
@@ -20,4 +20,4 @@
   2026-11-01  Q3        p1=72881 p2=84425 winner=72881  (Hong Kong Tennis Open - Hong Kong)
   2026-11-01  Final     p1=65911 p2=49081 winner=65911  (Toray Pan Pacific Open - Tokyo)
   2026-11-01  Final     p1=14609 p2=79778 winner=14609  (Guangzhou Open - Guangzhou)
-  2026-11-01  1/2       p1=4110 p2=16664 winner=4110  (Queretaro Open - Queretaro)
+  2026-11-01  Final     p1=42230 p2=16134 winner=42230  (Curitiba Open - Curitiba)
