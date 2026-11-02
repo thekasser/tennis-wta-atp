@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-11-02T02:18:43.605972+00:00
+# Generated: 2026-11-02T16:52:50.553351+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    17,120
-  rankings_snapshots         46,658
-  api_fetch_log              83,959
+  matches                    17,126
+  rankings_snapshots         46,660
+  api_fetch_log              84,174
 
 ## Latest rankings snapshot: 2026-11-02
 
@@ -16,8 +16,8 @@
   wta_finals26   WTA Finals                       matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-11-01  Q3        p1=12842 p2=63750 winner=12842  (Hong Kong Tennis Open - Hong Kong)
-  2026-11-01  Q3        p1=72881 p2=84425 winner=72881  (Hong Kong Tennis Open - Hong Kong)
-  2026-11-01  Final     p1=65911 p2=49081 winner=65911  (Toray Pan Pacific Open - Tokyo)
-  2026-11-01  Final     p1=14609 p2=79778 winner=14609  (Guangzhou Open - Guangzhou)
-  2026-11-01  Final     p1=42230 p2=16134 winner=42230  (Curitiba Open - Curitiba)
+  2026-11-02  First     p1=14175 p2=10749 winner=14175  (Hong Kong Tennis Open - Hong Kong)
+  2026-11-02  First     p1=13541 p2=63750 winner=13541  (Hong Kong Tennis Open - Hong Kong)
+  2026-11-02  First     p1=47152 p2=52789 winner=47152  (Hong Kong Tennis Open - Hong Kong)
+  2026-11-02  First     p1=12842 p2=52790 winner=12842  (Hong Kong Tennis Open - Hong Kong)
+  2026-11-02  First     p1=27804 p2=72881 winner=27804  (Hong Kong Tennis Open - Hong Kong)
