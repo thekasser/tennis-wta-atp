@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-11-03T22:17:29.030758+00:00
+# Generated: 2026-11-04T02:57:45.045912+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   167
   matches                    17,152
-  rankings_snapshots         46,900
-  api_fetch_log              85,041
+  rankings_snapshots         47,140
+  api_fetch_log              85,048
 
-## Latest rankings snapshot: 2026-11-03
+## Latest rankings snapshot: 2026-11-04
 
 ## Active tournaments
   wta_finals26   WTA Finals                       matches=  0  latest=None
