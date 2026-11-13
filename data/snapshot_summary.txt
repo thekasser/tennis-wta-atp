@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-11-13T15:09:53.241515+00:00
+# Generated: 2026-11-13T22:29:24.880050+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    17,751
+  matches                    17,756
   rankings_snapshots         49,296
-  api_fetch_log              85,957
+  api_fetch_log              86,193
 
 ## Latest rankings snapshot: 2026-11-13
 
@@ -20,4 +20,4 @@
   2026-11-13  1/4       p1=92474 p2=19689 winner=92474  (Brisbane 3 Challenger)
   2026-11-13  1/4       p1=86082 p2=56590 winner=86082  (Brisbane 3 Challenger)
   2026-11-13  1/4       p1=29180 p2=22269 winner=29180  (Matsuyama Challenger)
-  2026-11-12  Second    p1=27358 p2=35323 winner=27358  (Orleans Challenger)
+  2026-11-13  1/4       p1=27358 p2=25533 winner=27358  (Orleans Challenger)
