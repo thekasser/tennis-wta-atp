@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-11-12T22:39:33.883427+00:00
+# Generated: 2026-11-13T03:22:21.954848+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    17,223
-  rankings_snapshots         49,057
-  api_fetch_log              85,485
+  matches                    17,746
+  rankings_snapshots         49,296
+  api_fetch_log              85,721
 
-## Latest rankings snapshot: 2026-11-12
+## Latest rankings snapshot: 2026-11-13
 
 ## Active tournaments
   atp_finals26   Nitto ATP Finals                 matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
-  2026-11-08  Robin     p1=54663 p2=11712 winner=54663  (WTA Finals - Indian Wells)
-  2026-11-08  Robin     p1=66597 p2=47742 winner=66597  (WTA Finals - Indian Wells)
-  2026-11-08  Final     p1=68074 p2=87562 winner=68074  (Rolex Paris Masters - Paris)
-  2026-11-07  1/2       p1=68074 p2=33648 winner=68074  (Rolex Paris Masters - Paris)
-  2026-11-07  1/2       p1=87562 p2=82371 winner=87562  (Rolex Paris Masters - Paris)
+  2026-11-12  Second    p1=27358 p2=35323 winner=27358  (Orleans Challenger)
+  2026-11-12  Second    p1=76009 p2=18736 winner=76009  (Knoxville Challenger)
+  2026-11-12  Second    p1=55252 p2=63299 winner=55252  (Orleans Challenger)
+  2026-11-12  Second    p1=25533 p2=52721 winner=25533  (Orleans Challenger)
+  2026-11-12  Second    p1=86082 p2=81153 winner=86082  (Brisbane 3 Challenger)
