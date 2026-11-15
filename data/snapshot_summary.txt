@@ -1,14 +1,14 @@
 # Tennis DB snapshot summary
-# Generated: 2026-11-15T02:32:10.560536+00:00
+# Generated: 2026-11-15T14:34:08.124952+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    17,761
+  matches                    17,763
   rankings_snapshots         49,774
-  api_fetch_log              87,137
+  api_fetch_log              87,373
 
 ## Latest rankings snapshot: 2026-11-15
 
@@ -16,8 +16,8 @@
   atp_finals26   Nitto ATP Finals                 matches=  0  latest=None
 
 ## 5 most recent matches anywhere in DB
+  2026-11-15  Q1        p1=71221 p2=80500 winner=71221  (Metz Challenger)
+  2026-11-15  Final     p1=29180 p2=45979 winner=29180  (Matsuyama Challenger)
   2026-11-14  Final     p1=29932 p2=52394 winner=29932  (BNP Paribas Nordic Open - Stockholm)
   2026-11-14  1/2       p1=30954 p2=86082 winner=30954  (Brisbane 3 Challenger)
   2026-11-14  1/2       p1=29180 p2=93550 winner=29180  (Matsuyama Challenger)
-  2026-11-14  1/2       p1=92184 p2=29732 winner=92184  (Orleans Challenger)
-  2026-11-14  1/2       p1=55252 p2=27358 winner=55252  (Orleans Challenger)
