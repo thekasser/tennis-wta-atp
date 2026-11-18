@@ -1,23 +1,23 @@
 # Tennis DB snapshot summary
-# Generated: 2026-11-18T04:05:46.650363+00:00
+# Generated: 2026-11-18T16:11:34.085681+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
 ## Row counts
   players                       274
   tournaments                   167
-  matches                    17,785
+  matches                    17,786
   rankings_snapshots         50,501
-  api_fetch_log              89,052
+  api_fetch_log              89,074
 
 ## Latest rankings snapshot: 2026-11-18
 
 ## Active tournaments
-  atp_finals26   Nitto ATP Finals                 matches=  6  latest=2026-11-17
+  atp_finals26   Nitto ATP Finals                 matches=  7  latest=2026-11-18
 
 ## 5 most recent matches anywhere in DB
+  2026-11-18  Robin     p1=68074 p2=22807 winner=68074  (Nitto ATP Finals - Turin)
   2026-11-17  Robin     p1=83135 p2=99691 winner=83135  (Nitto ATP Finals - Turin)
   2026-11-17  Robin     p1=24008 p2=87562 winner=24008  (Nitto ATP Finals - Turin)
   2026-11-17  First     p1=89700 p2=12190 winner=89700  (Metz Challenger)
   2026-11-17  First     p1=50146 p2=86082 winner=50146  (Sydney Challenger)
-  2026-11-17  First     p1=28762 p2=28904 winner=28762  (Metz Challenger)
