@@ -1,5 +1,5 @@
 # Tennis DB snapshot summary
-# Generated: 2026-11-18T23:19:09.431134+00:00
+# Generated: 2026-11-19T04:02:15.477837+00:00
 # Source DB: data/tennis.db
 # Compressed: data/tennis.db.gz
 
@@ -7,10 +7,10 @@
   players                       274
   tournaments                   167
   matches                    17,786
-  rankings_snapshots         50,501
-  api_fetch_log              89,096
+  rankings_snapshots         50,743
+  api_fetch_log              89,118
 
-## Latest rankings snapshot: 2026-11-18
+## Latest rankings snapshot: 2026-11-19
 
 ## Active tournaments
   atp_finals26   Nitto ATP Finals                 matches=  7  latest=2026-11-18
